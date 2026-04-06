@@ -172,6 +172,23 @@ def _get_lan_ip() -> str | None:
         return None
 
 
+def _notify(title: str, message: str):
+    """发送 macOS 系统通知（仅在 App 打包模式下）。"""
+    if _EDITION not in ("full", "lite"):
+        return
+    import subprocess
+    script = (
+        f'display notification "{message}" '
+        f'with title "{title}" '
+        f'sound name "default"'
+    )
+    try:
+        subprocess.Popen(["osascript", "-e", script],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
 def _print_ready_banner(host: str, port: int):
     edition_label = {"full": "Full", "lite": "Lite"}.get(_EDITION, "Dev")
     print()
@@ -189,6 +206,8 @@ def _print_ready_banner(host: str, port: int):
 
     print("=" * 55)
     print()
+
+    _notify("Lumina 已就绪", f"服务运行于 http://127.0.0.1:{port}")
 
 
 def cmd_pdf(args):

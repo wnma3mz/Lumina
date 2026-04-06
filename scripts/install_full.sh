@@ -34,6 +34,24 @@ uv pip install --python "$INSTALL_DIR/.venv/bin/python" \
 HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 \
 uv pip install --python "$INSTALL_DIR/.venv/bin/python" -e "$PROJECT_DIR"
 
+# 下载内置模型（若尚未存在）
+MODEL_DIR="$PROJECT_DIR/models/qwen3.5-0.8b-4bit"
+if [ ! -d "$MODEL_DIR" ] || [ -z "$(ls -A "$MODEL_DIR" 2>/dev/null)" ]; then
+    echo "正在下载内置模型（约 622MB）..."
+    mkdir -p "$MODEL_DIR"
+    HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 \
+    "$INSTALL_DIR/.venv/bin/python" -c "
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id='mlx-community/Qwen3.5-0.8B-4bit',
+    local_dir='$MODEL_DIR',
+)
+print('模型下载完成')
+"
+else
+    echo "内置模型已存在，跳过下载。"
+fi
+
 # 写全局启动脚本（注入 Full 标记）
 cat > "$INSTALL_DIR/lumina" <<EOF
 #!/usr/bin/env bash

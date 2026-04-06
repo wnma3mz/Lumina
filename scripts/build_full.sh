@@ -93,6 +93,16 @@ uv run pyinstaller "$BUILD_DIR/lumina_full.spec" \
     --workpath "$BUILD_DIR/work" \
     --noconfirm
 
+ZIP_PATH="$BUILD_DIR/dist/Lumina.zip"
+echo "正在压缩为 zip..."
+cd "$BUILD_DIR/dist"
+zip -qr "Lumina.zip" "Lumina.app"
+cd "$PROJECT_DIR"
+
 echo ""
-echo "✓ 打包完成: $BUILD_DIR/dist/Lumina.app"
-echo "将 Lumina.app 拖入 /Applications，双击即可启动，无需任何配置。"
+echo "✓ 打包完成"
+echo "  App : $BUILD_DIR/dist/Lumina.app"
+echo "  zip : $ZIP_PATH"
+echo ""
+echo "上传 Release："
+echo "  gh release create v0.1.0 \"$ZIP_PATH\" --title 'Lumina v0.1.0' --notes '首次发布'"
