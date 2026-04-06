@@ -600,6 +600,11 @@ def main():
                        choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     p_pol.set_defaults(func=cmd_polish)
 
+    # PyInstaller multiprocessing 会用 sys.argv 拉起子进程，argv[1] 形如
+    # "from multiprocessing.resource_tracker import main;main(7)"，需要跳过
+    if len(sys.argv) > 1 and sys.argv[1].startswith("from multiprocessing"):
+        return
+
     args = parser.parse_args()
     args.func(args)
 

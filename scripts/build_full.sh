@@ -17,34 +17,52 @@ HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 \
 
 mkdir -p "$BUILD_DIR"
 
+# runtime hook：进程启动时注入 LUMINA_EDITION=full
+cat > "$BUILD_DIR/rthook_edition_full.py" <<'RTHOOK'
+import os
+os.environ.setdefault("LUMINA_EDITION", "full")
+RTHOOK
+
 cat > "$BUILD_DIR/lumina_full.spec" <<'SPEC'
 # -*- mode: python ; coding: utf-8 -*-
-import os
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 project_dir = Path(SPECPATH).parent
+
+# 用 collect_all 确保 mlx / mlx_lm / mlx_whisper 的子模块和数据文件完整打包
+mlx_datas, mlx_bins, mlx_hidden       = collect_all('mlx')
+mlx_lm_datas, mlx_lm_bins, mlx_lm_hidden         = collect_all('mlx_lm')
+mlx_wh_datas, mlx_wh_bins, mlx_wh_hidden         = collect_all('mlx_whisper')
 
 a = Analysis(
     [str(project_dir / 'lumina' / 'main.py')],
     pathex=[str(project_dir)],
-    binaries=[],
-    datas=[
-        # 模型不打包进 App，首次启动时按需下载到 ~/.lumina/models/
-        (str(project_dir / 'lumina' / 'config.json'), 'lumina'),
-        (str(project_dir / 'lumina' / 'config.lite.json'), 'lumina'),
-    ],
-    hiddenimports=[
-        'mlx', 'mlx.core', 'mlx.nn',
-        'mlx_lm', 'mlx_whisper',
-        'sounddevice', 'scipy',
-        'fastapi', 'uvicorn', 'uvicorn.logging',
-        'transformers', 'huggingface_hub',
-        'aiohttp',
-        'pdf2zh', 'pdf2zh.common',
-        'rumps',
-    ],
+    binaries=mlx_bins + mlx_lm_bins + mlx_wh_bins,
+    datas=(
+        mlx_datas + mlx_lm_datas + mlx_wh_datas
+        + [
+            # 模型不打包进 App，首次启动时按需下载到 ~/.lumina/models/
+            (str(project_dir / 'lumina' / 'config.json'), 'lumina'),
+            (str(project_dir / 'lumina' / 'config.lite.json'), 'lumina'),
+        ]
+    ),
+    hiddenimports=(
+        mlx_hidden + mlx_lm_hidden + mlx_wh_hidden
+        + collect_submodules('mlx')
+        + collect_submodules('mlx_lm')
+        + collect_submodules('mlx_whisper')
+        + [
+            'sounddevice', 'scipy',
+            'fastapi', 'uvicorn', 'uvicorn.logging',
+            'transformers', 'huggingface_hub',
+            'aiohttp',
+            'pdf2zh',
+            'rumps',
+        ]
+    ),
     hookspath=[],
-    runtime_hooks=[],
+    runtime_hooks=[str(Path(SPECPATH) / 'rthook_edition_full.py')],
     excludes=[],
     noarchive=False,
 )
@@ -61,8 +79,6 @@ exe = EXE(
     strip=False,
     upx=False,
     console=True,
-    # 注入版本标记
-    env={'LUMINA_EDITION': 'full'},
 )
 
 coll = COLLECT(
