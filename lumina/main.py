@@ -22,6 +22,10 @@ _EDITION = os.environ.get("LUMINA_EDITION")
 # 用户级配置文件路径（Lite 版首次启动后写入，持久化用户填写的地址）
 _USER_CONFIG_PATH = Path.home() / ".lumina" / "config.json"
 
+# Full 版内置模型：下载到用户目录，与 App 本体解耦
+_MODEL_REPO_ID = "mlx-community/Qwen3.5-0.8B-4bit"
+_MODEL_CACHE_DIR = Path.home() / ".lumina" / "models" / "qwen3.5-0.8b-4bit"
+
 
 def _setup_logging(level: str = "INFO"):
     logging.basicConfig(
@@ -102,6 +106,53 @@ def _needs_lite_setup() -> bool:
     return True
 
 
+def _ensure_model():
+    """
+    Full 版启动时检测模型是否已下载；若无则从 HuggingFace 下载。
+    下载期间发系统通知提示进度，支持系统代理（HTTP_PROXY / HTTPS_PROXY）。
+    下载完成后更新 LUMINA_MODEL_PATH 环境变量，让 config 读到正确路径。
+    """
+    if _EDITION != "full":
+        return
+
+    model_dir = _MODEL_CACHE_DIR
+    # 判断是否已下载：目录存在且含模型权重文件
+    if model_dir.exists() and any(model_dir.glob("*.safetensors")):
+        logger.info("Model found at %s", model_dir)
+        os.environ.setdefault("LUMINA_MODEL_PATH", str(model_dir))
+        return
+
+    # 模型不存在，开始下载
+    print()
+    print("首次启动需要下载内置模型（约 622MB），请稍候…")
+    print(f"  来源：{_MODEL_REPO_ID}")
+    print(f"  目标：{model_dir}")
+    if os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY"):
+        proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+        print(f"  代理：{proxy}")
+    print()
+
+    _notify("Lumina", f"正在下载模型，请稍候（约 622MB）…")
+
+    try:
+        from huggingface_hub import snapshot_download
+        model_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_download(
+            repo_id=_MODEL_REPO_ID,
+            local_dir=str(model_dir),
+            # huggingface_hub 自动读取 HTTP_PROXY / HTTPS_PROXY 环境变量
+        )
+    except Exception as e:
+        print(f"\n模型下载失败：{e}")
+        print("请检查网络连接，或设置代理后重试：")
+        print("  export HTTPS_PROXY=http://127.0.0.1:7890")
+        _notify("Lumina 下载失败", "模型下载失败，请检查网络后重新启动")
+        sys.exit(1)
+
+    print(f"✓ 模型下载完成：{model_dir}")
+    os.environ["LUMINA_MODEL_PATH"] = str(model_dir)
+
+
 def build_provider(cfg):
     if cfg.provider.type == "openai":
         from lumina.providers.openai import OpenAIProvider
@@ -120,6 +171,9 @@ def cmd_server(args):
     from lumina.asr.transcriber import Transcriber
     from lumina.engine.llm import LLMEngine
     from lumina.api.server import create_app
+
+    # Full 版：首次启动时下载模型（若尚未存在）
+    _ensure_model()
 
     # Lite 版：首次启动时运行配置向导
     if _needs_lite_setup():

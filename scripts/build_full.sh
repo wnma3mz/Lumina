@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Lumina Full 打包脚本
-# 内含本地模型，启动后直接可用，无需配置。
-# 产出：build/dist/Lumina.app
+# 不含模型文件，首次启动时自动下载到 ~/.lumina/models/。
+# 产出：build/dist/Lumina.app  +  build/dist/Lumina.zip
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,7 +29,7 @@ a = Analysis(
     pathex=[str(project_dir)],
     binaries=[],
     datas=[
-        (str(project_dir / 'models'), 'models'),
+        # 模型不打包进 App，首次启动时按需下载到 ~/.lumina/models/
         (str(project_dir / 'lumina' / 'config.json'), 'lumina'),
         (str(project_dir / 'lumina' / 'config.lite.json'), 'lumina'),
     ],
@@ -87,7 +87,7 @@ app = BUNDLE(
 )
 SPEC
 
-echo "正在执行 PyInstaller（Full，含模型约 622MB）..."
+echo "正在执行 PyInstaller（Full，不含模型，首次启动时自动下载）..."
 uv run pyinstaller "$BUILD_DIR/lumina_full.spec" \
     --distpath "$BUILD_DIR/dist" \
     --workpath "$BUILD_DIR/work" \
