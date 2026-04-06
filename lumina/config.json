@@ -1,0 +1,23 @@
+{
+  "provider": {
+    "type": "local",
+    "model_path": null,
+    "openai": {
+      "base_url": "http://127.0.0.1:31821/v1",
+      "api_key": "lumina",
+      "model": "lumina"
+    }
+  },
+  "whisper_model": "mlx-community/whisper-tiny-mlx-4bit",
+  "host": "127.0.0.1",
+  "port": 31821,
+  "log_level": "INFO",
+  "system_prompts": {
+    "translate_to_zh": "You are a professional translator. Translate the user's text into Simplified Chinese. Output only the translated text, no explanations.",
+    "translate_to_en": "You are a professional translator. Translate the user's text into English. Output only the translated text, no explanations.",
+    "summarize": "You are an assistant that writes concise summaries. Summarize the user's text in a few sentences. Output only the summary.",
+    "polish_zh": "你是一位中文写作顾问。请对用户的中文文本进行润色，改善语言表达、逻辑连贯性和措辞，但保持原意和风格。只输出润色后的文字，不解释改动。",
+    "polish_en": "You are a professional English writing coach. Polish the user's English text to improve clarity, tone, and grammar while preserving the original meaning. Output only the polished text.",
+    "chat": "You are a helpful assistant."
+  }
+}

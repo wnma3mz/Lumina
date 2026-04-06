@@ -1,0 +1,400 @@
+"""
+Lumina CLI 入口
+
+用法：
+    lumina server              # 启动 HTTP 服务（默认）
+    lumina server --port 8080
+    lumina pdf paper.pdf
+    lumina pdf ./papers/ -o ./out
+"""
+import argparse
+import json
+import logging
+import os
+import sys
+from pathlib import Path
+
+logger = logging.getLogger("lumina")
+
+# 打包时注入的版本标记：LUMINA_EDITION = "lite" | "full" | None（开发模式）
+_EDITION = os.environ.get("LUMINA_EDITION")
+
+# 用户级配置文件路径（Lite 版首次启动后写入，持久化用户填写的地址）
+_USER_CONFIG_PATH = Path.home() / ".lumina" / "config.json"
+
+
+def _setup_logging(level: str = "INFO"):
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s  %(levelname)-8s  %(name)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+
+def _resolve_config_path() -> str | None:
+    """
+    确定加载哪个 config.json：
+      1. 用户级配置（~/.lumina/config.json）优先——Lite 向导写入后续都用这个
+      2. 打包内置 config（同目录下 config.json / config.lite.json）
+      3. 开发模式：返回 None，由 get_config() 用默认路径
+    """
+    if _USER_CONFIG_PATH.exists():
+        return str(_USER_CONFIG_PATH)
+    return None
+
+
+def _lite_setup_wizard():
+    """
+    Lite 版首次启动向导：引导用户填写外部服务地址，写入 ~/.lumina/config.json。
+    """
+    print("=" * 55)
+    print("  Lumina Lite — 首次启动配置")
+    print("=" * 55)
+    print()
+    print("Lite 版需要连接一个外部 LLM HTTP 服务。")
+    print("请填写该服务的地址（OpenAI 兼容接口）。")
+    print()
+
+    while True:
+        base_url = input("服务地址（如 http://192.168.1.10:8080/v1）: ").strip()
+        if base_url:
+            break
+        print("地址不能为空，请重新输入。")
+
+    api_key = input("API Key（留空则使用默认值 'lumina'）: ").strip() or "lumina"
+    model   = input("模型名称（留空则使用默认值 'lumina'）: ").strip() or "lumina"
+
+    port_str = input("本机监听端口（留空则使用默认值 31821）: ").strip()
+    port = int(port_str) if port_str.isdigit() else 31821
+
+    # 读取内置 lite 模板，填入用户值
+    _pkg_dir = Path(__file__).parent
+    template_path = _pkg_dir / "config.lite.json"
+    with open(template_path, "r", encoding="utf-8") as f:
+        cfg_data = json.load(f)
+
+    cfg_data["provider"]["openai"]["base_url"] = base_url
+    cfg_data["provider"]["openai"]["api_key"]  = api_key
+    cfg_data["provider"]["openai"]["model"]    = model
+    cfg_data["port"] = port
+
+    _USER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(_USER_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg_data, f, indent=2, ensure_ascii=False)
+
+    print()
+    print(f"✓ 配置已保存至 {_USER_CONFIG_PATH}")
+    print()
+
+
+def _needs_lite_setup() -> bool:
+    """Lite 版且尚未完成过配置向导。"""
+    if _EDITION != "lite":
+        return False
+    if _USER_CONFIG_PATH.exists():
+        # 已有配置，检查 base_url 是否已填写
+        try:
+            with open(_USER_CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return not data.get("provider", {}).get("openai", {}).get("base_url", "")
+        except Exception:
+            return True
+    return True
+
+
+def build_provider(cfg):
+    if cfg.provider.type == "openai":
+        from lumina.providers.openai import OpenAIProvider
+        oa = cfg.provider.openai
+        logger.info("Provider: OpenAI-compatible  base_url=%s  model=%s", oa.base_url, oa.model)
+        return OpenAIProvider(base_url=oa.base_url, api_key=oa.api_key, model=oa.model)
+    else:
+        from lumina.providers.local import LocalProvider
+        logger.info("Provider: Local  model_path=%s", cfg.provider.model_path)
+        return LocalProvider(model_path=cfg.provider.model_path)
+
+
+def cmd_server(args):
+    import uvicorn
+    from lumina.config import get_config
+    from lumina.asr.transcriber import Transcriber
+    from lumina.engine.llm import LLMEngine
+    from lumina.api.server import create_app
+
+    # Lite 版：首次启动时运行配置向导
+    if _needs_lite_setup():
+        _lite_setup_wizard()
+
+    if args.provider:
+        os.environ["LUMINA_PROVIDER_TYPE"] = args.provider
+    if args.model_path:
+        os.environ["LUMINA_MODEL_PATH"] = args.model_path
+    if args.whisper_model:
+        os.environ["LUMINA_WHISPER_MODEL"] = args.whisper_model
+    if args.host:
+        os.environ["LUMINA_HOST"] = args.host
+    if args.port:
+        os.environ["LUMINA_PORT"] = str(args.port)
+    if args.log_level:
+        os.environ["LUMINA_LOG_LEVEL"] = args.log_level
+
+    config_path = getattr(args, "config", None) or _resolve_config_path()
+    cfg = get_config(config_path)
+    _setup_logging(cfg.log_level)
+
+    provider = build_provider(cfg)
+    llm = LLMEngine(provider=provider, system_prompts=cfg.system_prompts)
+
+    logger.info("Loading provider...")
+    llm.load()
+    logger.info("Provider ready.")
+
+    transcriber = Transcriber()
+    logger.info("Whisper model: %s (loaded on first use)", transcriber.model)
+
+    app = create_app(llm, transcriber)
+
+    # 启动完成提示（Full 版更显眼）
+    _print_ready_banner(cfg.host, cfg.port)
+
+    uvicorn.run(app, host=cfg.host, port=cfg.port, log_level=cfg.log_level.lower())
+
+
+def _get_lan_ip() -> str | None:
+    """获取本机局域网 IP（非回环地址）。"""
+    import socket
+    try:
+        # 连接一个外部地址（不会真正发包），获取本机出口 IP
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return None
+
+
+def _print_ready_banner(host: str, port: int):
+    edition_label = {"full": "Full", "lite": "Lite"}.get(_EDITION, "Dev")
+    print()
+    print("=" * 55)
+    print(f"  Lumina {edition_label} 已就绪")
+    print(f"  本机访问：http://127.0.0.1:{port}")
+
+    # 监听 0.0.0.0 时显示局域网地址（供手机 PWA 使用）
+    if host in ("0.0.0.0", ""):
+        lan_ip = _get_lan_ip()
+        if lan_ip:
+            print(f"  局域网访问：http://{lan_ip}:{port}")
+            print(f"  手机扫码或在 Safari 打开上方地址")
+            print(f"  添加到主屏幕即可像 App 一样使用")
+
+    print("=" * 55)
+    print()
+
+
+def cmd_pdf(args):
+    from lumina.pdf_translate import translate_pdfs
+
+    _setup_logging(args.log_level)
+    results = translate_pdfs(
+        paths=args.paths,
+        output_dir=args.output,
+        lang_in=args.lang_in,
+        lang_out=args.lang_out,
+        threads=args.threads,
+        base_url=args.base_url,
+        model=args.model,
+        api_key=args.api_key,
+    )
+    print(f"\nTranslation complete. {len(results)} file(s) translated.")
+    for mono, dual in results:
+        print(f"  mono: {mono}")
+        print(f"  dual: {dual}")
+
+
+def cmd_polish(args):
+    from lumina.text_polish import polish_text, polish_file
+
+    _setup_logging(args.log_level)
+
+    for path in args.paths:
+        # stdin 模式
+        if path == "-":
+            import sys as _sys
+            text = _sys.stdin.read()
+            lang = args.lang or "zh"
+            result = polish_text(text, language=lang, base_url=args.base_url, api_key=args.api_key)
+            print(result)
+            continue
+
+        p = Path(path)
+        if not p.is_file():
+            logger.warning("File not found: %s", path)
+            continue
+
+        # 语言自动检测：.md 文件名含 en / README 默认英文，否则中文
+        if args.lang:
+            lang = args.lang
+        elif p.name.lower().startswith("readme") or "-en" in p.stem.lower():
+            lang = "en"
+        else:
+            lang = "zh"
+
+        out_path = None
+        if args.output:
+            out_path = str(Path(args.output) / f"{p.stem}-polished{p.suffix}")
+
+        result = polish_file(path=path, language=lang, base_url=args.base_url,
+                              api_key=args.api_key, output=out_path)
+
+        if args.stdout:
+            print(f"\n=== {p.name} (polished) ===\n")
+            print(result)
+        else:
+            # polish_file 已打印保存路径
+            pass
+
+
+def cmd_watch(args):
+    from lumina.watcher import watch
+
+    _setup_logging(args.log_level)
+    watch(
+        directory=args.directory,
+        base_url=args.base_url,
+        model=args.model,
+        api_key=args.api_key,
+        lang_in=args.lang_in,
+        lang_out=args.lang_out,
+        threads=args.threads,
+    )
+
+
+def _resolve_pdf_path(path: str) -> tuple[str, bool]:
+    """
+    解析 PDF 路径或 URL。
+    返回 (本地路径, is_tmp)，is_tmp=True 表示是需要清理的临时文件。
+    URL 下载后存入持久缓存（~/.lumina/cache/pdf/），不需要清理，is_tmp=False。
+    """
+    if path.startswith("http://") or path.startswith("https://"):
+        from lumina.pdf_translate import _download_url
+        return _download_url(path), False
+    return path, False
+
+
+def cmd_summarize(args):
+    import shutil
+    from lumina.pdf_summarize import summarize_pdf
+
+    _setup_logging(args.log_level)
+
+    for path in args.paths:
+        local_path, is_tmp = _resolve_pdf_path(path)
+        p = Path(local_path)
+        if not p.is_file() or p.suffix.lower() != ".pdf":
+            logger.warning("Skipping non-PDF or missing file: %s", path)
+            continue
+
+        # 输出文件名基于原始输入（URL 时取 URL 中的文件名）
+        stem = Path(path.split("?")[0].split("/")[-1]).stem if path.startswith("http") else p.stem
+
+        out_path = None
+        if args.output:
+            out_path = str(Path(args.output) / (stem + "-summary.txt"))
+        elif not args.stdout:
+            out_path = str(p.parent / (stem + "-summary.txt"))
+
+        try:
+            summary = summarize_pdf(
+                path=local_path,
+                base_url=args.base_url,
+                api_key=args.api_key,
+                output=out_path,
+            )
+        finally:
+            if is_tmp:
+                shutil.rmtree(str(p.parent), ignore_errors=True)
+
+        if args.stdout or not out_path:
+            print(f"\n=== {stem}.pdf ===\n")
+            print(summary)
+        else:
+            print(f"Summary saved: {out_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="lumina",
+        description="Lumina — local LLM service",
+    )
+    sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+    sub.required = True
+
+    # ── lumina server ─────────────────────────────────────────────────────────
+    p_server = sub.add_parser("server", help="Start the HTTP service")
+    p_server.add_argument("--config", default=None, help="Path to config.json")
+    p_server.add_argument("--host", default=None)
+    p_server.add_argument("--port", type=int, default=None)
+    p_server.add_argument("--provider", default=None, choices=["local", "openai"])
+    p_server.add_argument("--model-path", dest="model_path", default=None)
+    p_server.add_argument("--whisper-model", dest="whisper_model", default=None)
+    p_server.add_argument("--log-level", dest="log_level", default=None,
+                          choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    p_server.set_defaults(func=cmd_server)
+
+    # ── lumina pdf ────────────────────────────────────────────────────────────
+    p_pdf = sub.add_parser("pdf", help="Translate PDF file(s) via pdf2zh")
+    p_pdf.add_argument("paths", nargs="+", help="PDF file(s) or directory")
+    p_pdf.add_argument("-o", "--output", default="./translated")
+    p_pdf.add_argument("--lang-in", dest="lang_in", default="en")
+    p_pdf.add_argument("--lang-out", dest="lang_out", default="zh")
+    p_pdf.add_argument("-t", "--threads", type=int, default=4)
+    p_pdf.add_argument("--base-url", dest="base_url", default="http://127.0.0.1:31821/v1")
+    p_pdf.add_argument("--model", default="lumina")
+    p_pdf.add_argument("--api-key", dest="api_key", default="lumina")
+    p_pdf.add_argument("--log-level", dest="log_level", default="INFO",
+                       choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    p_pdf.set_defaults(func=cmd_pdf)
+
+    # ── lumina summarize ──────────────────────────────────────────────────────
+    p_sum = sub.add_parser("summarize", help="Summarize PDF file(s)")
+    p_sum.add_argument("paths", nargs="+", help="PDF file(s)")
+    p_sum.add_argument("-o", "--output", default=None, help="Output directory (default: same as PDF)")
+    p_sum.add_argument("--stdout", action="store_true", help="Print summary to stdout instead of file")
+    p_sum.add_argument("--base-url", dest="base_url", default="http://127.0.0.1:31821")
+    p_sum.add_argument("--api-key", dest="api_key", default="lumina")
+    p_sum.add_argument("--log-level", dest="log_level", default="INFO",
+                       choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    p_sum.set_defaults(func=cmd_summarize)
+
+    # ── lumina watch ──────────────────────────────────────────────────────────
+    p_watch = sub.add_parser("watch", help="Watch a directory and auto-translate new PDFs")
+    p_watch.add_argument("directory", help="Directory to watch")
+    p_watch.add_argument("--lang-in", dest="lang_in", default="en")
+    p_watch.add_argument("--lang-out", dest="lang_out", default="zh")
+    p_watch.add_argument("-t", "--threads", type=int, default=4)
+    p_watch.add_argument("--base-url", dest="base_url", default="http://127.0.0.1:31821/v1")
+    p_watch.add_argument("--model", default="lumina")
+    p_watch.add_argument("--api-key", dest="api_key", default="lumina")
+    p_watch.add_argument("--log-level", dest="log_level", default="INFO",
+                         choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    p_watch.set_defaults(func=cmd_watch)
+
+    # ── lumina polish ─────────────────────────────────────────────────────────
+    p_pol = sub.add_parser("polish", help="Polish text file(s) using LLM")
+    p_pol.add_argument("paths", nargs="+", help="Text/Markdown file(s), or '-' for stdin")
+    p_pol.add_argument("-o", "--output", default=None, help="Output directory (default: same as input)")
+    p_pol.add_argument("--lang", default=None, choices=["zh", "en"],
+                       help="Language to polish (default: auto-detect by filename)")
+    p_pol.add_argument("--stdout", action="store_true", help="Print result to stdout")
+    p_pol.add_argument("--base-url", dest="base_url", default="http://127.0.0.1:31821")
+    p_pol.add_argument("--api-key", dest="api_key", default="lumina")
+    p_pol.add_argument("--log-level", dest="log_level", default="INFO",
+                       choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    p_pol.set_defaults(func=cmd_polish)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumina"
+version = "0.1.0"
+description = "Local LLM service for translation, summarization and speech transcription"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
+    "pydantic>=2.7",
+    "mlx>=0.18.0",
+    "mlx-lm>=0.12.0",
+    "mlx-whisper>=0.2.0",
+    "sounddevice>=0.4.7",
+    "numpy>=1.26.0",
+    "scipy>=1.13.0",
+    "transformers>=4.45.0",
+    "huggingface_hub>=0.24.0",
+    "aiohttp>=3.13.5",
+    "pdf2zh>=1.9.0",
+    "watchdog>=3.0",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = ["black", "isort", "pyinstaller"]
+
+[project.scripts]
+lumina = "lumina.main:main"
+
+[tool.setuptools.packages.find]
+include = ["lumina*"]
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
