@@ -64,7 +64,9 @@ a = Analysis(
         + [
             # 模型不打包进 App，首次启动时按需下载到 ~/.lumina/models/
             (str(project_dir / 'lumina' / 'config.json'), 'lumina'),
-            (str(project_dir / 'lumina' / 'config.lite.json'), 'lumina'),
+            (str(project_dir / 'assets' / 'lumina.icns'), 'assets'),
+            (str(project_dir / 'lumina' / 'api' / 'static'), 'lumina/api/static'),
+            (str(project_dir / 'scripts' / 'install_quick_action.sh'), 'scripts'),
         ]
     ),
     hiddenimports=(
@@ -113,7 +115,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='Lumina.app',
-    icon=None,
+    icon=str(project_dir / 'assets' / 'lumina.icns'),
     bundle_identifier='com.lumina.server',
     info_plist={
         'CFBundleShortVersionString': '0.1.0',
@@ -173,6 +175,14 @@ cp -r "$APP_SRC" "$APP_DEST"
 echo "正在移除 macOS 安全限制..."
 xattr -cr "$APP_DEST"
 
+echo "正在安装 Finder 右键快速操作..."
+QA_SCRIPT="$APP_DEST/Contents/Resources/scripts/install_quick_action.sh"
+if [[ -f "$QA_SCRIPT" ]]; then
+    bash "$QA_SCRIPT" 2>/dev/null && echo "✓ 快速操作已安装" || echo "⚠ 快速操作安装失败（可稍后手动运行）"
+else
+    echo "⚠ 未找到快速操作安装脚本，跳过"
+fi
+
 echo ""
 echo "✓ 安装完成！"
 echo "  Lumina.app 已安装到「应用程序」文件夹"
@@ -186,8 +196,8 @@ ZIP_PATH="$BUILD_DIR/dist/Lumina.zip"
 echo "正在压缩为 zip..."
 cd "$BUILD_DIR/dist"
 zip -qr "Lumina.zip" "Lumina.app" "install.command"
-# 验证安装脚本确实进了 zip
-unzip -l "Lumina.zip" | grep -q "install.command" && echo "安装脚本已打入 zip" || echo "警告：安装脚本未打入 zip"
+# 验证安装脚本确实进了 zip（用精确匹配，避免匹配到同名子串）
+unzip -l "Lumina.zip" | grep -qE "^\s+[0-9].*install\.command$" && echo "安装脚本已打入 zip" || echo "警告：安装脚本未打入 zip"
 cd "$PROJECT_DIR"
 
 echo ""

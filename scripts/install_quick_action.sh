@@ -11,10 +11,19 @@ SERVICES_DIR="$HOME/Library/Services"
 LUMINA_BIN="$HOME/.lumina/lumina"
 
 # ── 查找 lumina 可执行文件 ──────────────────────────────────────────────────
+# 优先级：~/.lumina/lumina → PATH → App bundle 内置 → 开发模式 uv run
+_APP_BUNDLE_BIN="/Applications/Lumina.app/Contents/MacOS/lumina"
+# 脚本也可能从 bundle 内部调用（Contents/Resources/scripts/），此时 PROJECT_DIR 是 Contents/Resources
+_BUNDLE_BIN_RELATIVE="$(dirname "$PROJECT_DIR")/MacOS/lumina"
+
 if [[ -x "$LUMINA_BIN" ]]; then
     LUMINA_CMD="$LUMINA_BIN"
 elif command -v lumina &>/dev/null; then
     LUMINA_CMD="$(command -v lumina)"
+elif [[ -x "$_APP_BUNDLE_BIN" ]]; then
+    LUMINA_CMD="$_APP_BUNDLE_BIN"
+elif [[ -x "$_BUNDLE_BIN_RELATIVE" ]]; then
+    LUMINA_CMD="$_BUNDLE_BIN_RELATIVE"
 elif [[ -f "$PROJECT_DIR/pyproject.toml" ]] && command -v uv &>/dev/null; then
     WRAPPER="$HOME/.lumina/lumina-dev"
     mkdir -p "$HOME/.lumina"
@@ -209,52 +218,7 @@ done'
 SUMMARIZE_SCRIPT="${SUMMARIZE_SCRIPT//LUMINA_CMD/$LUMINA_CMD}"
 install_workflow "用 Lumina 总结 PDF" "$SUMMARIZE_SCRIPT"
 
-# ── Quick Action 3：录音并总结（不需要选中文件，从 Finder 服务菜单触发）──────
-# 录音脚本用 heredoc 写入临时文件，避免引号嵌套问题
-_RECORD_TMP=$(mktemp /tmp/lumina_record_XXXXXX.sh)
-cat > "$_RECORD_TMP" <<'RECORD_EOF'
-#!/usr/bin/env bash
-if ! curl -s --noproxy '*' --max-time 2 http://127.0.0.1:31821/health &>/dev/null; then
-    osascript -e 'display notification "请先启动 lumina server" with title "Lumina" subtitle "服务未运行"'
-    exit 1
-fi
-
-RESP=$(curl -s --noproxy '*' -X POST http://127.0.0.1:31821/v1/audio/record/start)
-SESSION_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['session_id'])" 2>/dev/null)
-if [[ -z "$SESSION_ID" ]]; then
-    osascript -e 'display notification "无法开始录音" with title "Lumina"'
-    exit 1
-fi
-
-osascript -e 'display dialog "正在录音…\n\n说完后点击「停止」" buttons {"停止"} default button "停止" with title "Lumina 录音"' &>/dev/null
-
-STOP_RESP=$(curl -s --noproxy '*' -X POST http://127.0.0.1:31821/v1/audio/record/stop \
-    -H 'Content-Type: application/json' \
-    -d "{\"session_id\":\"$SESSION_ID\"}")
-TRANSCRIPT=$(echo "$STOP_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('text',''))" 2>/dev/null)
-
-if [[ -z "$TRANSCRIPT" ]]; then
-    osascript -e 'display notification "未识别到语音内容" with title "Lumina"'
-    exit 0
-fi
-
-TEXT_JSON=$(python3 -c "import sys,json; print(json.dumps(sys.argv[1]))" "$TRANSCRIPT")
-SUM_RESP=$(curl -s --noproxy '*' -X POST http://127.0.0.1:31821/v1/summarize \
-    -H 'Content-Type: application/json' \
-    -d "{\"text\":$TEXT_JSON}")
-SUMMARY=$(echo "$SUM_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('text',''))" 2>/dev/null)
-
-TS=$(date +"%Y%m%d_%H%M%S")
-OUT="$HOME/Desktop/lumina-record-${TS}.txt"
-printf "=== 转写 ===\n%s\n\n=== 摘要 ===\n%s\n" "$TRANSCRIPT" "$SUMMARY" > "$OUT"
-osascript -e "display dialog \"摘要：\n\n${SUMMARY}\n\n已保存到桌面\" buttons {\"好\"} default button \"好\" with title \"Lumina 录音结果\""
-open -R "$OUT" 2>/dev/null || true
-RECORD_EOF
-RECORD_SCRIPT=$(cat "$_RECORD_TMP")
-rm -f "$_RECORD_TMP"
-install_workflow "用 Lumina 录音并总结" "$RECORD_SCRIPT" "none"
-
-# ── Quick Action 4：润色文本（处理 TXT / MD 文件）────────────────────────────
+# ── Quick Action 3：润色文本（处理 TXT / MD 文件）────────────────────────────
 POLISH_SCRIPT='#!/usr/bin/env bash
 if ! curl -s --noproxy '"'"'*'"'"' --max-time 2 http://127.0.0.1:31821/health &>/dev/null; then
     osascript -e '"'"'display notification "请先启动 lumina server" with title "Lumina" subtitle "服务未运行"'"'"'
@@ -297,8 +261,6 @@ echo "     「用 Lumina 翻译 PDF」  输出 *-mono.pdf 和 *-dual.pdf"
 echo "     「用 Lumina 总结 PDF」  输出 *-summary.txt"
 echo "  TXT/MD 文件 → 右键 → 快速操作："
 echo "     「用 Lumina 润色文本」  输出 *-polished.txt / *-polished.md"
-echo "  Finder 菜单栏 → 服务："
-echo "     「用 Lumina 录音并总结」  录音 → 转写 + 摘要 → 保存到桌面"
 echo ""
 echo "前提：lumina server 需已在运行。"
 echo "  启动：$LUMINA_CMD server"

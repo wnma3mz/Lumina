@@ -77,6 +77,10 @@ cat > "$PLIST_PATH" <<PLIST
 </plist>
 PLIST
 
+# 安装 Finder 右键快速操作（翻译/总结/润色/录音）
+echo "正在安装 Finder 右键快速操作..."
+bash "$SCRIPT_DIR/install_quick_action.sh" 2>/dev/null && echo "✓ 快速操作安装完成" || echo "⚠ 快速操作安装失败（可稍后手动运行 bash scripts/install_quick_action.sh）"
+
 echo ""
 echo "✓ Lumina Lite 安装完成！"
 echo ""

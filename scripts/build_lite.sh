@@ -30,9 +30,8 @@ a = Analysis(
     pathex=[str(project_dir)],
     binaries=[],
     datas=[
-        # Lite 版不打包 models/，只带配置模板
-        (str(project_dir / 'lumina' / 'config.lite.json'), 'lumina'),
         (str(project_dir / 'lumina' / 'config.json'), 'lumina'),
+        (str(project_dir / 'lumina' / 'api' / 'static'), 'lumina/api/static'),
     ],
     hiddenimports=[
         'fastapi', 'uvicorn', 'uvicorn.logging',
