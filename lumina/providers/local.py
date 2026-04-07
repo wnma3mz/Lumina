@@ -43,7 +43,9 @@ class LocalProvider(BaseProvider):
         self.model_path = model_path
         self._model = None
         self._tokenizer = None
-        self._queue: asyncio.Queue[_PendingRequest] = asyncio.Queue()
+        # Queue 不在 __init__ 里创建：__init__ 可能在同步上下文（主线程）运行，
+        # 而 Queue 必须绑定到真正使用它的 asyncio 事件循环，否则会报 "bound to a different event loop"。
+        self._queue: Optional[asyncio.Queue] = None
         self._worker_task: Optional[asyncio.Task] = None
 
     def load(self):
@@ -55,7 +57,9 @@ class LocalProvider(BaseProvider):
         return self._model is not None
 
     def _ensure_worker(self):
-        """确保后台 BatchWorker 已启动（懒启动，首次请求时创建）。"""
+        """确保后台 BatchWorker 已启动（懒启动，首次请求时创建）。在事件循环内调用，Queue 在此绑定到正确的 loop。"""
+        if self._queue is None:
+            self._queue = asyncio.Queue()
         if self._worker_task is None or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._batch_worker())
 

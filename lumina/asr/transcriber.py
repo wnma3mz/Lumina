@@ -21,7 +21,7 @@ import numpy as np
 import mlx_whisper
 
 _DEFAULT_WHISPER_MODEL = os.environ.get(
-    "HERMES_WHISPER_MODEL",
+    "LUMINA_WHISPER_MODEL",
     "mlx-community/whisper-tiny-mlx-4bit",
 )
 
