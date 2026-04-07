@@ -42,7 +42,7 @@ def _resolve_config_path() -> str | None:
     """
     确定加载哪个 config.json：
       1. 用户级配置（~/.lumina/config.json）优先——Lite 向导写入后续都用这个
-      2. 打包内置 config（同目录下 config.json / config.lite.json）
+      2. 打包内置 config（同目录下 config.json）
       3. 开发模式：返回 None，由 get_config() 用默认路径
     """
     if _USER_CONFIG_PATH.exists():
@@ -74,10 +74,9 @@ def _lite_setup_wizard():
     port_str = input("本机监听端口（留空则使用默认值 31821）: ").strip()
     port = int(port_str) if port_str.isdigit() else 31821
 
-    # 读取内置 lite 模板，填入用户值
+    # 读取内置 config.json 作模板，填入用户值
     _pkg_dir = Path(__file__).parent
-    template_path = _pkg_dir / "config.lite.json"
-    with open(template_path, "r", encoding="utf-8") as f:
+    with open(_pkg_dir / "config.json", "r", encoding="utf-8") as f:
         cfg_data = json.load(f)
 
     cfg_data["provider"]["openai"]["base_url"] = base_url
@@ -224,8 +223,8 @@ def cmd_server(args):
     llm.load()
     logger.info("Provider ready.")
 
-    transcriber = Transcriber()
-    logger.info("Whisper model: %s (loaded on first use)", transcriber.model)
+    transcriber = Transcriber(model=cfg.whisper_model or None)
+    logger.info("Whisper model: %s", transcriber.model)
 
     # 检查端口是否已被占用
     if _is_port_in_use(cfg.host, cfg.port):
@@ -233,6 +232,10 @@ def cmd_server(args):
         print(f"\nERROR: {msg}\n")
         _notify("Lumina 已在运行", f"端口 {cfg.port} 已被占用，请查看菜单栏图标")
         sys.exit(1)
+
+    # 初始化 digest 配置
+    from lumina import digest as _digest_mod
+    _digest_mod.configure({"digest": cfg.digest} if hasattr(cfg, "digest") else {})
 
     fastapi_app = create_app(llm, transcriber)
 
@@ -242,18 +245,30 @@ def cmd_server(args):
     # 写 PID 文件（供 lumina stop / lumina restart 使用）
     _write_pid()
 
+    # 启动后台摘要任务（不阻塞服务）
+    import threading
+    threading.Thread(target=_run_digest_task, args=(llm, False), daemon=True).start()
+
     if _EDITION in ("full", "lite"):
-        # App 模式：rumps 菜单栏占主线程，uvicorn 跑后台线程
-        _run_with_menubar(fastapi_app, cfg)
+        _run_with_menubar(fastapi_app, cfg, llm)
     else:
-        # CLI / 开发模式：前台直接跑 uvicorn
         try:
             uvicorn.run(fastapi_app, host=cfg.host, port=cfg.port, log_level=cfg.log_level.lower())
         finally:
             _remove_pid()
 
 
-def _run_with_menubar(fastapi_app, cfg):
+def _run_digest_task(llm, changelog: bool = False):
+    """在独立线程里运行摘要生成（全量或增量）。"""
+    import asyncio
+    from lumina.digest import maybe_generate_digest, maybe_generate_changelog
+    if changelog:
+        asyncio.run(maybe_generate_changelog(llm))
+    else:
+        asyncio.run(maybe_generate_digest(llm))
+
+
+def _run_with_menubar(fastapi_app, cfg, llm):
     """启动 rumps 菜单栏 App，uvicorn 在后台线程运行。"""
     import threading
     import uvicorn
@@ -276,9 +291,17 @@ def _run_with_menubar(fastapi_app, cfg):
     t = threading.Thread(target=_serve, daemon=True)
     t.start()
 
+    # 菜单栏图标：打包后从 Resources/assets/lumina.icns 读取，开发模式从 assets/ 读
+    import sys as _sys
+    _icon_candidates = [
+        Path(_sys._MEIPASS) / "assets" / "lumina.icns" if hasattr(_sys, "_MEIPASS") else None,
+        Path(__file__).parent.parent / "assets" / "lumina.icns",
+    ]
+    _icon_path = next((str(p) for p in _icon_candidates if p and p.exists()), None)
+
     class LuminaApp(rumps.App):
         def __init__(self):
-            super().__init__(title, quit_button=None)
+            super().__init__(title, icon=_icon_path, quit_button=None, template=False)
             self.menu = [
                 rumps.MenuItem(f"打开界面", callback=self._open_ui),
                 None,  # 分隔线
@@ -304,8 +327,16 @@ def _run_with_menubar(fastapi_app, cfg):
             _remove_pid()
             rumps.quit_application()
 
+        @rumps.timer(3600)
+        def _on_digest_timer(self, _):
+            """每小时检测增量变化，有则生成 Change Log。"""
+            threading.Thread(
+                target=_run_digest_task, args=(llm, True), daemon=True
+            ).start()
+
     try:
-        LuminaApp().run()
+        app = LuminaApp()
+        app.run()
     finally:
         server.should_exit = True
         _remove_pid()

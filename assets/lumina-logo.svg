@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Lumina logo</title>
+  <desc id="desc">A glowing L monogram on a dark rounded square with a sparkle.</desc>
+  <defs>
+    <linearGradient id="bg" x1="24" y1="20" x2="228" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B1020"/>
+      <stop offset="0.58" stop-color="#111B34"/>
+      <stop offset="1" stop-color="#0F2A4A"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientTransform="translate(126 124) rotate(90) scale(84)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9BE7FF" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#57C8FF" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#57C8FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark" x1="96" y1="62" x2="176" y2="186" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8FDFF"/>
+      <stop offset="0.42" stop-color="#9BE7FF"/>
+      <stop offset="1" stop-color="#4EB9FF"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="64" y1="72" x2="192" y2="184" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A6ECFF" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#5CBEFF" stop-opacity="0.12"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="sparkGlow" x="-200%" y="-200%" width="400%" height="400%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <rect x="16" y="16" width="224" height="224" rx="56" fill="url(#bg)"/>
+
+  <circle cx="126" cy="124" r="58" fill="#7DDBFF" opacity="0.22" filter="url(#softGlow)"/>
+  <circle cx="126" cy="124" r="66" fill="url(#halo)"/>
+  <circle cx="128" cy="128" r="78" fill="none" stroke="url(#ring)" stroke-width="10" stroke-linecap="round" opacity="0.62"/>
+
+  <path fill="url(#mark)" d="M104 76c0-8.837 7.163-16 16-16h18c8.837 0 16 7.163 16 16v76h24c8.837 0 16 7.163 16 16v12c0 8.837-7.163 16-16 16h-58c-8.837 0-16-7.163-16-16V76Z"/>
+
+  <circle cx="184" cy="74" r="10" fill="#9BE7FF" opacity="0.38" filter="url(#sparkGlow)"/>
+  <path fill="#F7FCFF" d="M184 56l7.2 10.8L202 74l-10.8 7.2L184 92l-7.2-10.8L166 74l10.8-7.2L184 56Z"/>
+  <circle cx="92" cy="176" r="6" fill="#D8F6FF" opacity="0.9"/>
+</svg>

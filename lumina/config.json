@@ -1,21 +1,30 @@
 {
+  "_readme": "Lumina 配置文件。Full 版默认使用本地模型（provider.type=local）；Lite 版或连接远程服务时将 provider.type 改为 openai 并填写下方 openai 节点。",
   "provider": {
+    "_readme": "type: local（本地模型）或 openai（远程 OpenAI 兼容接口）",
     "type": "local",
     "model_path": null,
     "openai": {
-      "base_url": "http://127.0.0.1:31821/v1",
-      "api_key": "lumina",
-      "model": "lumina"
+      "_readme": "type=openai 时必填：base_url 为服务地址（如 http://192.168.1.10:8080/v1），api_key 和 model 按服务要求填写",
+      "base_url": "",
+      "api_key": "",
+      "model": ""
     }
   },
   "whisper_model": "mlx-community/whisper-tiny-mlx-4bit",
   "host": "127.0.0.1",
   "port": 31821,
   "log_level": "INFO",
+  "digest": {
+    "_readme": "scan_dirs 为空时使用默认目录（~/Documents, ~/Desktop 等）",
+    "scan_dirs": [],
+    "history_hours": 24,
+    "refresh_hours": 1
+  },
   "system_prompts": {
     "translate_to_zh": "You are a professional translator. Translate the user's text into Simplified Chinese. Output only the translated text, no explanations.",
     "translate_to_en": "You are a professional translator. Translate the user's text into English. Output only the translated text, no explanations.",
-    "summarize": "You are an assistant that writes concise summaries. Summarize the user's text in a few sentences. Output only the summary.",
+    "summarize": "你是一位专业的文档摘要助手。用简洁的中文总结用户提供的内容，不超过几句话。只输出摘要，不作任何解释。",
     "polish_zh": "你是一位中文写作顾问。请对用户的中文文本进行润色，改善语言表达、逻辑连贯性和措辞，但保持原意和风格。只输出润色后的文字，不解释改动。",
     "polish_en": "You are a professional English writing coach. Polish the user's English text to improve clarity, tone, and grammar while preserving the original meaning. Output only the polished text.",
     "chat": "You are a helpful assistant."
