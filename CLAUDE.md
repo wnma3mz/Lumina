@@ -84,6 +84,10 @@ bash scripts/build_full.sh    # 打包为 Lumina.app
 - SVG rect: `x=20 y=20 w=216 h=216 rx=46`（符合 macOS HIG 安全边距）
 - PyInstaller 的 sips 处理会丢失透明通道，build 脚本最后用源文件覆盖 bundle 里的 icns
 
+## 测试资源
+
+- `tests/fixtures/2010_Bottou_SGD.pdf` — 10 页英文论文，用于 PDF 翻译/总结功能的快速测试（约 40s 完成）
+
 ## 已知问题 / 注意事项
 
 - **网络代理**：所有外部下载失败时用 `HTTP_PROXY=http://127.0.0.1:7890`
