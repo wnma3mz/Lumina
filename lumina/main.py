@@ -246,8 +246,12 @@ def cmd_server(args):
     _write_pid()
 
     # 启动后台摘要任务（不阻塞服务）
+    # 先跑全量（若已过期），再立即跑一次增量（捕捉启动前的新活动）
     import threading
-    threading.Thread(target=_run_digest_task, args=(llm, False), daemon=True).start()
+    def _startup_digest():
+        _run_digest_task(llm, changelog=False)   # 全量（超过 history_hours 才真正执行）
+        _run_digest_task(llm, changelog=True)    # 增量：有新活动则立即追加，无则跳过
+    threading.Thread(target=_startup_digest, daemon=True).start()
 
     if _EDITION in ("full", "lite"):
         _run_with_menubar(fastapi_app, cfg, llm)
