@@ -94,73 +94,108 @@ PLIST
     local tmp_sh="$workflow_path/Contents/_action.sh"
     printf '%s' "$shell_script" > "$tmp_sh"
 
-    # 用 Python 安全生成 document.wflow（XML 转义 shell 内容）
-    python3 - "$tmp_sh" "$workflow_path/Contents/document.wflow" <<'PYEOF'
-import sys
-import xml.sax.saxutils as saxutils
+    # 用 Python 生成 document.wflow（用 plistlib 保证格式正确，UUID 随机生成）
+    python3 - "$tmp_sh" "$workflow_path/Contents/document.wflow" "$file_type" <<'PYEOF'
+import sys, uuid, plistlib
 
 shell_script_path = sys.argv[1]
 output_path = sys.argv[2]
+file_type = sys.argv[3]  # e.g. "com.adobe.pdf" or "public.plain-text" or "none"
 
 with open(shell_script_path) as f:
     shell_content = f.read()
 
-escaped = saxutils.escape(shell_content)
+# 输入类型：文件系统对象（Finder 选中文件传入）
+input_type_id  = "com.apple.Automator.fileSystemObject"
+output_type_id = "com.apple.Automator.nothing"
 
-wflow = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>AMApplicationBuild</key><string>521</string>
-    <key>AMApplicationVersion</key><string>2.10</string>
-    <key>AMDocumentVersion</key><string>2</string>
-    <key>actions</key>
-    <array>
-        <dict>
-            <key>action</key>
-            <dict>
-                <key>ActionBundlePath</key>
-                <string>/System/Library/Automator/Run Shell Script.action</string>
-                <key>ActionName</key><string>Run Shell Script</string>
-                <key>ActionParameters</key>
-                <dict>
-                    <key>COMMAND_STRING</key>
-                    <string>""" + escaped + """</string>
-                    <key>CheckedForUserDefaultShell</key><true/>
-                    <key>inputMethod</key><integer>1</integer>
-                    <key>shell</key><string>/bin/bash</string>
-                    <key>source</key><string></string>
-                </dict>
-                <key>BundleIdentifier</key>
-                <string>com.apple.RunShellScript</string>
-                <key>CFBundleVersion</key><string>2.0.3</string>
-                <key>CanShowSelectedItemsWhenRun</key><false/>
-                <key>CanShowWhenRun</key><true/>
-                <key>Category</key>
-                <array><string>AMCategoryUtilities</string></array>
-                <key>Class Name</key><string>RunShellScriptAction</string>
-                <key>InputUUID</key><string>D2F90C67-C3B3-4FE1-92C4-9EDAE80C6E97</string>
-                <key>OutputUUID</key><string>3B714E91-27F7-4C9E-935E-A60B6C30D01B</string>
-                <key>UUID</key><string>1A2B3C4D-5E6F-7890-ABCD-EF1234567890</string>
-                <key>UnlockTimeout</key><integer>0</integer>
-                <key>arguments</key><dict/>
-                <key>isViewVisible</key><integer>1</integer>
-                <key>location</key><string>309.000000:253.000000</string>
-            </dict>
-            <key>isViewVisible</key><integer>1</integer>
-        </dict>
-    </array>
-    <key>connectors</key><dict/>
-    <key>workflowMetaData</key>
-    <dict>
-        <key>workflowTypeIdentifier</key>
-        <string>com.apple.Automator.servicesMenu</string>
-    </dict>
-</dict>
-</plist>"""
+action_uuid     = str(uuid.uuid4()).upper()
+input_uuid      = str(uuid.uuid4()).upper()
+output_uuid     = str(uuid.uuid4()).upper()
 
-with open(output_path, "w", encoding="utf-8") as f:
-    f.write(wflow)
+d = {
+    "AMApplicationBuild":   "521",
+    "AMApplicationVersion": "2.10",
+    "AMDocumentVersion":    "2",
+    "actions": [
+        {
+            "action": {
+                "AMAccepts": {
+                    "Container": "List",
+                    "Optional": True,
+                    "Types": ["com.apple.cocoa.string"],
+                },
+                "AMActionVersion": "2.0.3",
+                "AMApplication": ["自动操作"],
+                "AMParameterProperties": {
+                    "COMMAND_STRING": {},
+                    "CheckedForUserDefaultShell": {},
+                    "inputMethod": {},
+                    "shell": {},
+                    "source": {},
+                },
+                "AMProvides": {
+                    "Container": "List",
+                    "Types": ["com.apple.cocoa.string"],
+                },
+                "ActionBundlePath": "/System/Library/Automator/Run Shell Script.action",
+                "ActionName": "运行Shell脚本",
+                "ActionParameters": {
+                    "COMMAND_STRING": shell_content,
+                    "CheckedForUserDefaultShell": True,
+                    "inputMethod": 1,
+                    "shell": "/bin/bash",
+                    "source": "",
+                },
+                "BundleIdentifier": "com.apple.RunShellScript",
+                "CFBundleVersion": "2.0.3",
+                "CanShowSelectedItemsWhenRun": False,
+                "CanShowWhenRun": True,
+                "Category": ["AMCategoryUtilities"],
+                "Class Name": "RunShellScriptAction",
+                "InputUUID":  input_uuid,
+                "OutputUUID": output_uuid,
+                "UUID":       action_uuid,
+                "Keywords": ["Shell", "脚本", "命令", "运行", "Unix"],
+                "UnlocalizedApplications": ["Automator"],
+                "UnlockTimeout": 0,
+                "arguments": {
+                    "0": {"default value": 0,     "name": "inputMethod",              "required": "0", "type": "0", "uuid": "0"},
+                    "1": {"default value": False,  "name": "CheckedForUserDefaultShell","required": "0", "type": "0", "uuid": "1"},
+                    "2": {"default value": "",     "name": "source",                   "required": "0", "type": "0", "uuid": "2"},
+                    "3": {"default value": "",     "name": "COMMAND_STRING",            "required": "0", "type": "0", "uuid": "3"},
+                    "4": {"default value": "/bin/sh", "name": "shell",                 "required": "0", "type": "0", "uuid": "4"},
+                },
+                "isViewVisible": 1,
+                "location": "309.000000:305.000000",
+                "nibPath": "/System/Library/Automator/Run Shell Script.action/Contents/Resources/Base.lproj/main.nib",
+            },
+            "isViewVisible": 1,
+        }
+    ],
+    "connectors": {},
+    "workflowMetaData": {
+        "applicationBundleID": "com.apple.finder",
+        "applicationBundleIDsByPath": {"/System/Library/CoreServices/Finder.app": "com.apple.finder"},
+        "applicationPath": "/System/Library/CoreServices/Finder.app",
+        "applicationPaths": ["/System/Library/CoreServices/Finder.app"],
+        "inputTypeIdentifier":          input_type_id,
+        "outputTypeIdentifier":         output_type_id,
+        "presentationMode":             15,
+        "processesInput":               False,
+        "serviceApplicationBundleID":   "com.apple.finder",
+        "serviceApplicationPath":       "/System/Library/CoreServices/Finder.app",
+        "serviceInputTypeIdentifier":   input_type_id,
+        "serviceOutputTypeIdentifier":  output_type_id,
+        "serviceProcessesInput":        False,
+        "systemImageName":              "NSTouchBarSend",
+        "useAutomaticInputType":        False,
+        "workflowTypeIdentifier":       "com.apple.Automator.servicesMenu",
+    },
+}
+
+with open(output_path, "wb") as f:
+    plistlib.dump(d, f, fmt=plistlib.FMT_XML)
 PYEOF
 
     rm -f "$tmp_sh"
@@ -169,10 +204,15 @@ PYEOF
 
 # ── Quick Action 1：翻译 PDF ───────────────────────────────────────────────
 TRANSLATE_SCRIPT='#!/usr/bin/env bash
-if ! curl -s --noproxy '"'"'*'"'"' --max-time 2 http://127.0.0.1:31821/health &>/dev/null; then
+exec 2>>"$HOME/.lumina/qa.log"
+echo "=== translate triggered $(date) args=$# ===" >&2
+echo "files: $@" >&2
+if ! curl -s --noproxy '"'"'*'"'"' --max-time 2 http://127.0.0.1:31821/health >>$HOME/.lumina/qa.log 2>&1; then
     osascript -e '"'"'display notification "请先启动 lumina server" with title "Lumina" subtitle "服务未运行"'"'"'
+    echo "health check FAILED" >&2
     exit 1
 fi
+echo "health check OK" >&2
 for f in "$@"; do
     name="$(basename "$f")"
     ext="${name##*.}"
@@ -181,12 +221,12 @@ for f in "$@"; do
     dir="$(dirname "$f")"
     base="$(basename "$f" .pdf)"
     osascript -e "display notification \"正在翻译：${base}.pdf\" with title \"Lumina\""
-    LUMINA_LOG_LEVEL=WARNING LUMINA_CMD pdf "$f" -o "$dir" 2>/tmp/lumina_qa.log
+    LUMINA_LOG_LEVEL=WARNING LUMINA_CMD pdf "$f" -o "$dir" 2>>"$HOME/.lumina/qa.log"
     if [[ $? -eq 0 ]]; then
         osascript -e "display notification \"翻译完成：${base}-mono.pdf\" with title \"Lumina\" subtitle \"双语版：${base}-dual.pdf\""
         open -R "$dir/${base}-mono.pdf" 2>/dev/null || open "$dir"
     else
-        osascript -e "display notification \"翻译失败，详情见 /tmp/lumina_qa.log\" with title \"Lumina\""
+        osascript -e "display notification \"翻译失败，详情见 $HOME/.lumina/qa.log\" with title \"Lumina\""
     fi
 done'
 TRANSLATE_SCRIPT="${TRANSLATE_SCRIPT//LUMINA_CMD/$LUMINA_CMD}"
@@ -194,10 +234,15 @@ install_workflow "用 Lumina 翻译 PDF" "$TRANSLATE_SCRIPT"
 
 # ── Quick Action 2：总结 PDF ───────────────────────────────────────────────
 SUMMARIZE_SCRIPT='#!/usr/bin/env bash
-if ! curl -s --noproxy '"'"'*'"'"' --max-time 2 http://127.0.0.1:31821/health &>/dev/null; then
+exec 2>>"$HOME/.lumina/qa.log"
+echo "=== summarize triggered $(date) args=$# ===" >&2
+echo "files: $@" >&2
+if ! curl -s --noproxy '"'"'*'"'"' --max-time 2 http://127.0.0.1:31821/health >>$HOME/.lumina/qa.log 2>&1; then
     osascript -e '"'"'display notification "请先启动 lumina server" with title "Lumina" subtitle "服务未运行"'"'"'
+    echo "health check FAILED" >&2
     exit 1
 fi
+echo "health check OK" >&2
 for f in "$@"; do
     name="$(basename "$f")"
     ext="${name##*.}"
@@ -207,12 +252,12 @@ for f in "$@"; do
     base="$(basename "$f" .pdf)"
     out_file="$dir/${base}-summary.txt"
     osascript -e "display notification \"正在生成摘要：${base}.pdf\" with title \"Lumina\""
-    LUMINA_LOG_LEVEL=WARNING LUMINA_CMD summarize "$f" 2>/tmp/lumina_qa.log
+    LUMINA_LOG_LEVEL=WARNING LUMINA_CMD summarize "$f" 2>>"$HOME/.lumina/qa.log"
     if [[ $? -eq 0 ]]; then
         osascript -e "display notification \"摘要已保存：${base}-summary.txt\" with title \"Lumina\""
         open -R "$out_file" 2>/dev/null || open "$dir"
     else
-        osascript -e "display notification \"生成摘要失败，详情见 /tmp/lumina_qa.log\" with title \"Lumina\""
+        osascript -e "display notification \"生成摘要失败，详情见 $HOME/.lumina/qa.log\" with title \"Lumina\""
     fi
 done'
 SUMMARIZE_SCRIPT="${SUMMARIZE_SCRIPT//LUMINA_CMD/$LUMINA_CMD}"
@@ -220,8 +265,12 @@ install_workflow "用 Lumina 总结 PDF" "$SUMMARIZE_SCRIPT"
 
 # ── Quick Action 3：润色文本（处理 TXT / MD 文件）────────────────────────────
 POLISH_SCRIPT='#!/usr/bin/env bash
-if ! curl -s --noproxy '"'"'*'"'"' --max-time 2 http://127.0.0.1:31821/health &>/dev/null; then
+exec 2>>"$HOME/.lumina/qa.log"
+echo "=== polish triggered $(date) args=$# ===" >&2
+echo "files: $@" >&2
+if ! curl -s --noproxy '"'"'*'"'"' --max-time 2 http://127.0.0.1:31821/health >>$HOME/.lumina/qa.log 2>&1; then
     osascript -e '"'"'display notification "请先启动 lumina server" with title "Lumina" subtitle "服务未运行"'"'"'
+    echo "health check FAILED" >&2
     exit 1
 fi
 for f in "$@"; do
@@ -240,12 +289,12 @@ for f in "$@"; do
     fi
 
     osascript -e "display notification \"正在润色：$(basename "$f")\" with title \"Lumina\""
-    LUMINA_LOG_LEVEL=WARNING LUMINA_CMD polish "$f" --lang "$LANG_ARG" 2>/tmp/lumina_qa.log
+    LUMINA_LOG_LEVEL=WARNING LUMINA_CMD polish "$f" --lang "$LANG_ARG" 2>>"$HOME/.lumina/qa.log"
     if [[ $? -eq 0 ]]; then
         osascript -e "display notification \"润色完成：${base}-polished.$ext\" with title \"Lumina\""
         open -R "$out_file" 2>/dev/null || open "$dir"
     else
-        osascript -e "display notification \"润色失败，详情见 /tmp/lumina_qa.log\" with title \"Lumina\""
+        osascript -e "display notification \"润色失败，详情见 $HOME/.lumina/qa.log\" with title \"Lumina\""
     fi
 done'
 POLISH_SCRIPT="${POLISH_SCRIPT//LUMINA_CMD/$LUMINA_CMD}"
