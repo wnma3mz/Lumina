@@ -151,4 +151,4 @@ bash scripts/build_full.sh    # 打包为 Lumina.app
 
 ## 版本
 
-当前：`v0.2.0`（`pyproject.toml` 和 `scripts/lumina_full.spec` 中的 `CFBundleShortVersionString`）
+当前：`v0.3.0`（`pyproject.toml` 和 `scripts/lumina_full.spec` 中的 `CFBundleShortVersionString`）
