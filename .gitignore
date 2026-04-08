@@ -10,3 +10,16 @@ build/
 models/
 uv.lock
 .DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test artifacts (only keep the committed fixture)
+tests/fixtures/*.pdf
+!tests/fixtures/2010_Bottou_SGD.pdf
+tests/fixtures/*-summary.txt
+tests/fixtures/*-mono.pdf
+tests/fixtures/*-dual.pdf
