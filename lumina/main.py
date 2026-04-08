@@ -278,19 +278,27 @@ def _run_digest_task(llm, changelog: bool = False):
 
 
 def _start_digest_timer(llm, interval: int = 3600):
-    """每小时在后台线程生成 changelog（命令行模式，与 menubar 的 rumps.timer 行为一致）。"""
+    """整点（或按 interval 覆盖）在后台线程生成 changelog。"""
     import threading
+    import time
+
+    def _seconds_to_next_hour():
+        now = time.time()
+        return 3600 - (now % 3600)
 
     def _loop():
-        t = threading.Timer(interval, _loop)
+        _run_digest_task(llm, changelog=True)
+        # 下一次仍对齐整点
+        delay = _seconds_to_next_hour() if interval == 3600 else interval
+        t = threading.Timer(delay, _loop)
         t.daemon = True
         t.start()
-        _run_digest_task(llm, changelog=True)
 
-    t = threading.Timer(interval, _loop)
+    delay = _seconds_to_next_hour() if interval == 3600 else interval
+    t = threading.Timer(delay, _loop)
     t.daemon = True
     t.start()
-    logger.info("Digest timer started (interval=%ds)", interval)
+    logger.info("Digest timer started, next trigger in %.0fs (interval=%ds)", delay, interval)
 
 
 def _run_with_menubar(fastapi_app, cfg, llm):

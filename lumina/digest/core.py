@@ -120,14 +120,22 @@ async def _collect_all() -> str:
                            "error": traceback.format_exc()}
         else:
             text = r or ""
-            cache[name] = {
-                "chars": len(text),
-                "lines": text.count("\n"),
-                "preview": text[:300] if text else None,
-                "error": None,
-            }
-            if text.strip():
-                sections.append(text)
+            if text == "__PERMISSION_DENIED__":
+                cache[name] = {
+                    "chars": 0, "lines": 0, "preview": None,
+                    "permission_denied": True,
+                    "error": None,
+                }
+            else:
+                cache[name] = {
+                    "chars": len(text),
+                    "lines": text.count("\n"),
+                    "preview": text[:300] if text else None,
+                    "permission_denied": False,
+                    "error": None,
+                }
+                if text.strip():
+                    sections.append(text)
     _last_collector_results = cache
 
     if not sections:

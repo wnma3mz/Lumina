@@ -206,32 +206,56 @@ def collect_browser_history(n: int = 50) -> str:
 
 
 def collect_notes_app() -> str:
-    """通过 AppleScript 读取 Notes.app 内容（最近 history_hours 修改的笔记）。"""
+    """读取 Notes NoteStore.sqlite。
+
+    macOS TCC 限制：打包后的 .app 需要「完整磁盘访问」才能读取备忘录数据库。
+    若权限不足，返回特殊标记 '__PERMISSION_DENIED__'，由 core.py 转为提示信息。
+    """
+    import datetime
+    import sqlite3 as _sqlite3
     cfg = get_cfg()
     try:
-        script = f'''
-tell application "Notes"
-    set cutoff to (current date) - ({int(cfg.history_hours * 3600)} * seconds)
-    set result to ""
-    repeat with n in every note
-        if modification date of n > cutoff then
-            set noteTitle to name of n
-            set noteBody to text 1 thru (min(200, (count characters of (body of n)))) of (body of n)
-            set result to result & "**" & noteTitle & "**:\\n  " & noteBody & "\\n\\n"
-        end if
-    end repeat
-    return result
-end tell
-'''
-        out = subprocess.check_output(
-            ["osascript", "-e", script],
-            timeout=10, text=True, stderr=subprocess.DEVNULL
-        ).strip()
-        if not out:
+        db_path = Path.home() / "Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"
+        if not db_path.exists():
             return ""
-        return f"## 备忘录（过去 {cfg.history_hours:.0f}h 修改）\n{out}"
+
+        cutoff_ts = (datetime.datetime.now() - datetime.timedelta(hours=cfg.history_hours)).timestamp()
+        # CoreData 时间戳 epoch 是 2001-01-01，比 Unix epoch 晚 978307200 秒
+        cutoff_core = cutoff_ts - 978307200
+
+        # 先 cp 到 /tmp 规避文件锁
+        import shutil as _shutil
+        tmp_db = Path("/tmp/lumina_notes.db")
+        _shutil.copy2(str(db_path), str(tmp_db))
+        conn = _sqlite3.connect(str(tmp_db))
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT ZTITLE1, ZSNIPPET FROM ZICCLOUDSYNCINGOBJECT "
+            "WHERE ZMODIFICATIONDATE1 > ? AND ZTITLE1 IS NOT NULL "
+            "ORDER BY ZMODIFICATIONDATE1 DESC LIMIT 20",
+            (cutoff_core,),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        tmp_db.unlink(missing_ok=True)
+
+        if not rows:
+            return ""
+
+        entries = []
+        for title, snippet in rows:
+            snippet_text = (snippet or "").strip()[:200]
+            if snippet_text:
+                entries.append(f"**{title}**:\n  {snippet_text}")
+            else:
+                entries.append(f"**{title}**")
+
+        return f"## 备忘录（过去 {cfg.history_hours:.0f}h 修改）\n" + "\n\n".join(entries)
+    except PermissionError:
+        logger.warning("notes app: 权限不足，请在「系统设置 → 隐私与安全 → 完整磁盘访问」中授权 Lumina")
+        return "__PERMISSION_DENIED__"
     except Exception as e:
-        logger.debug("notes app: %s", e)
+        logger.debug("notes app sqlite: %s", e)
         return ""
 
 

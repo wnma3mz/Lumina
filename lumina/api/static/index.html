@@ -11,6 +11,10 @@
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="manifest" href="/manifest.json">
 <title>Lumina</title>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -55,9 +59,6 @@
 
   /* ── Main content ── */
   main { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
-
-  .panel { display: none; flex-direction: column; gap: 14px; }
-  .panel.active { display: flex; }
 
   /* ── Cards ── */
   .card { background: var(--card); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
@@ -105,15 +106,11 @@
   .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
 
   /* ── Progress ── */
-  .progress-wrap { display: none; flex-direction: column; gap: 8px; }
-  .progress-wrap.visible { display: flex; }
-  .progress-bar-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
-  .progress-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .4s; width: 0%; }
+  .progress-bar-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-bottom: 6px; }
+  .progress-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .4s; }
   .progress-label { font-size: 13px; color: var(--sub); }
 
   /* ── Result area ── */
-  .result-area { display: none; flex-direction: column; gap: 10px; }
-  .result-area.visible { display: flex; }
   .result-text {
     background: var(--bg); border-radius: 12px; padding: 14px;
     font-size: 15px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
@@ -134,569 +131,542 @@
   .btn-dl:active { background: rgba(0,122,255,.08); }
 
   /* ── Error ── */
-  .error-msg { color: var(--danger); font-size: 14px; display: none; padding: 4px 0; }
-  .error-msg.visible { display: block; }
+  .error-msg { color: var(--danger); font-size: 14px; padding: 4px 0; }
 
-  /* ── Digest show-more ── */
-  .more-btn {
-    display: block; width: 100%; margin-top: 12px; padding: 10px;
-    border: 1px solid var(--border); border-radius: 10px; background: transparent;
-    color: var(--accent); font-size: 14px; cursor: pointer; text-align: center;
+  /* ── Digest sections ── */
+  .digest-item {
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 8px;
+    background: var(--card);
   }
-  .more-btn:hover { background: rgba(0,122,255,.06); }
+  .digest-item-header {
+    padding: 12px 16px; cursor: pointer; font-size: 14px; font-weight: 600;
+    display: flex; align-items: center; justify-content: space-between;
+    user-select: none;
+  }
+  .digest-item-header:hover { background: rgba(0,0,0,.03); }
+  .digest-item-body {
+    padding: 0 16px 14px; border-top: 1px solid var(--border); padding-top: 12px;
+    font-size: 14px; line-height: 1.7;
+  }
+  /* Markdown 样式 */
+  .digest-item-body h1, .digest-item-body h2, .digest-item-body h3, .digest-item-body h4 {
+    margin: 12px 0 6px; font-weight: 700;
+  }
+  .digest-item-body h1 { font-size: 18px; }
+  .digest-item-body h2 { font-size: 16px; }
+  .digest-item-body h3 { font-size: 15px; }
+  .digest-item-body h4 { font-size: 14px; }
+  .digest-item-body p { margin: 0 0 8px; }
+  .digest-item-body ul, .digest-item-body ol { padding-left: 20px; margin: 0 0 8px; }
+  .digest-item-body li { margin-bottom: 4px; }
+  .digest-item-body code {
+    background: var(--bg); border-radius: 4px; padding: 1px 5px;
+    font-size: 13px; font-family: "SF Mono", monospace;
+  }
+  .digest-item-body pre {
+    background: var(--bg); border-radius: 8px; padding: 10px 12px;
+    overflow-x: auto; margin: 8px 0;
+  }
+  .digest-item-body pre code { background: none; padding: 0; }
+  .digest-item-body hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .digest-item-body strong { font-weight: 700; }
+  .digest-item-body em { font-style: italic; }
+
+  /* ── Debug panel ── */
+  .debug-section { margin-bottom: 8px; }
+  .debug-summary {
+    cursor: pointer; font-size: 13px; font-weight: 500;
+    display: flex; align-items: center; gap: 6px; padding: 4px 0;
+    list-style: none;
+  }
+  .debug-pre {
+    margin-top: 6px; padding: 10px; background: var(--bg); border-radius: 8px;
+    font-size: 12px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  }
 
   /* ── Bottom safe area ── */
   .safe-bottom { height: env(safe-area-inset-bottom, 16px); flex-shrink: 0; }
 </style>
 </head>
 <body>
-<div id="app">
+
+<div id="app" x-data="luminaApp()" x-init="init()">
   <header>
     <h1>Lumina</h1>
     <p>本地 AI · 隐私优先</p>
   </header>
 
   <div class="tabs">
-    <button class="tab-btn active" data-tab="digest" onclick="switchTab('digest')">📋 日报</button>
-    <button class="tab-btn" data-tab="translate" onclick="switchTab('translate')">📄 翻译</button>
-    <button class="tab-btn" data-tab="summarize" onclick="switchTab('summarize')">📝 总结</button>
+    <button class="tab-btn" :class="{ active: tab === 'digest' }" @click="tab = 'digest'; loadDigest()">📋 日报</button>
+    <button class="tab-btn" :class="{ active: tab === 'translate' }" @click="tab = 'translate'">📄 翻译</button>
+    <button class="tab-btn" :class="{ active: tab === 'summarize' }" @click="tab = 'summarize'">📝 总结</button>
   </div>
 
   <main>
-    <!-- ── 翻译 panel ── -->
-    <div id="panel-translate" class="panel active">
-      <div class="card">
-        <label>上传 PDF</label>
-        <div class="drop-zone" id="dz-translate" ondragover="onDrag(event,'translate')" ondragleave="offDrag('translate')" ondrop="onDrop(event,'translate')">
-          <input type="file" accept=".pdf" onchange="onFile(event,'translate')">
-          <div class="icon">📂</div>
-          <div class="hint">点击选择或<span>拖入 PDF</span></div>
-          <div class="filename" id="fn-translate"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <label>或输入 PDF 链接</label>
-        <div class="url-row">
-          <input type="url" id="url-translate" placeholder="https://example.com/paper.pdf">
-        </div>
-      </div>
-
-      <div class="card">
-        <label>翻译方向</label>
-        <div class="options">
-          <button class="opt-btn selected" data-panel="translate" data-val="zh" onclick="selectOpt(this,'translate')">英 → 中</button>
-          <button class="opt-btn" data-panel="translate" data-val="en" onclick="selectOpt(this,'translate')">中 → 英</button>
-        </div>
-      </div>
-
-      <div class="error-msg" id="err-translate"></div>
-
-      <div class="progress-wrap" id="prog-translate">
-        <div class="progress-bar-track"><div class="progress-bar-fill" id="prog-fill-translate"></div></div>
-        <div class="progress-label" id="prog-label-translate">正在翻译，请稍候…</div>
-      </div>
-
-      <div class="result-area" id="dl-translate">
-        <div class="dl-row">
-          <a class="btn-dl" id="dl-mono" href="#" download>⬇ 中文版</a>
-          <a class="btn-dl" id="dl-dual" href="#" download>⬇ 双语版</a>
-        </div>
-      </div>
-
-      <button class="btn-primary" id="btn-translate" onclick="runTranslate()">开始翻译</button>
-    </div>
-
-    <!-- ── 总结 panel ── -->
-    <div id="panel-summarize" class="panel">
-      <div class="card">
-        <label>上传 PDF</label>
-        <div class="drop-zone" id="dz-summarize" ondragover="onDrag(event,'summarize')" ondragleave="offDrag('summarize')" ondrop="onDrop(event,'summarize')">
-          <input type="file" accept=".pdf" onchange="onFile(event,'summarize')">
-          <div class="icon">📂</div>
-          <div class="hint">点击选择或<span>拖入 PDF</span></div>
-          <div class="filename" id="fn-summarize"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <label>或输入 PDF 链接</label>
-        <div class="url-row">
-          <input type="url" id="url-summarize" placeholder="https://example.com/paper.pdf">
-        </div>
-      </div>
-
-      <div class="error-msg" id="err-summarize"></div>
-
-      <div class="progress-wrap" id="prog-summarize">
-        <div class="progress-bar-track"><div class="progress-bar-fill" id="prog-fill-summarize"></div></div>
-        <div class="progress-label" id="prog-label-summarize">正在提取文字…</div>
-      </div>
-
-      <div class="result-area" id="res-summarize">
-        <div class="result-text" id="res-text-summarize"></div>
-      </div>
-
-      <button class="btn-primary" id="btn-summarize" onclick="runSummarize()">生成总结</button>
-    </div>
 
     <!-- ── 日报 panel ── -->
-    <div id="panel-digest" class="panel">
-      <div class="card" id="digest-meta-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <span id="digest-time" style="font-size:13px;color:var(--sub);">加载中…</span>
-          <button class="opt-btn selected" onclick="refreshDigest()" id="btn-digest-refresh" style="padding:6px 14px;font-size:13px;">刷新</button>
+    <template x-if="tab === 'digest'">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+
+        <!-- 工具栏 -->
+        <div class="card" style="padding:14px 18px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span style="font-size:13px;color:var(--sub);" x-text="digest.timeLabel"></span>
+            <div style="display:flex;gap:8px;">
+              <template x-if="digest.sections.length > 1">
+                <button class="opt-btn" :class="{ selected: digest.allExpanded }"
+                  style="padding:5px 12px;font-size:12px;"
+                  @click="digest.allExpanded = !digest.allExpanded; digest.sections.forEach((s,i) => s.open = digest.allExpanded || i === 0)"
+                  x-text="digest.allExpanded ? '收起全部' : '展开全部'"></button>
+              </template>
+              <button class="opt-btn selected" style="padding:5px 12px;font-size:13px;font-weight:600;"
+                :disabled="digest.generating"
+                @click="triggerGenerate()"
+                x-text="digest.generating ? '生成中…' : '立即生成'"></button>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="card" id="digest-spinner-card" style="display:none;text-align:center;padding:32px;">
-        <div style="font-size:28px;margin-bottom:8px;">⏳</div>
-        <div style="color:var(--sub);font-size:14px;">正在生成摘要，请稍候…</div>
-      </div>
-      <div class="card" id="digest-content-card" style="display:none;">
-        <div id="digest-body" style="font-size:14px;line-height:1.7;color:var(--label);"></div>
-      </div>
-      <div class="error-msg" id="err-digest"></div>
 
-      <!-- ── 数据源调试折叠 ── -->
-      <div class="card" id="digest-debug-card" style="padding:0;overflow:hidden;">
-        <button onclick="toggleDebug()" id="btn-debug-toggle"
-          style="width:100%;padding:14px 18px;background:none;border:none;cursor:pointer;
-                 display:flex;align-items:center;justify-content:space-between;
-                 font-size:13px;font-weight:600;color:var(--sub);font-family:var(--font);">
-          <span>数据来源</span>
-          <span id="debug-arrow" style="transition:transform .2s;">▶</span>
-        </button>
-        <div id="debug-body" style="display:none;padding:0 18px 16px;"></div>
+        <!-- 生成中 spinner -->
+        <template x-if="digest.generating">
+          <div class="card" style="text-align:center;padding:32px;">
+            <div style="font-size:28px;margin-bottom:8px;">⏳</div>
+            <div style="color:var(--sub);font-size:14px;">正在生成摘要，请稍候…</div>
+          </div>
+        </template>
+
+        <!-- 错误 -->
+        <template x-if="digest.error">
+          <div class="error-msg" x-text="digest.error"></div>
+        </template>
+
+        <!-- 条目列表 -->
+        <template x-if="!digest.generating && digest.sections.length > 0">
+          <div>
+            <template x-for="(sec, i) in digest.sections" :key="i">
+              <div class="digest-item">
+                <div class="digest-item-header" @click="sec.open = !sec.open">
+                  <span>
+                    <span style="color:var(--sub);font-size:12px;margin-right:6px;" x-text="i + 1"></span>
+                    <span x-text="sec.title"></span>
+                  </span>
+                  <span style="color:var(--sub);font-size:12px;transition:transform .2s;"
+                    :style="sec.open ? 'transform:rotate(90deg)' : ''">&rsaquo;</span>
+                </div>
+                <div class="digest-item-body" x-show="sec.open" x-html="sec.html"
+                  style="display:none;" x-transition></div>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- 空状态 -->
+        <template x-if="!digest.generating && digest.sections.length === 0 && !digest.error">
+          <div class="card">
+            <p style="color:var(--sub);font-size:14px;">暂无摘要，点击「立即生成」生成。</p>
+          </div>
+        </template>
+
+        <!-- 数据来源 -->
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div style="width:100%;padding:14px 18px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600;color:var(--sub);"
+            @click="debug.open = !debug.open; debug.open && loadDebug()">
+            <span>数据来源</span>
+            <span style="transition:transform .2s;" :style="debug.open ? 'transform:rotate(90deg)' : ''">▶</span>
+          </div>
+          <div x-show="debug.open" style="padding:0 18px 16px;display:none;" x-transition>
+            <template x-if="debug.loading">
+              <p style="color:var(--sub);font-size:13px;">加载中…</p>
+            </template>
+            <template x-if="!debug.loading && debug.activityCheck">
+              <p style="font-size:12px;color:var(--sub);margin-bottom:12px;"
+                x-text="(debug.activityCheck.has_new ? '有新活动' : '无新活动，跳过生成') + ' · 检测于 ' + debug.activityCheck.time"></p>
+            </template>
+            <template x-for="(info, key) in debug.collectors" :key="key">
+              <details class="debug-section">
+                <summary class="debug-summary">
+                  <span :style="info.error ? 'color:var(--danger)' : info.permission_denied ? 'color:var(--warn,#f59e0b)' : info.chars > 0 ? 'color:var(--success)' : 'color:var(--sub)'">●</span>
+                  <span x-text="debug.names[key] || key"></span>
+                  <span style="color:var(--sub);font-size:12px;" x-text="info.error ? info.error.split('\n').pop() : info.permission_denied ? '需要授权' : info.chars > 0 ? info.lines + ' 行 / ' + info.chars + ' 字' : '空'"></span>
+                </summary>
+                <template x-if="info.permission_denied">
+                  <div style="padding:8px 0 4px;font-size:13px;line-height:1.6;">
+                    <span style="color:var(--warn,#f59e0b);">⚠ 权限不足，无法读取备忘录。</span><br>
+                    请前往 <strong>系统设置 → 隐私与安全 → 完整磁盘访问</strong>，<br>
+                    将 <strong>Lumina</strong> 添加到列表并开启，然后重启 Lumina 即可。
+                  </div>
+                </template>
+                <template x-if="info.preview && !info.permission_denied">
+                  <pre class="debug-pre" x-text="info.preview"></pre>
+                </template>
+                <template x-if="info.error && !info.preview">
+                  <pre class="debug-pre" style="color:var(--danger);" x-text="info.error"></pre>
+                </template>
+              </details>
+            </template>
+          </div>
+        </div>
+
       </div>
-    </div>
+    </template>
+
+    <!-- ── 翻译 panel ── -->
+    <template x-if="tab === 'translate'">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+
+        <div class="card">
+          <label>上传 PDF</label>
+          <div class="drop-zone" :class="{ over: translate.dragging }"
+            @dragover.prevent="translate.dragging = true"
+            @dragleave="translate.dragging = false"
+            @drop.prevent="translate.dragging = false; onDrop($event, 'translate')">
+            <input type="file" accept=".pdf" @change="onFile($event, 'translate')">
+            <div class="icon">📂</div>
+            <div class="hint">点击选择或<span>拖入 PDF</span></div>
+            <div class="filename" x-show="translate.filename" x-text="translate.filename"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <label>或输入 PDF 链接</label>
+          <div class="url-row">
+            <input type="url" x-model="translate.url" placeholder="https://example.com/paper.pdf">
+          </div>
+        </div>
+
+        <div class="card">
+          <label>翻译方向</label>
+          <div class="options">
+            <button class="opt-btn" :class="{ selected: translate.lang === 'zh' }" @click="translate.lang = 'zh'">英 → 中</button>
+            <button class="opt-btn" :class="{ selected: translate.lang === 'en' }" @click="translate.lang = 'en'">中 → 英</button>
+          </div>
+        </div>
+
+        <template x-if="translate.error">
+          <div class="error-msg" x-text="translate.error"></div>
+        </template>
+
+        <template x-if="translate.running">
+          <div class="card">
+            <div class="progress-bar-track"><div class="progress-bar-fill" :style="'width:' + translate.pct + '%'"></div></div>
+            <div class="progress-label" x-text="translate.label"></div>
+          </div>
+        </template>
+
+        <template x-if="translate.done">
+          <div class="dl-row">
+            <a class="btn-dl" :href="translate.monoUrl" download>⬇ 中文版</a>
+            <a class="btn-dl" :href="translate.dualUrl" download>⬇ 双语版</a>
+          </div>
+        </template>
+
+        <button class="btn-primary" :disabled="translate.running" @click="runTranslate()"
+          x-text="translate.running ? '翻译中…' : '开始翻译'"></button>
+      </div>
+    </template>
+
+    <!-- ── 总结 panel ── -->
+    <template x-if="tab === 'summarize'">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+
+        <div class="card">
+          <label>上传 PDF</label>
+          <div class="drop-zone" :class="{ over: summarize.dragging }"
+            @dragover.prevent="summarize.dragging = true"
+            @dragleave="summarize.dragging = false"
+            @drop.prevent="summarize.dragging = false; onDrop($event, 'summarize')">
+            <input type="file" accept=".pdf" @change="onFile($event, 'summarize')">
+            <div class="icon">📂</div>
+            <div class="hint">点击选择或<span>拖入 PDF</span></div>
+            <div class="filename" x-show="summarize.filename" x-text="summarize.filename"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <label>或输入 PDF 链接</label>
+          <div class="url-row">
+            <input type="url" x-model="summarize.url" placeholder="https://example.com/paper.pdf">
+          </div>
+        </div>
+
+        <template x-if="summarize.error">
+          <div class="error-msg" x-text="summarize.error"></div>
+        </template>
+
+        <template x-if="summarize.running">
+          <div class="card">
+            <div class="progress-bar-track"><div class="progress-bar-fill" :style="'width:' + summarize.pct + '%'"></div></div>
+            <div class="progress-label" x-text="summarize.label"></div>
+          </div>
+        </template>
+
+        <template x-if="summarize.text">
+          <div class="card">
+            <div class="result-text" :class="{ streaming: summarize.running }" x-text="summarize.text"
+              style="max-height:340px;overflow-y:auto;"></div>
+          </div>
+        </template>
+
+        <button class="btn-primary" :disabled="summarize.running" @click="runSummarize()"
+          x-text="summarize.running ? '总结中…' : '生成总结'"></button>
+      </div>
+    </template>
+
   </main>
-
   <div class="safe-bottom"></div>
 </div>
 
 <script>
-// ── State ──
-const state = {
-  translate: { file: null, lang: 'zh' },
-  summarize: { file: null },
-};
+// 配置 marked：禁用 mangle/headerIds 避免警告
+marked.use({ mangle: false, headerIds: false, breaks: true, gfm: true });
 
-// ── Tabs ──
-function switchTab(name) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
-  const btn = document.querySelector('.tab-btn[data-tab="' + name + '"]');
-  if (btn) btn.classList.add('active');
-  if (name === 'digest') loadDigest();
-}
+function luminaApp() {
+  return {
+    tab: 'digest',
 
-// ── Options ──
-function selectOpt(el, panel) {
-  el.closest('.options').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  state[panel].lang = el.dataset.val;
-}
+    // ── Digest ──
+    digest: {
+      sections: [],
+      timeLabel: '加载中…',
+      generating: false,
+      allExpanded: false,
+      error: '',
+      _pollTimer: null,
+      _autoTimer: null,
+    },
 
-// ── File drag/drop/select ──
-function onFile(e, panel) {
-  const f = e.target.files[0];
-  if (f) setFile(panel, f);
-}
-function onDrag(e, panel) {
-  e.preventDefault();
-  document.getElementById('dz-' + panel).classList.add('over');
-}
-function offDrag(panel) {
-  document.getElementById('dz-' + panel).classList.remove('over');
-}
-function onDrop(e, panel) {
-  e.preventDefault();
-  offDrag(panel);
-  const f = e.dataTransfer.files[0];
-  if (f && f.name.toLowerCase().endsWith('.pdf')) setFile(panel, f);
-}
-function setFile(panel, f) {
-  state[panel].file = f;
-  document.getElementById('url-' + panel).value = '';
-  const fn = document.getElementById('fn-' + panel);
-  fn.textContent = f.name;
-  fn.style.display = 'block';
-  hideError(panel);
-}
+    // ── Translate ──
+    translate: {
+      file: null, filename: '', url: '', lang: 'zh',
+      running: false, pct: 0, label: '', error: '',
+      done: false, monoUrl: '', dualUrl: '', dragging: false,
+    },
 
-// ── Helpers ──
-function showError(panel, msg) {
-  const el = document.getElementById('err-' + panel);
-  el.textContent = msg; el.classList.add('visible');
-}
-function hideError(panel) {
-  document.getElementById('err-' + panel).classList.remove('visible');
-}
-function setProgress(panel, pct, label) {
-  document.getElementById('prog-' + panel).classList.add('visible');
-  document.getElementById('prog-fill-' + panel).style.width = pct + '%';
-  if (label) document.getElementById('prog-label-' + panel).textContent = label;
-}
-function hideProgress(panel) {
-  document.getElementById('prog-' + panel).classList.remove('visible');
-}
-function setBtn(panel, disabled, text) {
-  const b = document.getElementById('btn-' + panel);
-  b.disabled = disabled; b.textContent = text;
-}
+    // ── Summarize ──
+    summarize: {
+      file: null, filename: '', url: '',
+      running: false, pct: 0, label: '', error: '', text: '', dragging: false,
+    },
 
-// ── Translate ──
-async function runTranslate() {
-  hideError('translate');
-  document.getElementById('dl-translate').classList.remove('visible');
+    // ── Debug ──
+    debug: {
+      open: false, loading: false,
+      activityCheck: null, collectors: {},
+      names: {
+        collect_shell_history:   '终端历史',
+        collect_git_logs:        'Git 提交',
+        collect_clipboard:       '剪贴板',
+        collect_browser_history: '浏览器历史',
+        collect_notes_app:       '备忘录',
+        collect_markdown_notes:  'Markdown 笔记',
+        collect_ai_queries:      'AI 提问',
+      },
+    },
 
-  const file = state.translate.file;
-  const url  = normalizePdfUrl(document.getElementById('url-translate').value.trim());
-  if (!file && !url) return showError('translate', '请上传 PDF 或输入链接');
+    // ── Init ──
+    init() {
+      this.loadDigest();
+      // 每 5 分钟静默刷新（仅日报 tab 激活时）
+      this.digest._autoTimer = setInterval(() => {
+        if (this.tab === 'digest') this.loadDigest();
+      }, 5 * 60 * 1000);
+    },
 
-  setBtn('translate', true, '翻译中…');
-  setProgress('translate', 10, '正在上传…');
+    // ── Digest: load ──
+    async loadDigest() {
+      this._stopPoll();
+      this.digest.error = '';
+      try {
+        const res = await fetch('/v1/digest');
+        if (!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
 
-  try {
-    let res;
-    if (file) {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('lang_out', state.translate.lang);
-      res = await fetch('/v1/pdf/upload', { method: 'POST', body: fd });
-    } else {
-      res = await fetch('/v1/pdf/url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, action: 'translate', lang_out: state.translate.lang }),
-      });
-    }
-    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
-    const { job_id } = await res.json();
+        if (data.generating) {
+          this.digest.generating = true;
+          this.digest.timeLabel = '正在生成摘要…';
+          this.digest._pollTimer = setTimeout(() => this.loadDigest(), 2000);
+          return;
+        }
 
-    // Poll for completion
-    setProgress('translate', 30, '正在翻译，可能需要几分钟…');
-    let pct = 30;
-    while (true) {
-      await sleep(2000);
-      const poll = await fetch('/v1/pdf/job/' + job_id);
-      const data = await poll.json();
-      if (data.status === 'done') {
-        setProgress('translate', 100, '完成！');
-        document.getElementById('dl-mono').href = '/v1/pdf/download/' + job_id + '/mono';
-        document.getElementById('dl-dual').href = '/v1/pdf/download/' + job_id + '/dual';
-        document.getElementById('dl-translate').classList.add('visible');
-        hideProgress('translate');
-        break;
+        this.digest.generating = false;
+
+        if (data.generated_at) {
+          const d = new Date(data.generated_at);
+          this.digest.timeLabel = '生成于 ' + d.toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        } else {
+          this.digest.timeLabel = '尚未生成';
+        }
+
+        if (data.content) {
+          const rawSections = data.content.split('\n---\n').map(s => s.trim()).filter(s => s);
+          this.digest.sections = rawSections.map((s, i) => {
+            // 提取 "# 2026-04-08 21:24" 格式作为标题
+            const m = s.match(/^#\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/m);
+            const title = m ? m[1] : s.split('\n')[0].replace(/^#+\s*/, '').trim() || ('条目 ' + (i + 1));
+            // 去掉 HTML 注释行再渲染 Markdown
+            const cleaned = s.replace(/<!--.*?-->\n?/g, '');
+            return { title, html: marked.parse(cleaned), open: i === 0 };
+          });
+          this.digest.allExpanded = false;
+        } else {
+          this.digest.sections = [];
+        }
+      } catch(e) {
+        this.digest.error = '加载失败：' + e.message;
+        this.digest.generating = false;
       }
-      if (data.status === 'error') throw new Error(data.error || '翻译失败');
-      pct = Math.min(pct + 8, 90);
-      setProgress('translate', pct);
-    }
-  } catch(e) {
-    hideProgress('translate');
-    showError('translate', '错误：' + e.message);
-  } finally {
-    setBtn('translate', false, '开始翻译');
-  }
-}
+    },
 
-// ── Summarize ──
-async function runSummarize() {
-  hideError('summarize');
-  const resEl = document.getElementById('res-summarize');
-  const textEl = document.getElementById('res-text-summarize');
-  resEl.classList.remove('visible');
-  textEl.textContent = '';
-
-  const file = state.summarize.file;
-  const url  = normalizePdfUrl(document.getElementById('url-summarize').value.trim());
-  if (!file && !url) return showError('summarize', '请上传 PDF 或输入链接');
-
-  setBtn('summarize', true, '总结中…');
-  setProgress('summarize', 20, '正在提取文字…');
-
-  try {
-    let endpoint, body, headers = {};
-    if (file) {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('action', 'summarize');
-      endpoint = '/v1/pdf/upload_stream';
-      body = fd;
-    } else {
-      endpoint = '/v1/pdf/url_stream';
-      headers['Content-Type'] = 'application/json';
-      body = JSON.stringify({ url, action: 'summarize' });
-    }
-
-    const res = await fetch(endpoint, { method: 'POST', headers, body });
-    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
-
-    setProgress('summarize', 60, '正在生成摘要…');
-    resEl.classList.add('visible');
-    textEl.classList.add('streaming');
-
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
-        if (payload === '[DONE]') { textEl.classList.remove('streaming'); break; }
-        try {
-          const d = JSON.parse(payload);
-          if (d.text) textEl.textContent += d.text;
-        } catch {}
+    // ── Digest: trigger generate ──
+    async triggerGenerate() {
+      this.digest.generating = true;
+      this.digest.error = '';
+      try {
+        const res = await fetch('/v1/digest/refresh', { method: 'POST' });
+        if (!res.ok) throw new Error(res.statusText);
+        // poll 直到完成
+        while (true) {
+          await this._sleep(2000);
+          const poll = await fetch('/v1/digest');
+          if (!poll.ok) throw new Error(poll.statusText);
+          const data = await poll.json();
+          if (!data.generating) { await this.loadDigest(); return; }
+        }
+      } catch(e) {
+        this.digest.error = '生成失败：' + e.message;
+        this.digest.generating = false;
       }
-    }
-    textEl.classList.remove('streaming');
-    hideProgress('summarize');
-  } catch(e) {
-    hideProgress('summarize');
-    textEl.classList.remove('streaming');
-    showError('summarize', '错误：' + e.message);
-  } finally {
-    setBtn('summarize', false, '生成总结');
-  }
-}
+    },
 
-function normalizePdfUrl(url) {
-  // arXiv abs → pdf
-  return url.replace(/arxiv\.org\/abs\/([0-9]+\.[0-9]+)/g, 'arxiv.org/pdf/$1');
-}
+    _stopPoll() {
+      if (this.digest._pollTimer) { clearTimeout(this.digest._pollTimer); this.digest._pollTimer = null; }
+    },
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// ── Digest ──
-let _digestPollTimer = null;
-
-function _renderMarkdown(md) {
-  if (!md) return '';
-  md = md.replace(/<!--.*?-->\n?/g, '');
-  md = md.replace(/^### (.+)$/gm, '<h4 style="margin:14px 0 6px;font-size:15px;font-weight:700;">$1</h4>');
-  md = md.replace(/^## (.+)$/gm,  '<h3 style="margin:16px 0 8px;font-size:16px;font-weight:700;">$1</h3>');
-  md = md.replace(/^# (.+)$/gm,   '<h2 style="margin:18px 0 10px;font-size:18px;font-weight:700;">$1</h2>');
-  md = md.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  md = md.replace(/^---$/gm, '<hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">');
-  return md.split(/\n{2,}/).map(p => {
-    p = p.trim();
-    if (!p) return '';
-    if (/^<h[2-4]/.test(p) || /^<hr/.test(p)) return p;
-    return '<p style="margin:0 0 10px;">' + p.replace(/\n/g, '<br>') + '</p>';
-  }).join('');
-}
-
-function _stopDigestPoll() {
-  if (_digestPollTimer) { clearTimeout(_digestPollTimer); _digestPollTimer = null; }
-}
-
-const _DIGEST_DEFAULT_LIMIT = 20;
-const HR = '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">';
-
-function _renderDigestSections(container, sections) {
-  const limit = parseInt(localStorage.getItem('digestLimit') || _DIGEST_DEFAULT_LIMIT, 10);
-  const visible = sections.slice(0, limit);
-  const remaining = sections.length - visible.length;
-
-  container.innerHTML = visible.map(s => _renderMarkdown(s)).join(HR);
-
-  if (remaining > 0) {
-    const btn = document.createElement('button');
-    btn.className = 'more-btn';
-    btn.textContent = '显示更多（剩余 ' + remaining + ' 条）';
-    btn.onclick = () => {
-      const newLimit = limit + 20;
-      localStorage.setItem('digestLimit', newLimit);
-      _renderDigestSections(container, sections);
-    };
-    container.appendChild(btn);
-  } else if (sections.length > _DIGEST_DEFAULT_LIMIT) {
-    // all shown — offer to collapse
-    const btn = document.createElement('button');
-    btn.className = 'more-btn';
-    btn.textContent = '收起（仅显示最新 ' + _DIGEST_DEFAULT_LIMIT + ' 条）';
-    btn.onclick = () => {
-      localStorage.removeItem('digestLimit');
-      _renderDigestSections(container, sections);
-    };
-    container.appendChild(btn);
-  }
-}
-
-async function loadDigest() {
-  _stopDigestPoll();
-  const timeEl      = document.getElementById('digest-time');
-  const spinnerCard = document.getElementById('digest-spinner-card');
-  const contentCard = document.getElementById('digest-content-card');
-  const bodyEl      = document.getElementById('digest-body');
-  const errEl       = document.getElementById('err-digest');
-  errEl.classList.remove('visible');
-
-  try {
-    const res = await fetch('/v1/digest');
-    if (!res.ok) throw new Error(res.statusText);
-    const data = await res.json();
-
-    if (data.generating) {
-      timeEl.textContent = '正在生成摘要…';
-      spinnerCard.style.display = 'block';
-      contentCard.style.display = 'none';
-      _digestPollTimer = setTimeout(loadDigest, 3000);
-      return;
-    }
-
-    spinnerCard.style.display = 'none';
-
-    if (data.generated_at) {
-      const d = new Date(data.generated_at);
-      const fmt = d.toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
-      timeEl.textContent = '生成于 ' + fmt;
-    } else {
-      timeEl.textContent = '尚未生成';
-    }
-
-    if (data.content) {
-      // 按 \n---\n 分段（已 prepend，最新在前，无需 reverse）
-      const sections = data.content.split('\n---\n').map(s => s.trim()).filter(s => s);
-      _renderDigestSections(bodyEl, sections);
-      contentCard.style.display = 'block';
-    } else {
-      bodyEl.innerHTML = '<p style="color:var(--sub);">暂无摘要，点击「刷新」生成。</p>';
-      contentCard.style.display = 'block';
-    }
-  } catch(e) {
-    spinnerCard.style.display = 'none';
-    errEl.textContent = '加载失败：' + e.message;
-    errEl.classList.add('visible');
-  }
-}
-
-async function refreshDigest() {
-  const btn = document.getElementById('btn-digest-refresh');
-  btn.disabled = true;
-  btn.textContent = '生成中…';
-  document.getElementById('err-digest').classList.remove('visible');
-  try {
-    const res = await fetch('/v1/digest/refresh', { method: 'POST' });
-    if (!res.ok) throw new Error(res.statusText);
-    await loadDigest();
-  } catch(e) {
-    document.getElementById('err-digest').textContent = '刷新失败：' + e.message;
-    document.getElementById('err-digest').classList.add('visible');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '刷新';
-  }
-}
-
-// 日报自动刷新：tab 可见时每 5 分钟静默拉取一次
-let _digestAutoTimer = null;
-function _startDigestAutoRefresh() {
-  _stopDigestAutoRefresh();
-  _digestAutoTimer = setInterval(() => {
-    if (document.getElementById('panel-digest').classList.contains('active')) loadDigest();
-  }, 5 * 60 * 1000);
-}
-function _stopDigestAutoRefresh() {
-  if (_digestAutoTimer) { clearInterval(_digestAutoTimer); _digestAutoTimer = null; }
-}
-
-window.addEventListener('load', () => {
-  if (document.getElementById('panel-digest').classList.contains('active')) loadDigest();
-  _startDigestAutoRefresh();
-});
-
-// ── Debug panel ──
-let _debugOpen = false;
-
-function toggleDebug() {
-  _debugOpen = !_debugOpen;
-  const body = document.getElementById('debug-body');
-  const arrow = document.getElementById('debug-arrow');
-  body.style.display = _debugOpen ? 'block' : 'none';
-  arrow.style.transform = _debugOpen ? 'rotate(90deg)' : '';
-  if (_debugOpen) loadDebug();
-}
-
-async function loadDebug() {
-  const body = document.getElementById('debug-body');
-  body.innerHTML = '<p style="color:var(--sub);font-size:13px;">加载中…</p>';
-  try {
-    const res = await fetch('/v1/digest/debug');
-    if (!res.ok) throw new Error(res.statusText);
-    const data = await res.json();
-
-    const NAMES = {
-      shell_history:   '终端历史',
-      git_logs:        'Git 提交',
-      clipboard:       '剪贴板',
-      browser_history: '浏览器历史',
-      notes_app:       '备忘录',
-      markdown_notes:  'Markdown 笔记',
-      ai_queries:      'AI 提问',
-    };
-
-    let html = '';
-    if (data.activity_check) {
-      const ac = data.activity_check;
-      const badge = ac.has_new
-        ? '<span style="color:var(--success);font-weight:600;">有新活动</span>'
-        : '<span style="color:var(--sub);">无新活动，跳过生成</span>';
-      html += '<p style="font-size:12px;color:var(--sub);margin-bottom:12px;">'
-        + badge + ' · 检测于 ' + ac.time + '</p>';
-    } else {
-      html += '<p style="font-size:12px;color:var(--sub);margin-bottom:12px;">尚未检测（等待首次生成）</p>';
-    }
-
-    if (!data.collectors || Object.keys(data.collectors).length === 0) {
-      html += '<p style="font-size:13px;color:var(--sub);">尚无采集记录，等待首次日报生成后显示。</p>';
-      body.innerHTML = html;
-      return;
-    }
-
-    for (const [key, info] of Object.entries(data.collectors)) {
-      const name = NAMES[key] || key;
-      const hasData = info.chars > 0;
-      const dot = info.error
-        ? '<span style="color:var(--danger);">●</span>'
-        : hasData
-          ? '<span style="color:var(--success);">●</span>'
-          : '<span style="color:var(--sub);">●</span>';
-      const summary = info.error
-        ? '<span style="color:var(--danger);font-size:12px;">' + info.error.split('\n').pop() + '</span>'
-        : hasData
-          ? '<span style="color:var(--sub);font-size:12px;">' + info.lines + ' 行 / ' + info.chars + ' 字</span>'
-          : '<span style="color:var(--sub);font-size:12px;">空</span>';
-
-      html += '<details style="margin-bottom:8px;">'
-        + '<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;">'
-        + dot + ' ' + name + '&nbsp;' + summary
-        + '</summary>';
-
-      if (info.preview) {
-        html += '<pre style="margin-top:8px;padding:10px;background:var(--bg);border-radius:8px;'
-          + 'font-size:12px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;word-break:break-all;">'
-          + info.preview.replace(/</g, '&lt;') + '</pre>';
-      } else if (info.error) {
-        html += '<pre style="margin-top:8px;padding:10px;background:var(--bg);border-radius:8px;'
-          + 'font-size:12px;color:var(--danger);white-space:pre-wrap;">'
-          + info.error.replace(/</g, '&lt;') + '</pre>';
+    // ── Debug ──
+    async loadDebug() {
+      this.debug.loading = true;
+      try {
+        const res = await fetch('/v1/digest/debug');
+        if (!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+        this.debug.activityCheck = data.activity_check || null;
+        this.debug.collectors = data.collectors || {};
+      } catch(e) {
+        // ignore
+      } finally {
+        this.debug.loading = false;
       }
-      html += '</details>';
-    }
+    },
 
-    body.innerHTML = html;
-  } catch(e) {
-    body.innerHTML = '<p style="color:var(--danger);font-size:13px;">加载失败：' + e.message + '</p>';
-  }
+    // ── File handling ──
+    onFile(e, panel) {
+      const f = e.target.files[0];
+      if (f) { this[panel].file = f; this[panel].filename = f.name; this[panel].url = ''; }
+    },
+    onDrop(e, panel) {
+      const f = e.dataTransfer.files[0];
+      if (f && f.name.toLowerCase().endsWith('.pdf')) { this[panel].file = f; this[panel].filename = f.name; this[panel].url = ''; }
+    },
+
+    // ── Translate ──
+    async runTranslate() {
+      const t = this.translate;
+      t.error = ''; t.done = false;
+      const url = this._normalizeUrl(t.url.trim());
+      if (!t.file && !url) { t.error = '请上传 PDF 或输入链接'; return; }
+
+      t.running = true; t.pct = 10; t.label = '正在上传…';
+      try {
+        let res;
+        if (t.file) {
+          const fd = new FormData();
+          fd.append('file', t.file);
+          fd.append('lang_out', t.lang);
+          res = await fetch('/v1/pdf/upload', { method: 'POST', body: fd });
+        } else {
+          res = await fetch('/v1/pdf/url', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, action: 'translate', lang_out: t.lang }),
+          });
+        }
+        if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+        const { job_id } = await res.json();
+
+        t.pct = 30; t.label = '正在翻译，可能需要几分钟…';
+        while (true) {
+          await this._sleep(2000);
+          const poll = await fetch('/v1/pdf/job/' + job_id);
+          const data = await poll.json();
+          if (data.status === 'done') {
+            t.monoUrl = '/v1/pdf/download/' + job_id + '/mono';
+            t.dualUrl = '/v1/pdf/download/' + job_id + '/dual';
+            t.done = true; t.pct = 100; t.label = '完成！';
+            break;
+          }
+          if (data.status === 'error') throw new Error(data.error || '翻译失败');
+          t.pct = Math.min(t.pct + 8, 90);
+        }
+      } catch(e) {
+        t.error = '错误：' + e.message;
+      } finally {
+        t.running = false;
+      }
+    },
+
+    // ── Summarize ──
+    async runSummarize() {
+      const s = this.summarize;
+      s.error = ''; s.text = '';
+      const url = this._normalizeUrl(s.url.trim());
+      if (!s.file && !url) { s.error = '请上传 PDF 或输入链接'; return; }
+
+      s.running = true; s.pct = 20; s.label = '正在提取文字…';
+      try {
+        let endpoint, body, headers = {};
+        if (s.file) {
+          const fd = new FormData();
+          fd.append('file', s.file);
+          fd.append('action', 'summarize');
+          endpoint = '/v1/pdf/upload_stream'; body = fd;
+        } else {
+          endpoint = '/v1/pdf/url_stream';
+          headers['Content-Type'] = 'application/json';
+          body = JSON.stringify({ url, action: 'summarize' });
+        }
+        const res = await fetch(endpoint, { method: 'POST', headers, body });
+        if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+
+        s.pct = 60; s.label = '正在生成摘要…';
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (payload === '[DONE]') break;
+            try { const d = JSON.parse(payload); if (d.text) s.text += d.text; } catch {}
+          }
+        }
+        s.pct = 100; s.label = '完成！';
+      } catch(e) {
+        s.error = '错误：' + e.message;
+      } finally {
+        s.running = false;
+      }
+    },
+
+    // ── Helpers ──
+    _normalizeUrl(url) {
+      return url.replace(/arxiv\.org\/abs\/([0-9]+\.[0-9]+)/g, 'arxiv.org/pdf/$1');
+    },
+    _sleep(ms) { return new Promise(r => setTimeout(r, ms)); },
+  };
 }
 </script>
 </body>

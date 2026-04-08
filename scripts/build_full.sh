@@ -12,6 +12,11 @@ echo "=== Lumina Full .app 打包 ==="
 
 cd "$PROJECT_DIR"
 
+# 清理 pyc 缓存和 PyInstaller work 缓存，确保 PyInstaller 使用最新源码
+find lumina -name "*.pyc" -delete 2>/dev/null || true
+find lumina -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+rm -rf "$BUILD_DIR/work"
+
 HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 \
     uv add --dev pyinstaller 2>/dev/null || true
 

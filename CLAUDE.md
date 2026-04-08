@@ -99,7 +99,24 @@ bash scripts/build_full.sh    # 打包为 Lumina.app
 - **mlx 路径**：`libmlx.dylib` 必须在 `mlx/lib/`，`mlx.metallib` 必须同时放在 `mlx/` 和 `Contents/Frameworks/`
 - **Quick Action 错误「服务输入出现问题」**：Automator 调用 `lumina pdf` 时 multiprocessing spawn 子进程重走 CLI 导致的，已通过 `set_start_method("fork")` 修复，需重新打包才能生效
 - **前端无构建步骤**：`lumina/api/static/index.html` 直接编辑，改完立即生效（开发模式下刷新页面即可）
+- **打包前必须清理 pyc 缓存**：PyInstaller 优先使用 `__pycache__/*.pyc` 而非源码，修改 `.py` 后若 pyc 未更新则改动不会打入包内。每次打包前运行：
+  ```bash
+  find lumina -name "*.pyc" -delete && find lumina -name "__pycache__" -type d -exec rm -rf {} +
+  ```
+  或在 `build_full.sh` 开头加上这两行（已加）。
+
+- **`.app` 里 static 文件有三份**：PyInstaller 打包后 `index.html` 存在于三个路径，FastAPI 实际 serve 的是 `Contents/Frameworks/lumina/api/static/`。直接改 `.app` 里的文件时必须三处同步更新，否则服务器返回旧内容：
+  ```bash
+  for d in "Contents/Frameworks" "Contents/Resources" "Lumina.app/Contents/Resources"; do
+    cp lumina/api/static/index.html "/Applications/Lumina.app/$d/lumina/api/static/index.html"
+  done
+  ```
 - **Web UI 默认 tab**：日报 → 翻译 → 总结
+
+- **备忘录（Notes.app）在 .app 包中无法读取**：根本原因是 macOS TCC 沙盒限制——打包后的 `.app` 没有 `com.apple.Notes` 权利和 Full Disk Access，无法访问 `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite`（`shutil.copy2` 和直接 `sqlite3.connect` 均返回 `Permission denied`）。
+  - `uv run lumina server` 开发模式下可正常读取（终端继承用户权限）
+  - `.app` 模式静默返回空字符串，不影响其他采集器
+  - 如需在 .app 中支持 Notes，需对 `.app` 进行代码签名并添加 `NSNotesUsageDescription` 权利——目前不计划实现
 
 ## 版本
 
