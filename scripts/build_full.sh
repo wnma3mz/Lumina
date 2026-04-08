@@ -137,6 +137,11 @@ uv run pyinstaller "$BUILD_DIR/lumina_full.spec" \
 # PyInstaller 将 libmlx.dylib 放在 Contents/Frameworks/，
 # 因此 mlx.metallib 必须放到 Contents/Frameworks/ 目录下。
 APP="$BUILD_DIR/dist/Lumina.app"
+
+# PyInstaller 用 sips 处理图标会丢失透明通道，用源文件直接覆盖
+echo "修复图标透明度..."
+cp "$PROJECT_DIR/assets/lumina.icns" "$APP/Contents/Resources/lumina.icns"
+
 MLX_LIB_SRC=$(uv run python -c "import mlx.core; from pathlib import Path; print(Path(mlx.core.__file__).parent / 'lib' / 'mlx.metallib')")
 echo "复制 mlx.metallib 到 Contents/Frameworks/..."
 cp "$MLX_LIB_SRC" "$APP/Contents/Frameworks/mlx.metallib"
