@@ -1,6 +1,7 @@
 """
 lumina/digest/config.py — DigestConfig 及全局配置单例
 """
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
@@ -25,6 +26,17 @@ _cfg: DigestConfig = DigestConfig()
 
 def get_cfg() -> DigestConfig:
     return _cfg
+
+
+@contextmanager
+def override_history_hours(hours: float):
+    """临时覆盖 history_hours（主线程调用，collector 线程启动前设置，完成后恢复）。"""
+    old = _cfg.history_hours
+    _cfg.history_hours = hours
+    try:
+        yield
+    finally:
+        _cfg.history_hours = old
 
 
 def configure(data: dict) -> None:

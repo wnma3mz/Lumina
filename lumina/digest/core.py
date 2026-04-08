@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from lumina.digest.config import get_cfg
+from lumina.digest.config import get_cfg, override_history_hours
 from lumina.digest.collectors import (
     collect_shell_history,
     collect_git_logs,
@@ -36,6 +36,9 @@ _last_activity_check: Optional[dict] = None   # {time: str, has_new: bool}
 
 # 上次 collector 结果缓存（key=函数名, value={chars, lines, preview, error}）
 _last_collector_results: dict = {}
+
+# 上次成功生成日报的时间戳（秒），用于计算增量采集窗口
+_last_generated_ts: Optional[float] = None
 
 # 注册的采集器列表——新增数据源在此追加
 _COLLECTORS = [
@@ -103,12 +106,27 @@ def _has_new_activity() -> bool:
 
 # ── 采集 ──────────────────────────────────────────────────────────────────────
 
-async def _collect_all() -> str:
+async def _collect_all(since_ts: Optional[float] = None) -> str:
+    """采集所有数据源。
+
+    since_ts: 上次生成的时间戳（秒）。若提供，采集窗口 = min(距今时长, max_hours)；
+              否则使用 config.history_hours（全量，首次启动或强制刷新时）。
+    """
     global _last_collector_results
+    cfg = get_cfg()
+    if since_ts is not None:
+        elapsed_hours = (time.time() - since_ts) / 3600
+        effective_hours = min(elapsed_hours, cfg.history_hours)
+        # 至少 5 分钟，避免极短窗口导致采集为空
+        effective_hours = max(effective_hours, 5 / 60)
+    else:
+        effective_hours = cfg.history_hours
+
     loop = asyncio.get_running_loop()
-    with ThreadPoolExecutor(max_workers=len(_COLLECTORS)) as executor:
-        futures = [loop.run_in_executor(executor, fn) for fn in _COLLECTORS]
-        results = await asyncio.gather(*futures, return_exceptions=True)
+    with override_history_hours(effective_hours):
+        with ThreadPoolExecutor(max_workers=len(_COLLECTORS)) as executor:
+            futures = [loop.run_in_executor(executor, fn) for fn in _COLLECTORS]
+            results = await asyncio.gather(*futures, return_exceptions=True)
 
     cache = {}
     sections = []
@@ -165,14 +183,15 @@ def _prepend_entry(entry: str) -> None:
 
 async def generate_digest(llm) -> str:
     """生成摘要，作为最新一条插入 digest.md 头部，历史记录永久保留。"""
-    global _generating, _generated_at, _last_activity_check
+    global _generating, _generated_at, _last_activity_check, _last_generated_ts
     _generating = True
     _last_activity_check = {
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "has_new": True,
     }
     try:
-        context = await _collect_all()
+        # 全量生成不传 since_ts，使用 config.history_hours
+        context = await _collect_all(since_ts=None)
         logger.info("Digest: generating full summary...")
         summary = await llm.generate(
             context, task="chat",
@@ -185,6 +204,7 @@ async def generate_digest(llm) -> str:
                  + summary.strip() + "\n")
         _prepend_entry(entry)
         _generated_at = now.isoformat()
+        _last_generated_ts = now.timestamp()
         _SNAPSHOT_PATH.write_text(_make_snapshot(), encoding="utf-8")
         logger.info("Digest: saved to %s", _DIGEST_PATH)
         return entry
@@ -194,15 +214,18 @@ async def generate_digest(llm) -> str:
 
 async def generate_changelog(llm) -> Optional[str]:
     """增量 Change Log：检测到新活动时追加最新条目，无变化返回 None。"""
-    global _generating, _generated_at
+    global _generating, _generated_at, _last_generated_ts
     if not _has_new_activity():
         logger.debug("Digest: no new activity, skipping changelog")
         return None
 
     _generating = True
     try:
-        context = await _collect_all()
-        logger.info("Digest: generating changelog...")
+        # 增量生成：只采集上次生成到现在的数据
+        context = await _collect_all(since_ts=_last_generated_ts)
+        elapsed = (time.time() - _last_generated_ts) / 3600 if _last_generated_ts else None
+        logger.info("Digest: generating changelog (window=%.1fh)...",
+                    min(elapsed, get_cfg().history_hours) if elapsed else get_cfg().history_hours)
         changelog = await llm.generate(
             context, task="chat",
             system=CHANGELOG_SYSTEM_PROMPT,
@@ -218,6 +241,7 @@ async def generate_changelog(llm) -> Optional[str]:
                  + changelog.strip() + "\n")
         _prepend_entry(entry)
         _generated_at = now.isoformat()
+        _last_generated_ts = now.timestamp()
         logger.info("Digest: changelog appended")
         return entry
     finally:
@@ -250,9 +274,11 @@ async def maybe_generate_digest(llm, force_full: bool = False) -> None:
             return
         logger.warning("Digest: stale lock (%.0fs old), removing", age)
         _LOCK_PATH.unlink(missing_ok=True)
-    global _generated_at
+    global _generated_at, _last_generated_ts
     if _generated_at is None and _DIGEST_PATH.exists():
-        _generated_at = datetime.fromtimestamp(_DIGEST_PATH.stat().st_mtime).isoformat()
+        mtime = _DIGEST_PATH.stat().st_mtime
+        _generated_at = datetime.fromtimestamp(mtime).isoformat()
+        _last_generated_ts = mtime
 
     if not force_full and not should_regenerate_full():
         logger.debug("Digest: still fresh, skipping full generation")
@@ -297,6 +323,7 @@ def get_debug_info() -> dict:
             "history_hours": cfg.history_hours,
             "refresh_hours": cfg.refresh_hours,
         },
+        "last_generated_ts": _last_generated_ts,
         "activity_check": _last_activity_check,
         "collectors": _last_collector_results,
     }
