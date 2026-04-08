@@ -347,6 +347,14 @@ def collect_notes_app() -> str:
         import shutil as _shutil
         tmp_db = Path("/tmp/lumina_notes.db")
         _shutil.copy2(str(db_path), str(tmp_db))
+        # 必须同时复制 WAL / SHM，否则 Notes.app 写入的未 checkpoint 数据会丢失
+        for suffix in ("-wal", "-shm"):
+            src = db_path.with_name(db_path.name + suffix)
+            if src.exists():
+                try:
+                    _shutil.copy2(str(src), str(tmp_db.with_name(tmp_db.name + suffix)))
+                except Exception:
+                    pass
         conn = _sqlite3.connect(str(tmp_db))
         cur = conn.cursor()
         cur.execute(
