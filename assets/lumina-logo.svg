@@ -29,7 +29,7 @@
     </filter>
   </defs>
 
-  <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect x="20" y="20" width="216" height="216" rx="46" fill="url(#bg)"/>
 
   <circle cx="126" cy="124" r="58" fill="#7DDBFF" opacity="0.22" filter="url(#softGlow)"/>
   <circle cx="126" cy="124" r="66" fill="url(#halo)"/>

@@ -18,116 +18,20 @@ HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 \
 mkdir -p "$BUILD_DIR"
 
 # runtime hook：进程启动时注入 LUMINA_EDITION=full
-cat > "$BUILD_DIR/rthook_edition_full.py" <<'RTHOOK'
-import os
-os.environ.setdefault("LUMINA_EDITION", "full")
-RTHOOK
+# 写入固定路径，内容不变时不重写（避免 mtime 变化触发 PyInstaller 缓存失效）
+RTHOOK="$BUILD_DIR/rthook_edition_full.py"
+RTHOOK_CONTENT='import os
+os.environ.setdefault("LUMINA_EDITION", "full")'
+if [[ ! -f "$RTHOOK" ]] || [[ "$(cat "$RTHOOK")" != "$RTHOOK_CONTENT" ]]; then
+    printf '%s\n' "$RTHOOK_CONTENT" > "$RTHOOK"
+fi
 
-cat > "$BUILD_DIR/lumina_full.spec" <<'SPEC'
-# -*- mode: python ; coding: utf-8 -*-
-from pathlib import Path
-from PyInstaller.utils.hooks import collect_all, collect_submodules
-
-project_dir = Path(SPECPATH).parent
-
-# 用 collect_all 确保 mlx / mlx_lm / mlx_whisper 的子模块和数据文件完整打包
-mlx_datas, mlx_bins, mlx_hidden       = collect_all('mlx')
-mlx_lm_datas, mlx_lm_bins, mlx_lm_hidden         = collect_all('mlx_lm')
-mlx_wh_datas, mlx_wh_bins, mlx_wh_hidden         = collect_all('mlx_whisper')
-
-# mlx.core 的 rpath 是 @loader_path/lib，即运行时从 mlx/ 找 lib/libmlx.dylib
-# PyInstaller collect_all 会把 libmlx.dylib 提升到 Contents/Frameworks/ 顶层，破坏相对路径
-# 解决：把 libmlx.dylib 和 mlx.metallib 显式放到 mlx/lib/ 目标目录
-import mlx.core as _mlx_core
-_mlx_lib_src = Path(_mlx_core.__file__).parent / 'lib'
-_mlx_extra_binaries = [
-    # (源路径, 目标目录) —— 二进制文件用 binaries，保留 rpath 相对关系
-    (str(_mlx_lib_src / 'libmlx.dylib'), 'mlx/lib'),
-]
-_mlx_extra_datas = [
-    # mlx C++ 代码在 macOS App Bundle 里查找路径为 Resources/mlx/mlx.metallib
-    # 同时保留 mlx/lib/ 位置作为备用
-    (str(_mlx_lib_src / 'mlx.metallib'), 'mlx'),
-    (str(_mlx_lib_src / 'mlx.metallib'), 'mlx/lib'),
-]
-
-# 从 collect_all 的 binaries 中移除 libmlx.dylib（避免它被再次放到顶层）
-mlx_bins = [(src, dst) for src, dst in mlx_bins if 'libmlx.dylib' not in src]
-
-a = Analysis(
-    [str(project_dir / 'lumina' / 'main.py')],
-    pathex=[str(project_dir)],
-    binaries=mlx_bins + mlx_lm_bins + mlx_wh_bins + _mlx_extra_binaries,
-    datas=(
-        mlx_datas + mlx_lm_datas + mlx_wh_datas
-        + _mlx_extra_datas
-        + [
-            # 模型不打包进 App，首次启动时按需下载到 ~/.lumina/models/
-            (str(project_dir / 'lumina' / 'config.json'), 'lumina'),
-            (str(project_dir / 'assets' / 'lumina.icns'), 'assets'),
-            (str(project_dir / 'lumina' / 'api' / 'static'), 'lumina/api/static'),
-            (str(project_dir / 'scripts' / 'install_quick_action.sh'), 'scripts'),
-        ]
-    ),
-    hiddenimports=(
-        mlx_hidden + mlx_lm_hidden + mlx_wh_hidden
-        + collect_submodules('mlx')
-        + collect_submodules('mlx_lm')
-        + collect_submodules('mlx_whisper')
-        + [
-            'sounddevice', 'scipy',
-            'fastapi', 'uvicorn', 'uvicorn.logging',
-            'transformers', 'huggingface_hub',
-            'aiohttp',
-            'pdf2zh',
-            'rumps',
-        ]
-    ),
-    hookspath=[],
-    runtime_hooks=[str(Path(SPECPATH) / 'rthook_edition_full.py')],
-    excludes=[],
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name='lumina',
-    debug=False,
-    strip=False,
-    upx=False,
-    console=True,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    name='lumina-full',
-)
-
-app = BUNDLE(
-    coll,
-    name='Lumina.app',
-    icon=str(project_dir / 'assets' / 'lumina.icns'),
-    bundle_identifier='com.lumina.server',
-    info_plist={
-        'CFBundleShortVersionString': '0.1.0',
-        'CFBundleName': 'Lumina',
-        'LSUIElement': True,
-        'NSMicrophoneUsageDescription': 'Lumina 需要麦克风权限用于语音转文本',
-    },
-)
-SPEC
+# spec 文件固定存放在 scripts/lumina_full.spec，不在每次构建时重新生成
+# → PyInstaller 可命中 Analysis 缓存，仅代码变化时才重新分析
+SPEC_FILE="$SCRIPT_DIR/lumina_full.spec"
 
 echo "正在执行 PyInstaller（Full，不含模型，首次启动时自动下载）..."
-uv run pyinstaller "$BUILD_DIR/lumina_full.spec" \
+uv run pyinstaller "$SPEC_FILE" \
     --distpath "$BUILD_DIR/dist" \
     --workpath "$BUILD_DIR/work" \
     --noconfirm
