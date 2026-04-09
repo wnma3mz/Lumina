@@ -22,6 +22,11 @@
     "refresh_hours": 1,
     "enabled_collectors": null
   },
+  "ptt": {
+    "_readme": "hotkey: f5、caps_lock、ctrl+alt+r 等；language: zh / en / null（null = Whisper 自动检测）",
+    "hotkey": "f5",
+    "language": "zh"
+  },
   "system_prompts": {
     "translate_to_zh": "You are a professional translator. Translate the user's text into Simplified Chinese. Output only the translated text, no explanations.",
     "translate_to_en": "You are a professional translator. Translate the user's text into English. Output only the translated text, no explanations.",

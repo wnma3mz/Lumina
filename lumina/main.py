@@ -258,6 +258,7 @@ def cmd_server(args):
     digest_interval = getattr(args, "digest_interval", _env_interval)
     _start_digest_timer(llm, interval=digest_interval)
     _start_daily_notify_timer()
+    _start_ptt(cfg)
 
     if _EDITION in ("full", "lite") or getattr(args, "menubar", False):
         _run_with_menubar(fastapi_app, cfg, llm)
@@ -348,6 +349,18 @@ def _start_daily_notify_timer():
     import datetime
     fire_at = (datetime.datetime.now() + datetime.timedelta(seconds=delay)).strftime("%H:%M")
     logger.info("Daily notify timer started, first trigger at %s", fire_at)
+
+
+def _start_ptt(cfg):
+    """启动 PTT 热键守护（后台 daemon 线程，随主进程退出）。"""
+    from lumina.ptt import PTTDaemon
+    ptt = PTTDaemon(
+        base_url=f"http://127.0.0.1:{cfg.port}",
+        hotkey_str=cfg.ptt.hotkey,
+        language=cfg.ptt.language,
+    )
+    t = threading.Thread(target=ptt.run, daemon=True)
+    t.start()
 
 
 def _run_with_menubar(fastapi_app, cfg, llm):
