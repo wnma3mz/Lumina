@@ -257,7 +257,7 @@ def cmd_server(args):
     _env_interval = int(os.environ.get("LUMINA_DIGEST_INTERVAL", 3600))
     digest_interval = getattr(args, "digest_interval", _env_interval)
     _start_digest_timer(llm, interval=digest_interval)
-    _start_daily_notify_timer()
+    _start_daily_notify_timer(llm)
 
     if _EDITION in ("full", "lite") or getattr(args, "menubar", False):
         _run_with_menubar(fastapi_app, cfg, llm)
@@ -303,8 +303,9 @@ def _start_digest_timer(llm, interval: int = 3600):
     logger.info("Digest timer started, next trigger in %.0fs (interval=%ds)", delay, interval)
 
 
-def _start_daily_notify_timer():
-    """每天在 config.digest.notify_time（默认 20:00）发送今日日报通知。"""
+def _start_daily_notify_timer(llm):
+    """每天在 config.digest.notify_time（默认 20:00）强制全量生成日报并发送通知。"""
+    import asyncio
     import threading
     import time
     from lumina.digest.config import get_cfg
@@ -325,9 +326,14 @@ def _start_daily_notify_timer():
         return target_ts - now
 
     def _fire():
+        from lumina.digest import maybe_generate_digest
         from lumina.digest.core import load_digest
+        # 强制全量重新生成今日日报
+        try:
+            asyncio.run(maybe_generate_digest(llm, force_full=True))
+        except Exception as e:
+            logger.error("Daily notify: digest generation failed: %s", e)
         digest = load_digest() or ""
-        # 取第一条日报的标题行作为通知摘要
         lines = [ln.strip() for ln in digest.splitlines() if ln.strip() and not ln.startswith("<!--")]
         summary = next((ln.lstrip("#").strip() for ln in lines if ln.startswith("#")), "今日日报已生成")
         _notify("Lumina 日报", summary[:60])
