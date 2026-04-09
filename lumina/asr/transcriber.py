@@ -12,7 +12,6 @@ Whisper 模型按需下载，首次使用时自动拉取。
 import asyncio
 import io
 import os
-from pathlib import Path
 from typing import Optional
 
 import numpy as np

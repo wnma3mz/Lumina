@@ -119,6 +119,16 @@ bash scripts/build_full.sh    # 打包为 Lumina.app
 
 - `tests/fixtures/2010_Bottou_SGD.pdf` — 10 页英文论文，用于 PDF 翻译/总结功能的快速测试（约 40s 完成）
 
+## 代码质量
+
+**每次改完代码必须 lint**，用 ruff 检查所有改动过的文件，0 error 才能提交：
+
+```bash
+uv run --with ruff ruff check <改动的文件...>
+# 可自动修复的先跑：
+uv run --with ruff ruff check --fix <改动的文件...>
+```
+
 ## Git 操作规范
 
 - **禁止在未经用户明确许可的情况下 push 到远端**（包括 `git push`、`gh release`）

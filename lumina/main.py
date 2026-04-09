@@ -152,7 +152,7 @@ def _ensure_model():
         print(f"  代理：{proxy}")
     print()
 
-    _notify("Lumina", f"正在下载模型，请稍候（约 622MB）…")
+    _notify("Lumina", "正在下载模型，请稍候（约 622MB）…")
 
     try:
         from huggingface_hub import snapshot_download
@@ -328,8 +328,8 @@ def _start_daily_notify_timer():
         from lumina.digest.core import load_digest
         digest = load_digest() or ""
         # 取第一条日报的标题行作为通知摘要
-        lines = [l.strip() for l in digest.splitlines() if l.strip() and not l.startswith("<!--")]
-        summary = next((l.lstrip("#").strip() for l in lines if l.startswith("#")), "今日日报已生成")
+        lines = [ln.strip() for ln in digest.splitlines() if ln.strip() and not ln.startswith("<!--")]
+        summary = next((ln.lstrip("#").strip() for ln in lines if ln.startswith("#")), "今日日报已生成")
         _notify("Lumina 日报", summary[:60])
         # 24 小时后再次触发
         t = threading.Timer(86400, _fire)
@@ -388,6 +388,7 @@ def _start_ptt(cfg, menubar_app=None):
     _watch_path = _user_cfg if _user_cfg.exists() else _pkg_cfg
 
     def _watcher():
+        import time
         last_mtime = _watch_path.stat().st_mtime if _watch_path.exists() else 0
         last_hotkey  = cfg.ptt.hotkey
         last_language = cfg.ptt.language
@@ -464,7 +465,7 @@ def _run_with_menubar(fastapi_app, cfg, llm):
         def __init__(self):
             super().__init__(title, icon=_icon_path, quit_button=None, template=False)
             self.menu = [
-                rumps.MenuItem(f"打开界面", callback=self._open_ui),
+                rumps.MenuItem("打开界面", callback=self._open_ui),
                 None,  # 分隔线
                 rumps.MenuItem("重启服务", callback=self._restart),
                 rumps.MenuItem("退出 Lumina", callback=self._quit),
@@ -478,7 +479,8 @@ def _run_with_menubar(fastapi_app, cfg, llm):
             server.should_exit = True
             t.join(timeout=5)
             _remove_pid()
-            import subprocess, sys
+            import subprocess
+            import sys
             subprocess.Popen([sys.executable] + sys.argv)
             rumps.quit_application()
 
@@ -548,8 +550,8 @@ def _print_ready_banner(host: str, port: int):
         lan_ip = _get_lan_ip()
         if lan_ip:
             print(f"  局域网访问：http://{lan_ip}:{port}")
-            print(f"  手机扫码或在 Safari 打开上方地址")
-            print(f"  添加到主屏幕即可像 App 一样使用")
+            print("  手机扫码或在 Safari 打开上方地址")
+            print("  添加到主屏幕即可像 App 一样使用")
 
     print("=" * 55)
     print()

@@ -63,12 +63,18 @@ def _parse_key(key_str: str):
 
     mapped = []
     for p in parts:
-        if p in ("ctrl", "control"):    mapped.append("<ctrl>")
-        elif p in ("alt", "option"):    mapped.append("<alt>")
-        elif p in ("cmd", "command"):   mapped.append("<cmd>")
-        elif p == "shift":              mapped.append("<shift>")
-        elif p.startswith("f") and p[1:].isdigit(): mapped.append(f"<{p}>")
-        else:                           mapped.append(p)
+        if p in ("ctrl", "control"):
+            mapped.append("<ctrl>")
+        elif p in ("alt", "option"):
+            mapped.append("<alt>")
+        elif p in ("cmd", "command"):
+            mapped.append("<cmd>")
+        elif p == "shift":
+            mapped.append("<shift>")
+        elif p.startswith("f") and p[1:].isdigit():
+            mapped.append(f"<{p}>")
+        else:
+            mapped.append(p)
     return "+".join(mapped)
 
 
