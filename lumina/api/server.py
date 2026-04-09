@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
@@ -44,7 +44,7 @@ from lumina.api.protocol import (
 _pdf_jobs: dict[str, dict] = {}
 
 # ── 静态文件路径 ───────────────────────────────────────────────────────────────
-import sys as _sys
+import sys as _sys  # noqa: E402
 _STATIC_DIR = (
     Path(_sys._MEIPASS) / "lumina" / "api" / "static"
     if hasattr(_sys, "_MEIPASS")
@@ -60,6 +60,9 @@ try:
     _LUMINA_VERSION = _pkg_version("lumina")
 except Exception:
     _LUMINA_VERSION = "0.3.0"
+
+# 服务启动时间戳，用于前端检测服务重启
+_SERVER_START_TIME = time.time()
 
 
 def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
@@ -409,12 +412,12 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
             "content": load_digest(),
             "generating": status["generating"],
             "generated_at": status["generated_at"],
+            "server_start": _SERVER_START_TIME,
         }
 
     @app.post("/v1/digest/refresh")
     async def refresh_digest_api(background_tasks: BackgroundTasks):
         from lumina.digest import maybe_generate_digest
-        import asyncio
 
         async def _run():
             await maybe_generate_digest(llm, force_full=True)

@@ -431,6 +431,7 @@ function luminaApp() {
       error: '',
       _pollTimer: null,
       _autoTimer: null,
+      _serverStart: null,
     },
 
     // ── Translate ──
@@ -479,6 +480,13 @@ function luminaApp() {
         const res = await fetch('/v1/digest');
         if (!res.ok) throw new Error(res.statusText);
         const data = await res.json();
+
+        // 检测服务重启：server_start 变化说明服务重启了，需重新渲染
+        if (data.server_start && this.digest._serverStart !== null
+            && data.server_start !== this.digest._serverStart) {
+          this.digest.sections = [];
+        }
+        if (data.server_start) this.digest._serverStart = data.server_start;
 
         if (data.generating) {
           this.digest.generating = true;
