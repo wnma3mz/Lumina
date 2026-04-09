@@ -3,7 +3,6 @@ lumina/digest/core.py — 摘要生成、增量检测、状态管理
 """
 import asyncio
 import logging
-import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -27,14 +26,10 @@ logger = logging.getLogger("lumina.digest")
 
 _DIGEST_PATH   = Path.home() / ".lumina" / "digest.md"
 _LOCK_PATH     = Path.home() / ".lumina" / "digest.lock"
-_SNAPSHOT_PATH = Path.home() / ".lumina" / "digest_snapshot.txt"
 
 # 模块级状态，供 API 查询
 _generating: bool = False
 _generated_at: Optional[str] = None
-
-# 上次活动检测结果缓存
-_last_activity_check: Optional[dict] = None   # {time: str, has_new: bool}
 
 # 上次 collector 结果缓存（key=函数名, value={chars, lines, preview, error}）
 _last_collector_results: dict = {}
@@ -68,42 +63,6 @@ CHANGELOG_SYSTEM_PROMPT = """\
 
 
 # ── 增量检测 ──────────────────────────────────────────────────────────────────
-
-def _make_snapshot() -> str:
-    parts = []
-    try:
-        zsh = Path.home() / ".zsh_history"
-        if zsh.exists():
-            lines = zsh.read_text(errors="replace").splitlines()
-            parts.append(lines[-1] if lines else "")
-    except Exception:
-        pass
-    try:
-        result = subprocess.check_output(["pbpaste"], timeout=2, text=True)
-        parts.append(result.strip()[:50])
-    except Exception:
-        pass
-    return "\n".join(parts)
-
-
-def _has_new_activity() -> bool:
-    global _last_activity_check
-    current = _make_snapshot()
-    if not _SNAPSHOT_PATH.exists():
-        _SNAPSHOT_PATH.write_text(current, encoding="utf-8")
-        result = True
-    else:
-        old = _SNAPSHOT_PATH.read_text(encoding="utf-8")
-        if current != old:
-            _SNAPSHOT_PATH.write_text(current, encoding="utf-8")
-            result = True
-        else:
-            result = False
-    _last_activity_check = {
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "has_new": result,
-    }
-    return result
 
 
 # ── 采集 ──────────────────────────────────────────────────────────────────────
@@ -195,12 +154,8 @@ def _prepend_entry(entry: str) -> None:
 
 async def generate_digest(llm) -> str:
     """生成摘要，作为最新一条插入 digest.md 头部，历史记录永久保留。"""
-    global _generating, _generated_at, _last_activity_check, _last_generated_ts
+    global _generating, _generated_at, _last_generated_ts
     _generating = True
-    _last_activity_check = {
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "has_new": True,
-    }
     try:
         # 全量生成不传 since_ts，使用 config.history_hours
         context = await _collect_all(since_ts=None)
@@ -217,7 +172,6 @@ async def generate_digest(llm) -> str:
         _prepend_entry(entry)
         _generated_at = now.isoformat()
         _last_generated_ts = now.timestamp()
-        _SNAPSHOT_PATH.write_text(_make_snapshot(), encoding="utf-8")
         logger.info("Digest: saved to %s", _DIGEST_PATH)
         return entry
     finally:
@@ -225,12 +179,8 @@ async def generate_digest(llm) -> str:
 
 
 async def generate_changelog(llm) -> Optional[str]:
-    """增量 Change Log：检测到新活动时追加最新条目，无变化返回 None。"""
+    """增量 Change Log：采集新活动并追加条目，collector 无新数据时 LLM 自行判断跳过。"""
     global _generating, _generated_at, _last_generated_ts
-    if not _has_new_activity():
-        logger.debug("Digest: no new activity, skipping changelog")
-        return None
-
     _generating = True
     try:
         # 增量生成：只采集上次生成到现在的数据
@@ -336,7 +286,6 @@ def get_debug_info() -> dict:
             "refresh_hours": cfg.refresh_hours,
         },
         "last_generated_ts": _last_generated_ts,
-        "activity_check": _last_activity_check,
         "collectors": _last_collector_results,
         "cursors": load_cursors(),
     }
