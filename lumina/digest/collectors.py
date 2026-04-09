@@ -394,35 +394,51 @@ def collect_notes_app() -> str:
         return ""
 
 
+_MD_SKIP_PARTS = {".app", "build", "dist", "node_modules", ".git", ".venv", "__pycache__"}
+
+
 def collect_markdown_notes() -> str:
     """扫描 scan_dirs 下最近修改的 .md 文件。cursor 直接与 st_mtime 比较（均为 Unix 秒）。"""
     name = "collect_markdown_notes"
     cursor = _get_cursor(name)
     cfg = get_cfg()
     try:
-        entries = []
-        newest_ts: Optional[float] = None
+        # 先收集所有候选文件，按 mtime 降序排，避免遍历顺序不定导致漏掉新文件
+        candidates: list[tuple[float, Path]] = []
 
         for root_str in cfg.scan_dirs[:2]:  # 只扫前两个目录（Documents/Desktop）
             root = Path(root_str)
             if not root.exists():
                 continue
             for md in root.rglob("*.md"):
+                # 跳过构建产物、依赖包、隐藏目录等无关路径
+                if any(part in _MD_SKIP_PARTS for part in md.parts):
+                    continue
                 try:
                     mtime = md.stat().st_mtime
                     if mtime <= cursor:
                         continue
-                    if newest_ts is None or mtime > newest_ts:
-                        newest_ts = mtime
-                    content = md.read_text(errors="replace")[:200].strip()
-                    if content:
-                        entries.append(f"**{md.name}**:\n  {content}")
+                    candidates.append((mtime, md))
                 except Exception:
                     continue
-                if len(entries) >= 10:
-                    break
 
-        _set_cursor(name, newest_ts)
+        if not candidates:
+            return ""
+
+        candidates.sort(key=lambda x: -x[0])
+        newest_ts = candidates[0][0]
+
+        entries = []
+        for mtime, md in candidates[:10]:
+            try:
+                content = md.read_text(errors="replace")[:200].strip()
+                if content:
+                    entries.append(f"**{md.name}**:\n  {content}")
+            except Exception:
+                continue
+
+        # cursor 退 1 秒，防止同一秒内其他文件在下次采集时因 mtime == cursor 被过滤
+        _set_cursor(name, newest_ts - 1)
 
         if not entries:
             return ""
