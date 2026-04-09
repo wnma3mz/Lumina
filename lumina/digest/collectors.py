@@ -66,6 +66,7 @@ from pathlib import Path
 from typing import Optional
 
 from lumina.digest.config import get_cfg
+from lumina.digest.cursor_store import load_md_hashes, md5_of_file, save_md_hashes
 
 logger = logging.getLogger("lumina.digest")
 
@@ -398,12 +399,17 @@ _MD_SKIP_PARTS = {".app", "build", "dist", "node_modules", ".git", ".venv", "__p
 
 
 def collect_markdown_notes() -> str:
-    """扫描 scan_dirs 下最近修改的 .md 文件。cursor 直接与 st_mtime 比较（均为 Unix 秒）。"""
+    """扫描 scan_dirs 下最近修改的 .md 文件。
+
+    两级过滤：
+    1. mtime > cursor（快速跳过明显旧文件）
+    2. md5(前4KB) 与上次采集不同（过滤 Cursor/iCloud 等 mtime-only 误触发）
+    """
     name = "collect_markdown_notes"
     cursor = _get_cursor(name)
     cfg = get_cfg()
     try:
-        # 先收集所有候选文件，按 mtime 降序排，避免遍历顺序不定导致漏掉新文件
+        hashes = load_md_hashes()
         candidates: list[tuple[float, Path]] = []
 
         for root_str in cfg.scan_dirs[:2]:  # 只扫前两个目录（Documents/Desktop）
@@ -418,7 +424,14 @@ def collect_markdown_notes() -> str:
                     mtime = md.stat().st_mtime
                     if mtime <= cursor:
                         continue
-                    candidates.append((mtime, md))
+                    # mtime 有变化，再用 md5 确认内容是否真的改了
+                    key = str(md)
+                    current_hash = md5_of_file(md)
+                    if hashes.get(key) == current_hash:
+                        # 内容未变（编辑器扫描/同步等误触发），更新 hash 记录但不采集
+                        hashes[key] = current_hash
+                        continue
+                    candidates.append((mtime, md, current_hash))
                 except Exception:
                     continue
 
@@ -428,8 +441,12 @@ def collect_markdown_notes() -> str:
         candidates.sort(key=lambda x: -x[0])
         newest_ts = candidates[0][0]
 
+        # 所有候选文件都记录 hash（不只是 top10），确保下次不会重复采集
+        for _, md, current_hash in candidates:
+            hashes[str(md)] = current_hash
+
         entries = []
-        for mtime, md in candidates[:10]:
+        for mtime, md, _ in candidates[:10]:
             try:
                 content = md.read_text(errors="replace")[:200].strip()
                 if content:
@@ -437,6 +454,7 @@ def collect_markdown_notes() -> str:
             except Exception:
                 continue
 
+        save_md_hashes(hashes)
         # cursor 退 1 秒，防止同一秒内其他文件在下次采集时因 mtime == cursor 被过滤
         _set_cursor(name, newest_ts - 1)
 
