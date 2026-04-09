@@ -33,12 +33,20 @@ class Transcriber:
     def transcribe_sync(self, wav_bytes: bytes, language: Optional[str] = None) -> str:
         """同步转写，在 executor 内调用。"""
         audio = _wav_bytes_to_float32(wav_bytes)
+        # initial_prompt 给模型提示标点和语言风格，显著提升中文识别质量
+        initial_prompt = None
+        if language == "zh":
+            initial_prompt = "以下是普通话的语音识别结果，包含标准的中文标点符号。"
+        elif language == "en":
+            initial_prompt = "The following is a transcription in English."
+
         result = mlx_whisper.transcribe(
             audio,
             path_or_hf_repo=self.model,
             language=language,
             fp16=False,
             condition_on_previous_text=False,  # PTT 每次独立录音，不应带上次上下文
+            initial_prompt=initial_prompt,
         )
         return result.get("text", "").strip()
 
