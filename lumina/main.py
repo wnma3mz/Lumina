@@ -353,6 +353,7 @@ def _start_daily_notify_timer():
 
 def _start_ptt(cfg):
     """启动 PTT 热键守护（后台 daemon 线程，随主进程退出）。"""
+    import threading
     from lumina.ptt import PTTDaemon
     ptt = PTTDaemon(
         base_url=f"http://127.0.0.1:{cfg.port}",

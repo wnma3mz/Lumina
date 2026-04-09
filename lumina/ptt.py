@@ -241,7 +241,9 @@ class PTTDaemon:
             data=body,
             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        # 显式绕过系统代理，避免 http_proxy 环境变量把本地请求转发出去
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(req, timeout=120) as resp:
             result = json.loads(resp.read())
         return result.get("text", "").strip()
 
