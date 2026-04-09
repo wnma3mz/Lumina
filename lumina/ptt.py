@@ -104,6 +104,7 @@ class PTTDaemon:
         self._frames: list = []
         self._stream = None
         self._lock = threading.Lock()
+        self._listener = None   # 当前 pynput listener，stop() 时用
 
     # ── 菜单栏状态 ────────────────────────────────────────────────────────────
 
@@ -249,6 +250,19 @@ class PTTDaemon:
 
     # ── 主循环 ────────────────────────────────────────────────────────────────
 
+    def stop(self):
+        """停止当前 listener（用于 hot reload 时替换热键）。"""
+        # 如果正在录音先停掉
+        with self._lock:
+            if self._recording:
+                threading.Thread(target=self._stop, daemon=True).start()
+        listener = self._listener
+        if listener is not None:
+            try:
+                listener.stop()
+            except Exception:
+                pass
+
     def run(self):
         """阻塞运行，放在 daemon 线程里即可随主进程退出。"""
         parsed = _parse_key(self.hotkey_str)
@@ -293,7 +307,9 @@ class PTTDaemon:
         threading.Thread(target=_permission_check, daemon=True).start()
 
         with kb.Listener(on_press=on_press) as listener:
+            self._listener = listener
             listener.join()
+        self._listener = None
 
     def _run_toggle_combo(self, hotkey_str: str):
         """组合键 toggle：使用 GlobalHotKeys。"""
@@ -306,4 +322,6 @@ class PTTDaemon:
                 threading.Thread(target=self._start, daemon=True).start()
 
         with kb.GlobalHotKeys({hotkey_str: on_activate}) as h:
+            self._listener = h
             h.join()
+        self._listener = None

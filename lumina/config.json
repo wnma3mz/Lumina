@@ -24,7 +24,7 @@
   },
   "ptt": {
     "_readme": "hotkey: f5、caps_lock、ctrl+alt+r 等；language: zh / en / null（null = Whisper 自动检测）",
-    "hotkey": "f5",
+    "hotkey": "cmd",
     "language": "zh"
   },
   "system_prompts": {

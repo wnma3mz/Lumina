@@ -258,11 +258,11 @@ def cmd_server(args):
     digest_interval = getattr(args, "digest_interval", _env_interval)
     _start_digest_timer(llm, interval=digest_interval)
     _start_daily_notify_timer()
-    _start_ptt(cfg)
 
     if _EDITION in ("full", "lite") or getattr(args, "menubar", False):
         _run_with_menubar(fastapi_app, cfg, llm)
     else:
+        _start_ptt(cfg, menubar_app=None)
         try:
             uvicorn.run(fastapi_app, host=cfg.host, port=cfg.port, log_level=cfg.log_level.lower())
         finally:
@@ -351,17 +351,82 @@ def _start_daily_notify_timer():
     logger.info("Daily notify timer started, first trigger at %s", fire_at)
 
 
-def _start_ptt(cfg):
-    """启动 PTT 热键守护（后台 daemon 线程，随主进程退出）。"""
+def _start_ptt(cfg, menubar_app=None):
+    """
+    启动 PTT 热键守护，并监听 config.json 变化实现热键 hot reload。
+
+    config.json mtime 变化时：
+    - 重新读取 ptt.hotkey / ptt.language
+    - 读取失败（JSON 损坏等）→ 打印警告，保留当前热键不变
+    - 读取成功且热键/语言有变化 → 停旧 PTTDaemon，启新的
+    """
     import threading
+    import json
+    from pathlib import Path
     from lumina.ptt import PTTDaemon
-    ptt = PTTDaemon(
-        base_url=f"http://127.0.0.1:{cfg.port}",
-        hotkey_str=cfg.ptt.hotkey,
-        language=cfg.ptt.language,
-    )
-    t = threading.Thread(target=ptt.run, daemon=True)
-    t.start()
+
+    base_url = f"http://127.0.0.1:{cfg.port}"
+    _current_ptt: list = []   # 用列表做可变引用
+
+    def _make_ptt(hotkey: str, language):
+        ptt = PTTDaemon(
+            base_url=base_url,
+            hotkey_str=hotkey,
+            language=language,
+            menubar_app=menubar_app,
+        )
+        t = threading.Thread(target=ptt.run, daemon=True)
+        t.start()
+        return ptt
+
+    _current_ptt.append(_make_ptt(cfg.ptt.hotkey, cfg.ptt.language))
+
+    # ── config.json hot reload watcher ───────────────────────────────────────
+    # 优先监听用户配置（~/.lumina/config.json），其次包内默认
+    _user_cfg = Path.home() / ".lumina" / "config.json"
+    _pkg_cfg  = Path(__file__).parent / "config.json"
+    _watch_path = _user_cfg if _user_cfg.exists() else _pkg_cfg
+
+    def _watcher():
+        last_mtime = _watch_path.stat().st_mtime if _watch_path.exists() else 0
+        last_hotkey  = cfg.ptt.hotkey
+        last_language = cfg.ptt.language
+
+        while True:
+            time.sleep(1)
+            try:
+                mtime = _watch_path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if mtime == last_mtime:
+                continue
+            last_mtime = mtime
+
+            # 读取新配置
+            try:
+                with open(_watch_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                ptt_cfg = data.get("ptt", {})
+                new_hotkey   = ptt_cfg.get("hotkey", last_hotkey) or last_hotkey
+                new_language = ptt_cfg.get("language", last_language) or None
+            except Exception as e:
+                print(f"⚠ PTT hot reload：读取配置失败，保留当前热键（{e}）", flush=True)
+                continue
+
+            if new_hotkey == last_hotkey and new_language == last_language:
+                continue
+
+            print(f"PTT 热键更新：{last_hotkey.upper()} → {new_hotkey.upper()}", flush=True)
+            # 停旧
+            if _current_ptt:
+                _current_ptt[0].stop()
+                _current_ptt.clear()
+            # 启新
+            _current_ptt.append(_make_ptt(new_hotkey, new_language))
+            last_hotkey   = new_hotkey
+            last_language = new_language
+
+    threading.Thread(target=_watcher, daemon=True).start()
 
 
 def _run_with_menubar(fastapi_app, cfg, llm):
@@ -425,6 +490,7 @@ def _run_with_menubar(fastapi_app, cfg, llm):
 
     try:
         app = LuminaApp()
+        _start_ptt(cfg, menubar_app=app)
         app.run()
     finally:
         server.should_exit = True
