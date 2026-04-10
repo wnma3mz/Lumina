@@ -23,19 +23,17 @@ dependencies = [
     "python-multipart>=0.0.9",
     "httpx>=0.27.0",
     "pynput>=1.8.1",
+    # macOS（Apple Silicon）专属推理 / ASR / 菜单栏
+    "mlx>=0.18.0; sys_platform == 'darwin'",
+    "mlx-lm>=0.12.0; sys_platform == 'darwin'",
+    "mlx-whisper>=0.2.0; sys_platform == 'darwin'",
+    "rumps>=0.4.0; sys_platform == 'darwin'",
+    # Windows 推理 / ASR
+    "llama-cpp-python>=0.2.90; sys_platform == 'win32'",
+    "faster-whisper>=1.0.0; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
-macos = [
-    "mlx>=0.18.0",
-    "mlx-lm>=0.12.0",
-    "mlx-whisper>=0.2.0",
-    "rumps>=0.4.0",
-]
-windows = [
-    "llama-cpp-python>=0.2.90",
-    "faster-whisper>=1.0.0",
-]
 dev = ["black", "isort", "pyinstaller", "pytest>=8.0", "pytest-asyncio>=0.23", "httpx>=0.27.0"]
 
 [project.scripts]
