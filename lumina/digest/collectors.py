@@ -240,8 +240,8 @@ def collect_git_logs(n: int = 20) -> str:
 def collect_clipboard() -> str:
     # 无状态，不使用 cursor
     try:
-        result = subprocess.check_output(["pbpaste"], timeout=3, text=True)
-        content = result.strip()
+        from lumina.platform_utils import clipboard_get
+        content = clipboard_get().strip()
         if not content:
             return ""
         if len(content) > 500:
@@ -253,6 +253,7 @@ def collect_clipboard() -> str:
 
 
 def collect_browser_history(n: int = 50) -> str:
+    import sys as _sys
     name = "collect_browser_history"
     cursor = _get_cursor(name)   # Unix 秒
     cfg = get_cfg()
@@ -260,9 +261,13 @@ def collect_browser_history(n: int = 50) -> str:
         results = []
         newest_ts: Optional[float] = None
 
-        # Chrome
-        chrome_db = (Path.home() / "Library" / "Application Support" /
-                     "Google" / "Chrome" / "Default" / "History")
+        # Chrome — macOS / Windows 路径
+        if _sys.platform == "win32":
+            chrome_db = (Path.home() / "AppData" / "Local" /
+                         "Google" / "Chrome" / "User Data" / "Default" / "History")
+        else:
+            chrome_db = (Path.home() / "Library" / "Application Support" /
+                         "Google" / "Chrome" / "Default" / "History")
         if chrome_db.exists():
             tmp = Path("/tmp/lumina_chrome_history.db")
             shutil.copy2(str(chrome_db), str(tmp))
@@ -287,8 +292,11 @@ def collect_browser_history(n: int = 50) -> str:
             finally:
                 tmp.unlink(missing_ok=True)
 
-        # Firefox
-        ff_profiles = Path.home() / "Library" / "Application Support" / "Firefox" / "Profiles"
+        # Firefox — macOS / Windows 路径
+        if _sys.platform == "win32":
+            ff_profiles = Path.home() / "AppData" / "Roaming" / "Mozilla" / "Firefox" / "Profiles"
+        else:
+            ff_profiles = Path.home() / "Library" / "Application Support" / "Firefox" / "Profiles"
         if ff_profiles.exists():
             for profile_dir in ff_profiles.iterdir():
                 places_db = profile_dir / "places.sqlite"
@@ -334,13 +342,16 @@ def collect_browser_history(n: int = 50) -> str:
 
 
 def collect_notes_app() -> str:
-    """读取 Notes NoteStore.sqlite。
+    """读取 Notes NoteStore.sqlite（仅 macOS）。
 
     macOS TCC 限制：打包后的 .app 需要「完整磁盘访问」才能读取备忘录数据库。
     若权限不足，返回特殊标记 '__PERMISSION_DENIED__'，由 core.py 转为提示信息。
 
     cursor 存 Unix 秒；查询时转换为 CoreData epoch（cursor - 978307200）。
     """
+    import sys as _sys
+    if _sys.platform != "darwin":
+        return ""
     name = "collect_notes_app"
     cursor = _get_cursor(name)   # Unix 秒
     import sqlite3 as _sqlite3
@@ -409,11 +420,14 @@ _CALENDAR_CORE_OFFSET = 978307200  # CoreData epoch = Unix epoch - 978307200
 
 
 def collect_calendar() -> str:
-    """读取 macOS Calendar，返回今天及未来 history_hours 内的日程。
+    """读取 macOS Calendar，返回今天及未来 history_hours 内的日程（仅 macOS）。
 
     无 cursor：日历事件按时间窗口查，不存在「只读新事件」的语义。
     需要完整磁盘访问权限（与 Notes.app 同理）。
     """
+    import sys as _sys
+    if _sys.platform != "darwin":
+        return ""
     cfg = get_cfg()
     try:
         if not _CALENDAR_DB.exists():

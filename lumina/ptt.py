@@ -6,7 +6,6 @@ lumina/ptt.py — 全局热键 PTT 守护（toggle 模式）
 """
 import io
 import json
-import subprocess
 import threading
 import time
 import urllib.request
@@ -23,13 +22,14 @@ WHISPER_RATE = 16000   # Whisper 要求的采样率
 # ── 系统剪贴板 / 粘贴 ──────────────────────────────────────────────────────────
 
 def _pbcopy(text: str):
-    subprocess.run(["pbcopy"], input=text.encode(), check=True)
+    from lumina.platform_utils import clipboard_set
+    clipboard_set(text)
 
 
 def _paste():
-    """模拟 Cmd+V，粘贴到当前最前面的窗口。需要辅助功能权限。"""
-    script = 'tell application "System Events" to keystroke "v" using command down'
-    subprocess.run(["osascript", "-e", script], check=False)
+    """模拟粘贴快捷键到当前最前面的窗口。需要辅助功能权限。"""
+    from lumina.platform_utils import paste_to_foreground
+    paste_to_foreground()
 
 
 # ── 热键解析 ───────────────────────────────────────────────────────────────────

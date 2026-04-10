@@ -174,14 +174,25 @@ def _ensure_model():
 
 
 def build_provider(cfg):
-    if cfg.provider.type == "openai":
+    ptype = cfg.provider.type
+    if ptype == "openai":
         from lumina.providers.openai import OpenAIProvider
         oa = cfg.provider.openai
         logger.info("Provider: OpenAI-compatible  base_url=%s  model=%s", oa.base_url, oa.model)
         return OpenAIProvider(base_url=oa.base_url, api_key=oa.api_key, model=oa.model)
+    elif ptype == "llama_cpp":
+        from lumina.providers.llama_cpp import LlamaCppProvider
+        lc = cfg.provider.llama_cpp
+        logger.info("Provider: llama-cpp-python  model_path=%s  n_gpu_layers=%d",
+                    lc.model_path, lc.n_gpu_layers)
+        return LlamaCppProvider(
+            model_path=lc.model_path,
+            n_gpu_layers=lc.n_gpu_layers,
+            n_ctx=lc.n_ctx,
+        )
     else:
         from lumina.providers.local import LocalProvider
-        logger.info("Provider: Local  model_path=%s", cfg.provider.model_path)
+        logger.info("Provider: Local (mlx)  model_path=%s", cfg.provider.model_path)
         return LocalProvider(model_path=cfg.provider.model_path)
 
 
@@ -293,10 +304,11 @@ def cmd_server(args):
     _start_digest_timer(llm, interval=digest_interval, uvicorn_loop=_uvicorn_loop)
     _start_daily_notify_timer(llm, uvicorn_loop=_uvicorn_loop)
 
-    if _EDITION in ("full", "lite") or getattr(args, "menubar", False):
+    if sys.platform == "darwin" and (_EDITION in ("full", "lite") or getattr(args, "menubar", False)):
         _run_with_menubar(fastapi_app, cfg, llm)
     else:
-        _start_ptt(cfg, menubar_app=None)
+        if sys.platform == "darwin":
+            _start_ptt(cfg, menubar_app=None)
         try:
             uvicorn.run(fastapi_app, host=cfg.host, port=cfg.port, log_level=cfg.log_level.lower())
         finally:
@@ -563,8 +575,8 @@ def _get_lan_ip() -> str | None:
 
 
 def _notify(title: str, message: str):
-    """发送 macOS 系统通知（仅在 App 打包模式下）。"""
-    if _EDITION not in ("full", "lite"):
+    """发送系统通知（macOS App 打包模式）；其他平台/模式静默。"""
+    if sys.platform != "darwin" or _EDITION not in ("full", "lite"):
         return
     import subprocess
     script = (
@@ -803,7 +815,7 @@ def main():
     p_server.add_argument("--config", default=None, help="Path to config.json")
     p_server.add_argument("--host", default=None)
     p_server.add_argument("--port", type=int, default=None)
-    p_server.add_argument("--provider", default=None, choices=["local", "openai"])
+    p_server.add_argument("--provider", default=None, choices=["local", "llama_cpp", "openai"])
     p_server.add_argument("--model-path", dest="model_path", default=None)
     p_server.add_argument("--whisper-model", dest="whisper_model", default=None)
     p_server.add_argument("--log-level", dest="log_level", default=None,

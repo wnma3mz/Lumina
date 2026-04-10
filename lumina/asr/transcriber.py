@@ -1,5 +1,5 @@
 """
-语音转文本：基于 mlx-whisper。
+语音转文本：macOS 用 mlx-whisper，其他平台用 faster-whisper。
 
 Whisper 模型按需下载，首次使用时自动拉取。
 支持的模型（从小到大）：
@@ -7,22 +7,59 @@ Whisper 模型按需下载，首次使用时自动拉取。
     base      ~74 MB
     small     ~244 MB
 
-默认使用 mlx-community/whisper-tiny（最小，够用于普通语音输入）。
+默认：
+  macOS   mlx-community/whisper-tiny-mlx-4bit（mlx-whisper）
+  Windows tiny（faster-whisper，HuggingFace model name）
 """
 import asyncio
 import io
 import os
+import sys
 from typing import Optional
 
 import numpy as np
 
-# mlx-whisper 的 transcribe 接口与 openai-whisper 兼容
-import mlx_whisper
+# ── 后端选择 ──────────────────────────────────────────────────────────────────
 
-_DEFAULT_WHISPER_MODEL = os.environ.get(
-    "LUMINA_WHISPER_MODEL",
-    "mlx-community/whisper-tiny-mlx-4bit",
-)
+if sys.platform == "darwin":
+    # mlx-whisper 的 transcribe 接口与 openai-whisper 兼容
+    import mlx_whisper as _mlx_whisper  # type: ignore[import]
+    _BACKEND = "mlx"
+    _DEFAULT_WHISPER_MODEL = os.environ.get(
+        "LUMINA_WHISPER_MODEL",
+        "mlx-community/whisper-tiny-mlx-4bit",
+    )
+else:
+    # faster-whisper 跨平台（CUDA GPU + CPU fallback）
+    _BACKEND = "faster_whisper"
+    _DEFAULT_WHISPER_MODEL = os.environ.get(
+        "LUMINA_WHISPER_MODEL",
+        "tiny",
+    )
+
+# faster-whisper 模块级缓存，避免每次转写重新加载
+_fw_model_cache: dict = {}
+
+
+def _make_initial_prompt(language: Optional[str]) -> Optional[str]:
+    if language == "zh":
+        return "以下是普通话的语音识别结果，包含标准的中文标点符号。"
+    if language == "en":
+        return "The following is a transcription in English."
+    return None
+
+
+def _get_faster_whisper_model(model_id: str):
+    if model_id not in _fw_model_cache:
+        from faster_whisper import WhisperModel  # type: ignore[import]
+        try:
+            import torch  # type: ignore[import]
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except ImportError:
+            device = "cpu"
+        compute = "float16" if device == "cuda" else "int8"
+        _fw_model_cache[model_id] = WhisperModel(model_id, device=device, compute_type=compute)
+    return _fw_model_cache[model_id]
 
 
 class Transcriber:
@@ -33,22 +70,28 @@ class Transcriber:
     def transcribe_sync(self, wav_bytes: bytes, language: Optional[str] = None) -> str:
         """同步转写，在 executor 内调用。"""
         audio = _wav_bytes_to_float32(wav_bytes)
-        # initial_prompt 给模型提示标点和语言风格，显著提升中文识别质量
-        initial_prompt = None
-        if language == "zh":
-            initial_prompt = "以下是普通话的语音识别结果，包含标准的中文标点符号。"
-        elif language == "en":
-            initial_prompt = "The following is a transcription in English."
+        initial_prompt = _make_initial_prompt(language)
 
-        result = mlx_whisper.transcribe(
+        if _BACKEND == "mlx":
+            result = _mlx_whisper.transcribe(
+                audio,
+                path_or_hf_repo=self.model,
+                language=language,
+                fp16=False,
+                condition_on_previous_text=False,  # PTT 每次独立录音，不应带上次上下文
+                initial_prompt=initial_prompt,
+            )
+            return result.get("text", "").strip()
+
+        # faster_whisper
+        fw_model = _get_faster_whisper_model(self.model)
+        segments, _ = fw_model.transcribe(
             audio,
-            path_or_hf_repo=self.model,
             language=language,
-            fp16=False,
-            condition_on_previous_text=False,  # PTT 每次独立录音，不应带上次上下文
             initial_prompt=initial_prompt,
+            condition_on_previous_text=False,
         )
-        return result.get("text", "").strip()
+        return "".join(s.text for s in segments).strip()
 
     async def transcribe(self, wav_bytes: bytes, language: Optional[str] = None) -> str:
         """异步转写。"""
