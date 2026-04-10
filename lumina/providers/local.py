@@ -25,10 +25,14 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, List, Optional
 import uuid
 
-import mlx.core as mx
-from mlx_lm import load
-from mlx_lm.generate import BatchGenerator, _left_pad_prompts, _make_cache, cache as mlx_cache
-from mlx_lm.sample_utils import make_sampler
+try:
+    import mlx.core as mx
+    from mlx_lm import load
+    from mlx_lm.generate import BatchGenerator, _left_pad_prompts, _make_cache, cache as mlx_cache
+    from mlx_lm.sample_utils import make_sampler
+    _MLX_AVAILABLE = True
+except ImportError:
+    _MLX_AVAILABLE = False
 
 from .base import BaseProvider
 
@@ -83,6 +87,11 @@ class LocalProvider(BaseProvider):
         enable_warmup: bool = True,
         warmup_decode_steps: int = _WARMUP_DECODE_STEPS,
     ):
+        if not _MLX_AVAILABLE:
+            raise ImportError(
+                "mlx / mlx-lm 未安装，LocalProvider 不可用。"
+                "macOS 用户请运行：pip install lumina[macos]"
+            )
         self.model_path = model_path
         self.max_new_prefill_per_iter = max(1, max_new_prefill_per_iter)
         self.enable_warmup = enable_warmup

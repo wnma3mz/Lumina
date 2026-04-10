@@ -3,7 +3,7 @@
 
 config.json 字段说明
 ─────────────────────
-provider.type        "local"（本地模型）或 "openai"（远程 OpenAI 兼容接口）
+provider.type        "local"（mlx，macOS）/ "llama_cpp"（Windows/CPU）/ "openai"（远程）
 provider.model_path  本地模型目录，null 时使用内置默认路径
 provider.openai      type=openai 时必填：
                        base_url  服务地址，如 http://192.168.1.10:8080/v1
@@ -23,6 +23,7 @@ ptt                  PTT 热键配置（hotkey / language）
 """
 import json
 import os
+import sys as _sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional
@@ -45,10 +46,22 @@ class PttConfig:
 
 
 @dataclass
+class LlamaCppConfig:
+    model_path: str = ""        # GGUF 模型文件路径（本地绝对路径）
+    n_gpu_layers: int = -1      # -1 = 全部放 GPU；0 = 纯 CPU
+    n_ctx: int = 4096
+
+
+def _default_provider_type() -> str:
+    return "llama_cpp" if _sys.platform == "win32" else "local"
+
+
+@dataclass
 class ProviderConfig:
-    type: str = "local"           # "local" | "openai"
+    type: str = field(default_factory=_default_provider_type)  # "local" | "llama_cpp" | "openai"
     model_path: str = _DEFAULT_MODEL
     openai: OpenAIProviderConfig = field(default_factory=OpenAIProviderConfig)
+    llama_cpp: LlamaCppConfig = field(default_factory=LlamaCppConfig)
 
 
 class Config:
@@ -60,8 +73,9 @@ class Config:
         # ── Provider ──────────────────────────────────────────────────────────
         p = data.get("provider", {})
         oa = p.get("openai", {})
+        lc = p.get("llama_cpp", {})
         self.provider = ProviderConfig(
-            type=os.environ.get("LUMINA_PROVIDER_TYPE") or p.get("type", "local"),
+            type=os.environ.get("LUMINA_PROVIDER_TYPE") or p.get("type", _default_provider_type()),
             model_path=(
                 os.environ.get("LUMINA_MODEL_PATH")
                 or p.get("model_path")
@@ -71,6 +85,11 @@ class Config:
                 base_url=os.environ.get("LUMINA_OPENAI_BASE_URL") or oa.get("base_url", ""),
                 api_key=os.environ.get("LUMINA_OPENAI_API_KEY") or oa.get("api_key", ""),
                 model=os.environ.get("LUMINA_OPENAI_MODEL") or oa.get("model", ""),
+            ),
+            llama_cpp=LlamaCppConfig(
+                model_path=lc.get("model_path", ""),
+                n_gpu_layers=int(lc.get("n_gpu_layers", -1)),
+                n_ctx=int(lc.get("n_ctx", 4096)),
             ),
         )
 
