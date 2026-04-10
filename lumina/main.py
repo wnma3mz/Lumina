@@ -247,17 +247,51 @@ def cmd_server(args):
 
     # 启动后台摘要任务（不阻塞服务）
     # 先跑全量（若已过期），再立即跑一次增量（捕捉启动前的新活动）
+    # 注意：digest 任务必须投递到 uvicorn event loop，不能用 asyncio.run()
+    # 否则 LocalProvider._ensure_worker 会检测到 loop 变化并重建，破坏进行中的翻译请求
     import threading
+    _uvicorn_loop: list = []   # 启动后由 _capture_loop 写入
+
+    async def _capture_loop():
+        import asyncio
+        _uvicorn_loop.append(asyncio.get_running_loop())
+
+    async def _startup_digest_coro():
+        from lumina.digest import maybe_generate_digest, maybe_generate_changelog
+        await maybe_generate_digest(llm)
+        await maybe_generate_changelog(llm)
+
     def _startup_digest():
-        _run_digest_task(llm, changelog=False)   # 全量（超过 history_hours 才真正执行）
-        _run_digest_task(llm, changelog=True)    # 增量：有新活动则立即追加，无则跳过
+        # 等 uvicorn loop 就绪
+        import asyncio
+        import time
+        for _ in range(50):   # 最多等 5s
+            if _uvicorn_loop:
+                break
+            time.sleep(0.1)
+        if not _uvicorn_loop:
+            logger.warning("Digest startup: uvicorn loop not ready, skipping")
+            return
+        loop = _uvicorn_loop[0]
+        future = asyncio.run_coroutine_threadsafe(_startup_digest_coro(), loop)
+        try:
+            future.result(timeout=300)
+        except Exception as e:
+            logger.error("Digest startup failed: %s", e)
+
+    # 在 FastAPI startup 时捕获 uvicorn event loop
+    @fastapi_app.on_event("startup")
+    async def _on_startup():
+        import asyncio
+        _uvicorn_loop.append(asyncio.get_running_loop())
+
     threading.Thread(target=_startup_digest, daemon=True).start()
 
     # LUMINA_DIGEST_INTERVAL 可在环境变量里覆盖（测试用），命令行参数优先
     _env_interval = int(os.environ.get("LUMINA_DIGEST_INTERVAL", 3600))
     digest_interval = getattr(args, "digest_interval", _env_interval)
-    _start_digest_timer(llm, interval=digest_interval)
-    _start_daily_notify_timer(llm)
+    _start_digest_timer(llm, interval=digest_interval, uvicorn_loop=_uvicorn_loop)
+    _start_daily_notify_timer(llm, uvicorn_loop=_uvicorn_loop)
 
     if _EDITION in ("full", "lite") or getattr(args, "menubar", False):
         _run_with_menubar(fastapi_app, cfg, llm)
@@ -269,17 +303,24 @@ def cmd_server(args):
             _remove_pid()
 
 
-def _run_digest_task(llm, changelog: bool = False):
-    """在独立线程里运行摘要生成（全量或增量）。"""
+def _run_digest_task(llm, changelog: bool = False, uvicorn_loop: list = None):
+    """digest 任务投递到 uvicorn event loop 执行，避免 asyncio.run() 创建新 loop 破坏 LocalProvider 状态。"""
     import asyncio
     from lumina.digest import maybe_generate_digest, maybe_generate_changelog
-    if changelog:
-        asyncio.run(maybe_generate_changelog(llm))
+    coro = maybe_generate_changelog(llm) if changelog else maybe_generate_digest(llm)
+    loop = uvicorn_loop[0] if uvicorn_loop else None
+    if loop and loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        try:
+            future.result(timeout=300)
+        except Exception as e:
+            logger.error("Digest task failed: %s", e)
     else:
-        asyncio.run(maybe_generate_digest(llm))
+        # fallback：uvicorn loop 不可用时（测试/非标准启动），仍用 asyncio.run()
+        asyncio.run(coro)
 
 
-def _start_digest_timer(llm, interval: int = 3600):
+def _start_digest_timer(llm, interval: int = 3600, uvicorn_loop: list = None):
     """整点（或按 interval 覆盖）在后台线程生成 changelog。"""
     import threading
     import time
@@ -289,8 +330,7 @@ def _start_digest_timer(llm, interval: int = 3600):
         return 3600 - (now % 3600)
 
     def _loop():
-        _run_digest_task(llm, changelog=True)
-        # 下一次仍对齐整点
+        _run_digest_task(llm, changelog=True, uvicorn_loop=uvicorn_loop)
         delay = _seconds_to_next_hour() if interval == 3600 else interval
         t = threading.Timer(delay, _loop)
         t.daemon = True
@@ -303,7 +343,7 @@ def _start_digest_timer(llm, interval: int = 3600):
     logger.info("Digest timer started, next trigger in %.0fs (interval=%ds)", delay, interval)
 
 
-def _start_daily_notify_timer(llm):
+def _start_daily_notify_timer(llm, uvicorn_loop: list = None):
     """每天在 config.digest.notify_time（默认 20:00）强制全量生成日报并发送通知。"""
     import asyncio
     import threading
@@ -328,9 +368,14 @@ def _start_daily_notify_timer(llm):
     def _fire():
         from lumina.digest import maybe_generate_digest
         from lumina.digest.core import load_digest
-        # 强制全量重新生成今日日报
+        # 强制全量重新生成今日日报，投递到 uvicorn loop 避免与正在进行的请求竞争
         try:
-            asyncio.run(maybe_generate_digest(llm, force_full=True))
+            coro = maybe_generate_digest(llm, force_full=True)
+            loop = uvicorn_loop[0] if uvicorn_loop else None
+            if loop and loop.is_running():
+                asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=300)
+            else:
+                asyncio.run(coro)
         except Exception as e:
             logger.error("Daily notify: digest generation failed: %s", e)
         digest = load_digest() or ""

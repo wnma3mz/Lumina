@@ -135,6 +135,10 @@ class LocalProvider(BaseProvider):
             self._batch_slots = {}
         if self._worker_task is None or self._worker_task.done():
             self._loop = current_loop
+            # _batch_scheduler finally 会 close batch_generator / shutdown executor；
+            # 新 worker 启动前必须重建，否则下次调用时使用已关闭的对象导致卡死。
+            if self._use_builtin_batch_engine():
+                self._init_batch_engine()
             worker = self._batch_scheduler if self._use_builtin_batch_engine() else self._scheduler
             self._worker_task = asyncio.create_task(worker())
 

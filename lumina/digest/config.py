@@ -11,11 +11,27 @@ from typing import List, Optional
 class DigestConfig:
     """从 config.json["digest"] 读取，或使用默认值。"""
     scan_dirs: List[str] = field(default_factory=lambda: [
+        # 通用目录
         str(Path.home() / "Documents"),
         str(Path.home() / "Desktop"),
         str(Path.home() / "Projects"),
         str(Path.home() / "code"),
         str(Path.home() / "dev"),
+        str(Path.home() / "workspace"),
+        str(Path.home() / "repos"),
+        # iCloud Drive
+        str(Path.home() / "Library/Mobile Documents/com~apple~CloudDocs"),
+        # Obsidian（常见 vault 位置）
+        str(Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents"),
+        str(Path.home() / "Obsidian"),
+        str(Path.home() / "obsidian"),
+        # Logseq
+        str(Path.home() / "Logseq"),
+        str(Path.home() / "logseq"),
+        # 个人笔记目录
+        str(Path.home() / "Notes"),
+        str(Path.home() / "notes"),
+        str(Path.home() / "wiki"),
     ])
     history_hours: float = 24.0   # 采集窗口（小时）
     refresh_hours: float = 1.0    # 每隔多久检查一次增量

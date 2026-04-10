@@ -38,6 +38,9 @@ _last_collector_results: dict = {}
 # 上次成功生成日报的时间戳（秒），用于计算增量采集窗口
 _last_generated_ts: Optional[float] = None
 
+# 当前进程启动时间，用于识别上一个进程遗留的 lock 文件
+_PROCESS_STARTED_TS = time.time()
+
 # 注册的采集器列表——新增数据源在此追加
 _COLLECTORS = [
     collect_shell_history,
@@ -127,11 +130,23 @@ async def _collect_all(since_ts: Optional[float] = None) -> str:
         enabled_set = set(cfg.enabled_collectors)
         active = [fn for fn in _COLLECTORS if fn.__name__ in enabled_set]
 
+    # 每个 collector 独立超时 30s，超时直接视为异常，不 block 其他 collector
+    _COLLECTOR_TIMEOUT = 30
+
+    async def _run_with_timeout(fn):
+        try:
+            return await asyncio.wait_for(
+                loop.run_in_executor(executor, fn),
+                timeout=_COLLECTOR_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Digest: collector %s timed out after %ds", fn.__name__, _COLLECTOR_TIMEOUT)
+            return Exception(f"timeout after {_COLLECTOR_TIMEOUT}s")
+
     loop = asyncio.get_running_loop()
     with override_history_hours(effective_hours):
         with ThreadPoolExecutor(max_workers=max(len(active), 1)) as executor:
-            futures = [loop.run_in_executor(executor, fn) for fn in active]
-            results = await asyncio.gather(*futures, return_exceptions=True)
+            results = await asyncio.gather(*[_run_with_timeout(fn) for fn in active])
 
     # ── 保存 collector 写回的 cursor（去掉内部哨兵 key）─────────────────────
     updated = {k: v for k, v in _collectors_mod._CURSORS.items()
@@ -251,6 +266,34 @@ async def generate_changelog(llm) -> Optional[str]:
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────
 
+def _sync_status_from_digest_file() -> None:
+    """进程重启后，从已有 digest.md 恢复最近一次生成时间。"""
+    global _generated_at, _last_generated_ts
+    if _generated_at is not None or not _DIGEST_PATH.exists():
+        return
+    try:
+        mtime = _DIGEST_PATH.stat().st_mtime
+    except OSError:
+        return
+    _generated_at = datetime.fromtimestamp(mtime).isoformat()
+    _last_generated_ts = mtime
+
+
+def _clear_orphan_lock_if_needed() -> None:
+    """清理前一个进程遗留的 lock，避免手动刷新被静默跳过。"""
+    if not _LOCK_PATH.exists():
+        return
+    mtime = _LOCK_PATH.stat().st_mtime
+    age = time.time() - mtime
+    if mtime < _PROCESS_STARTED_TS:
+        logger.warning("Digest: removing orphan lock from previous process")
+        _LOCK_PATH.unlink(missing_ok=True)
+        return
+    if age >= 600:
+        logger.warning("Digest: stale lock (%.0fs old), removing", age)
+        _LOCK_PATH.unlink(missing_ok=True)
+
+
 def should_regenerate_full(max_age_hours: Optional[float] = None) -> bool:
     cfg = get_cfg()
     age_limit = max_age_hours if max_age_hours is not None else cfg.history_hours
@@ -267,19 +310,11 @@ def load_digest() -> Optional[str]:
 
 async def maybe_generate_digest(llm, force_full: bool = False) -> None:
     """启动时调用：全量摘要（若需要）。用 lock 文件防并发。"""
+    _sync_status_from_digest_file()
+    _clear_orphan_lock_if_needed()
     if _LOCK_PATH.exists():
-        # lock 超过 10 分钟视为上次进程异常退出，强制清理
-        age = time.time() - _LOCK_PATH.stat().st_mtime
-        if age < 600:
-            logger.debug("Digest: locked, skipping")
-            return
-        logger.warning("Digest: stale lock (%.0fs old), removing", age)
-        _LOCK_PATH.unlink(missing_ok=True)
-    global _generated_at, _last_generated_ts
-    if _generated_at is None and _DIGEST_PATH.exists():
-        mtime = _DIGEST_PATH.stat().st_mtime
-        _generated_at = datetime.fromtimestamp(mtime).isoformat()
-        _last_generated_ts = mtime
+        logger.debug("Digest: locked, skipping")
+        return
 
     if not force_full and not should_regenerate_full():
         logger.debug("Digest: still fresh, skipping full generation")
@@ -308,6 +343,7 @@ async def maybe_generate_changelog(llm) -> None:
 
 
 def get_status() -> dict:
+    _sync_status_from_digest_file()
     return {
         "generating": _generating,
         "generated_at": _generated_at,
@@ -317,6 +353,7 @@ def get_status() -> dict:
 def get_debug_info() -> dict:
     """返回上次采集的缓存数据，不触发任何新的采集，立即返回。"""
     from lumina.digest.config import get_cfg
+    import lumina.digest.collectors as _col
     cfg = get_cfg()
     return {
         "config": {
@@ -327,4 +364,5 @@ def get_debug_info() -> dict:
         "last_generated_ts": _last_generated_ts,
         "collectors": _last_collector_results,
         "cursors": load_cursors(),
+        "md_files": _col._last_md_files,
     }

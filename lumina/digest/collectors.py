@@ -66,7 +66,7 @@ import shutil
 import sqlite3
 import subprocess
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -79,6 +79,9 @@ logger = logging.getLogger("lumina.digest")
 # 由 core.py 在 ThreadPoolExecutor 启动前注入，各 collector 只读自己的 key。
 # "_fallback" key = now - effective_hours（全局兜底时间戳）。
 _CURSORS: dict = {}
+
+# 上次 collect_markdown_notes 扫到的文件列表，供 debug 面板展示
+_last_md_files: list[dict] = []
 
 
 def _get_cursor(name: str) -> float:
@@ -160,7 +163,7 @@ def collect_shell_history(n: int = 100) -> str:
                 if len(cmds) >= n:
                     break
         else:
-            _set_cursor(name, newest_ts)
+            _set_cursor(name, newest_ts - 1)
 
         if not cmds:
             return ""
@@ -224,7 +227,7 @@ def collect_git_logs(n: int = 20) -> str:
                 except Exception:
                     continue
 
-        _set_cursor(name, newest_ts)
+        _set_cursor(name, newest_ts - 1)
 
         if not entries:
             return ""
@@ -315,7 +318,7 @@ def collect_browser_history(n: int = 50) -> str:
                     tmp.unlink(missing_ok=True)
                 break  # 只处理第一个 profile
 
-        _set_cursor(name, newest_ts)
+        _set_cursor(name, newest_ts - 1)
 
         if not results:
             return ""
@@ -389,7 +392,8 @@ def collect_notes_app() -> str:
             else:
                 entries.append(f"**{title}**")
 
-        _set_cursor(name, newest_ts)
+        # cursor 退 1 秒，防止同一秒内其他修改因 mtime == cursor 被严格大于过滤掉
+        _set_cursor(name, newest_ts - 1)
 
         return f"## 备忘录（过去 {cfg.history_hours:.0f}h 修改）\n" + "\n\n".join(entries)
     except PermissionError:
@@ -500,7 +504,7 @@ def collect_markdown_notes() -> str:
         hashes = load_md_hashes()
         candidates: list[tuple[float, Path]] = []
 
-        for root_str in cfg.scan_dirs[:2]:  # 只扫前两个目录（Documents/Desktop）
+        for root_str in cfg.scan_dirs:
             root = Path(root_str)
             if not root.exists():
                 continue
@@ -522,6 +526,12 @@ def collect_markdown_notes() -> str:
                     candidates.append((mtime, md, current_hash))
                 except Exception:
                     continue
+
+        global _last_md_files
+        _last_md_files = [
+            {"path": str(md), "mtime": mtime}
+            for mtime, md, _ in sorted(candidates, key=lambda x: -x[0])
+        ]
 
         if not candidates:
             return ""
@@ -706,7 +716,7 @@ def collect_ai_queries(n: int = 50) -> str:
                 finally:
                     tmp.unlink(missing_ok=True)
 
-        _set_cursor(name, newest_ts)
+        _set_cursor(name, newest_ts - 1)
 
         if not queries:
             return ""

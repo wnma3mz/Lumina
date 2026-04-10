@@ -262,6 +262,21 @@
                 </template>
               </details>
             </template>
+            <!-- Markdown 扫描文件列表 -->
+            <template x-if="debug.mdFiles && debug.mdFiles.length > 0">
+              <details class="debug-section">
+                <summary class="debug-summary">
+                  <span style="color:var(--success)">●</span>
+                  <span>Markdown 扫描文件</span>
+                  <span style="color:var(--sub);font-size:12px;" x-text="debug.mdFiles.length + ' 个文件'"></span>
+                </summary>
+                <pre class="debug-pre" x-text="debug.mdFiles.map(f => {
+                  const d = new Date(f.mtime * 1000);
+                  const ts = d.toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+                  return ts + '  ' + f.path;
+                }).join('\n')"></pre>
+              </details>
+            </template>
           </div>
         </div>
 
@@ -451,6 +466,7 @@ function luminaApp() {
     debug: {
       open: false, loading: false,
       collectors: {},
+      mdFiles: [],
       names: {
         collect_shell_history:   '终端历史',
         collect_git_logs:        'Git 提交',
@@ -557,6 +573,7 @@ function luminaApp() {
         if (!res.ok) throw new Error(res.statusText);
         const data = await res.json();
         this.debug.collectors = data.collectors || {};
+        this.debug.mdFiles = data.md_files || [];
       } catch(e) {
         // ignore
       } finally {
