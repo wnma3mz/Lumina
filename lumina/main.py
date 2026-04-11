@@ -589,8 +589,11 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
             self._ptt_ref: list = []   # _start_ptt 启动后写入
             self._digest_toggle_item = rumps.MenuItem("", callback=self._toggle_digest)
             self._refresh_digest_menu_label()
+            self._ip_item = rumps.MenuItem("", callback=self._copy_ip)
+            self._refresh_ip_label()
             self.menu = [
                 rumps.MenuItem("打开界面", callback=self._open_ui),
+                self._ip_item,
                 self._digest_toggle_item,
                 None,  # 分隔线
                 rumps.MenuItem(_PAUSE_LABEL, callback=self._toggle_ptt),
@@ -615,6 +618,27 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
                 logger.error("Failed to persist digest toggle: %s", e)
             self._refresh_digest_menu_label()
             logger.info("Digest toggled via menubar: enabled=%s", enabled)
+
+        def _get_local_ip(self) -> str:
+            import socket
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    s.connect(("8.8.8.8", 80))
+                    return s.getsockname()[0]
+            except Exception:
+                return "127.0.0.1"
+
+        def _refresh_ip_label(self):
+            ip = self._get_local_ip()
+            self._ip_item.title = f"复制地址  {ip}:{cfg.port}"
+
+        def _copy_ip(self, _):
+            from lumina.platform_utils import clipboard_set
+            ip = self._get_local_ip()
+            clipboard_set(f"http://{ip}:{cfg.port}")
+            self._ip_item.title = f"已复制 ✓  {ip}:{cfg.port}"
+            import threading
+            threading.Timer(2.0, self._refresh_ip_label).start()
 
         def _open_ui(self, _):
             import subprocess
