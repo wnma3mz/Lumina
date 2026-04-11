@@ -143,11 +143,11 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
         except Exception as e:
             _pdf_jobs[job_id].update({"status": "error", "error": str(e)})
         finally:
-            # 300 秒后删临时目录（给用户时间下载）；1 小时后清理 job 记录
+            # 3600 秒后删临时目录（与 job 记录清理时间对齐，避免 status=done 但文件已删的 404）
             # 两个独立 task：主任务到此结束，不再被 sleep 占用
             tmp_dir = _pdf_jobs.get(job_id, {}).get("dir")
             if tmp_dir:
-                t1 = _asyncio.create_task(_delayed_rmtree(tmp_dir, delay=300))
+                t1 = _asyncio.create_task(_delayed_rmtree(tmp_dir, delay=3600))
                 _bg_tasks.add(t1)
                 t1.add_done_callback(_bg_tasks.discard)
 
@@ -303,7 +303,11 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
             system_override = (
                 system_msg.content
                 if isinstance(system_msg.content, str)
-                else " ".join(c.text for c in system_msg.content)
+                else " ".join(
+                    getattr(c, "text", "")
+                    for c in system_msg.content
+                    if getattr(c, "type", "text") == "text"
+                )
             )
 
         user_msg = next(
@@ -315,7 +319,11 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
         user_text = (
             user_msg.content
             if isinstance(user_msg.content, str)
-            else " ".join(c.text for c in user_msg.content)
+            else " ".join(
+                getattr(c, "text", "")
+                for c in user_msg.content
+                if getattr(c, "type", "text") == "text"
+            )
         )
 
         if request.stream:

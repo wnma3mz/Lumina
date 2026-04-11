@@ -145,17 +145,9 @@ def collect_git_logs(n: int = 20) -> str:
             root = Path(root_str).expanduser()
             if not root.exists():
                 continue
-            for git_dir in root.rglob(".git"):
-                if not git_dir.is_dir():
-                    continue
+            for git_dir in _walk_git_dirs(root, max_depth=4):
                 repo_dir = git_dir.parent
                 if repo_dir in seen_repos:
-                    continue
-                try:
-                    rel = repo_dir.relative_to(root)
-                    if len(rel.parts) > 3:
-                        continue
-                except ValueError:
                     continue
                 seen_repos.add(repo_dir)
                 try:
@@ -437,6 +429,44 @@ def collect_calendar() -> str:
 
 _MD_SKIP_PARTS = {".app", "build", "dist", "node_modules", ".git", ".venv", "__pycache__"}
 
+_GIT_SKIP_DIRS = {".git", ".venv", "node_modules", "build", "dist", "__pycache__", ".app"}
+
+
+def _walk_git_dirs(root: Path, max_depth: int = 4):
+    """yield 深度 ≤ max_depth 的 .git 目录父路径（即仓库根），不进入忽略目录。"""
+    def _recurse(path: Path, depth: int):
+        if depth > max_depth:
+            return
+        try:
+            with os.scandir(path) as it:
+                entries = list(it)
+        except (PermissionError, OSError):
+            return
+        for entry in entries:
+            if entry.name == ".git" and entry.is_dir(follow_symlinks=False):
+                yield Path(entry.path)
+            elif entry.is_dir(follow_symlinks=False) and entry.name not in _GIT_SKIP_DIRS:
+                yield from _recurse(Path(entry.path), depth + 1)
+    yield from _recurse(root, 0)
+
+
+def _walk_md_files(root: Path, max_depth: int = 4):
+    """yield 深度 ≤ max_depth 的 .md 文件，不进入忽略目录及隐藏目录。"""
+    root_str = str(root)
+    root_depth = root_str.count(os.sep)
+    for dirpath, dirnames, filenames in os.walk(root_str):
+        cur_depth = dirpath.count(os.sep) - root_depth
+        if cur_depth >= max_depth:
+            dirnames.clear()
+        else:
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in _MD_SKIP_PARTS and not d.startswith(".")
+            ]
+        for fname in filenames:
+            if fname.endswith(".md"):
+                yield Path(dirpath) / fname
+
 
 def collect_markdown_notes() -> str:
     """扫描 scan_dirs 下最近修改的 .md 文件。
@@ -455,10 +485,7 @@ def collect_markdown_notes() -> str:
             root = Path(root_str).expanduser()
             if not root.exists():
                 continue
-            for md in root.rglob("*.md"):
-                # 跳过构建产物、依赖包、隐藏目录等无关路径
-                if any(part in _MD_SKIP_PARTS for part in md.parts):
-                    continue
+            for md in _walk_md_files(root, max_depth=4):
                 try:
                     mtime = md.stat().st_mtime
                     if mtime <= cutoff:

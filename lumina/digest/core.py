@@ -61,6 +61,18 @@ _last_collector_results: dict = {}
 # 当前进程启动时间，用于识别旧状态
 _PROCESS_STARTED_TS = time.time()
 
+# 模块级 collector 线程池，进程生命周期内复用，避免超时后线程累积
+_COLLECT_EXECUTOR: Optional[ThreadPoolExecutor] = None
+
+
+def _get_collect_executor() -> ThreadPoolExecutor:
+    global _COLLECT_EXECUTOR
+    if _COLLECT_EXECUTOR is None:
+        _COLLECT_EXECUTOR = ThreadPoolExecutor(
+            max_workers=8, thread_name_prefix="lumina_collector"
+        )
+    return _COLLECT_EXECUTOR
+
 
 def _get_digest_lock() -> asyncio.Lock:
     """懒初始化 asyncio.Lock，确保在 event loop 内创建。"""
@@ -134,8 +146,7 @@ async def _collect_all() -> str:
     _COLLECTOR_TIMEOUT = 30
 
     loop = asyncio.get_running_loop()
-    # shutdown(wait=False)：超时取消等待后不阻塞等待慢线程，避免单个 collector 卡住整个采集。
-    executor = ThreadPoolExecutor(max_workers=max(len(active), 1))
+    executor = _get_collect_executor()
 
     async def _run_with_timeout(fn):
         t0 = time.time()
@@ -150,11 +161,8 @@ async def _collect_all() -> str:
             logger.warning("Digest: collector %s timed out after %ds", fn.__name__, _COLLECTOR_TIMEOUT)
             return Exception(f"timeout after {_COLLECTOR_TIMEOUT}s")
 
-    try:
-        with override_history_hours(effective_hours):
-            results = await asyncio.gather(*[_run_with_timeout(fn) for fn in active])
-    finally:
-        executor.shutdown(wait=False)
+    with override_history_hours(effective_hours):
+        results = await asyncio.gather(*[_run_with_timeout(fn) for fn in active])
 
     cache = {}
     sections = []

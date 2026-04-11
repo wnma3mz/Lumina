@@ -820,6 +820,11 @@ class LocalProvider(BaseProvider):
                     if slot is None:
                         continue
 
+                    # 客户端取消时 generate_stream finally 会设置 slot.done=True
+                    if slot.done:
+                        self._batch_slots.pop(uid, None)
+                        continue
+
                     finish_reason = self._response_finish_reason(response)
                     token = self._response_token(response)
                     if finish_reason != "stop" and token is not None:
@@ -1012,10 +1017,14 @@ class LocalProvider(BaseProvider):
         self._not_empty.set()
 
         # 从 token_queue 流式消费：None = 结束，Exception = 错误
-        while True:
-            item = await slot.token_queue.get()
-            if item is None:
-                break
-            if isinstance(item, Exception):
-                raise item
-            yield item
+        # finally 在协程被 Cancel（客户端断开）时标记 done，通知调度器跳过后续生成
+        try:
+            while True:
+                item = await slot.token_queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            slot.done = True
