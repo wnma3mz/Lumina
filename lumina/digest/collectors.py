@@ -479,18 +479,23 @@ def collect_markdown_notes() -> str:
         candidates.sort(key=lambda x: -x[0])
 
         entries = []
-        for mtime, md, _ in candidates[:10]:
+        succeeded: set = set()
+        for mtime, md, current_hash in candidates[:10]:
             try:
                 content = md.read_text(errors="replace")[:200].strip()
                 if content:
                     entries.append(f"**{md.name}**:\n  {content}")
+                    succeeded.add(md)
             except Exception:
+                logger.debug("markdown notes: failed to read %s", md)
                 continue
 
-        # 只有真正产出内容后才推进 hash，避免临时 IO 失败导致文件被永久跳过
+        # 只更新成功读出内容的文件 hash，读取失败或超出前 10 名的文件保留旧 hash，
+        # 确保下次运行仍可重新采集
         if entries:
-            for _, md, current_hash in candidates:
-                hashes[str(md)] = current_hash
+            for mtime, md, current_hash in candidates[:10]:
+                if md in succeeded:
+                    hashes[str(md)] = current_hash
             save_md_hashes(hashes)
 
         if not entries:

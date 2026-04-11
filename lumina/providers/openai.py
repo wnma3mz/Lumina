@@ -40,6 +40,7 @@ class OpenAIProvider(BaseProvider):
         max_tokens: int,
         temperature: float,
         stream: bool,
+        top_p: float = 0.9,
     ) -> dict:
         messages = []
         if system:
@@ -50,6 +51,7 @@ class OpenAIProvider(BaseProvider):
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "top_p": top_p,
             "stream": stream,
         }
 
@@ -59,8 +61,9 @@ class OpenAIProvider(BaseProvider):
         system: Optional[str],
         max_tokens: int,
         temperature: float,
+        top_p: float = 0.9,
     ) -> AsyncIterator[str]:
-        payload = self._payload(user_text, system, max_tokens, temperature, stream=True)
+        payload = self._payload(user_text, system, max_tokens, temperature, stream=True, top_p=top_p)
         url = f"{self.base_url}/chat/completions"
 
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
@@ -92,8 +95,9 @@ class OpenAIProvider(BaseProvider):
         system: Optional[str],
         max_tokens: int,
         temperature: float,
+        top_p: float = 0.9,
     ) -> str:
-        payload = self._payload(user_text, system, max_tokens, temperature, stream=False)
+        payload = self._payload(user_text, system, max_tokens, temperature, stream=False, top_p=top_p)
         url = f"{self.base_url}/chat/completions"
 
         async with aiohttp.ClientSession(timeout=self.timeout) as session:

@@ -315,6 +315,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
             task="chat",
             max_tokens=request.max_tokens,
             temperature=request.temperature,
+            top_p=request.top_p,
             system=system_override,
         )
         return ChatCompletionResponse(
@@ -334,6 +335,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
             task="chat",
             max_tokens=request.max_tokens,
             temperature=request.temperature,
+            top_p=request.top_p,
             system=system_override,
         ):
             chunk = ChatCompletionStreamResponse(

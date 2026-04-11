@@ -45,10 +45,11 @@ class LLMEngine:
         task: str = "chat",
         max_tokens: int = 512,
         temperature: float = 0.3,
+        top_p: float = 0.9,
         system: Optional[str] = None,
     ) -> AsyncIterator[str]:
         system_prompt = self._resolve_system(task, system)
-        async for token in self._provider.generate_stream(user_text, system_prompt, max_tokens, temperature):
+        async for token in self._provider.generate_stream(user_text, system_prompt, max_tokens, temperature, top_p):
             yield token
 
     async def generate(
@@ -57,7 +58,8 @@ class LLMEngine:
         task: str = "chat",
         max_tokens: int = 512,
         temperature: float = 0.3,
+        top_p: float = 0.9,
         system: Optional[str] = None,
     ) -> str:
         system_prompt = self._resolve_system(task, system)
-        return await self._provider.generate(user_text, system_prompt, max_tokens, temperature)
+        return await self._provider.generate(user_text, system_prompt, max_tokens, temperature, top_p)

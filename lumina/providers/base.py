@@ -17,6 +17,7 @@ class BaseProvider(ABC):
         system: Optional[str],
         max_tokens: int,
         temperature: float,
+        top_p: float = 0.9,
     ) -> AsyncIterator[str]:
         """流式生成文本，逐 token yield。"""
         ...
@@ -27,10 +28,11 @@ class BaseProvider(ABC):
         system: Optional[str],
         max_tokens: int,
         temperature: float,
+        top_p: float = 0.9,
     ) -> str:
         """非流式，收集完整结果。默认实现基于 generate_stream。"""
         parts = []
-        async for token in self.generate_stream(user_text, system, max_tokens, temperature):
+        async for token in self.generate_stream(user_text, system, max_tokens, temperature, top_p):
             parts.append(token)
         return "".join(parts)
 

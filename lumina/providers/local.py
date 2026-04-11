@@ -91,6 +91,7 @@ class _RequestSlot:
     prompt_tokens: mx.array
     max_tokens: int
     temperature: float
+    top_p: float = 0.9
     system_text: str = ""
     user_text: str = ""
 
@@ -548,7 +549,7 @@ class LocalProvider(BaseProvider):
         执行 prefill + 生成首 token。
         结果通过 slot.token_queue 传递。
         """
-        slot.sampler = make_sampler(temp=slot.temperature, top_p=0.9)
+        slot.sampler = make_sampler(temp=slot.temperature, top_p=slot.top_p)
         prompt_cache = mlx_cache.make_prompt_cache(self._model)
         try:
             prompt = self._prefill_prompt_cache(slot.prompt_tokens, prompt_cache)
@@ -757,7 +758,13 @@ class LocalProvider(BaseProvider):
                     and not self._batch_generator_has_unprocessed_prompts()
                 ):
                     self._not_empty.clear()
-                    await self._not_empty.wait()
+                    # clear() 后重新检查，防止 put+set 与 clear+wait 交错时丢唤醒
+                    if (
+                        self._prefill_queue.empty()
+                        and not self._batch_slots
+                        and not self._batch_generator_has_unprocessed_prompts()
+                    ):
+                        await self._not_empty.wait()
 
                 new_slots: List[_RequestSlot] = []
                 while True:
@@ -769,7 +776,7 @@ class LocalProvider(BaseProvider):
                 if new_slots:
                     prompts = []
                     caches = []
-                    samplers = [make_sampler(temp=slot.temperature, top_p=0.9) for slot in new_slots]
+                    samplers = [make_sampler(temp=slot.temperature, top_p=slot.top_p) for slot in new_slots]
                     max_tokens = [slot.max_tokens for slot in new_slots]
                     for slot in new_slots:
                         prompt_tokens, prompt_cache = self._prepare_batch_generator_prompt(slot)
@@ -821,6 +828,15 @@ class LocalProvider(BaseProvider):
                     slot.done = True
                     self._put_token_local(slot, RuntimeError(f"Scheduler crashed: {e}"))
             self._batch_slots.clear()
+            # 排空 prefill_queue，避免已入队但未被取走的请求永久悬挂
+            while True:
+                try:
+                    slot = self._prefill_queue.get_nowait()
+                    if not slot.done:
+                        slot.done = True
+                        self._put_token_local(slot, RuntimeError(f"Scheduler crashed: {e}"))
+                except asyncio.QueueEmpty:
+                    break
         finally:
             if self._batch_generator is not None:
                 self._batch_generator.close()
@@ -921,7 +937,11 @@ class LocalProvider(BaseProvider):
 
                 if not has_active and self._prefill_queue.empty():
                     self._not_empty.clear()
-                    await self._not_empty.wait()
+                    # clear() 后重新检查，防止 put+set 与 clear+wait 交错时丢唤醒
+                    with self._active_lock:
+                        has_active_now = bool(self._active)
+                    if not has_active_now and self._prefill_queue.empty():
+                        await self._not_empty.wait()
 
                 prefill_list: List[_RequestSlot] = []
                 while len(prefill_list) < self.max_new_prefill_per_iter:
@@ -939,6 +959,15 @@ class LocalProvider(BaseProvider):
                 if not slot.done:
                     slot.done = True
                     self._put_token_local(slot, RuntimeError(f"Scheduler crashed: {e}"))
+            # 排空 prefill_queue，避免已入队但未被取走的请求永久悬挂
+            while True:
+                try:
+                    slot = self._prefill_queue.get_nowait()
+                    if not slot.done:
+                        slot.done = True
+                        self._put_token_local(slot, RuntimeError(f"Scheduler crashed: {e}"))
+                except asyncio.QueueEmpty:
+                    break
 
     # ══════════════════════════════════════════════════════════════════════════
     # Layer 5 — 公共接口
@@ -950,6 +979,7 @@ class LocalProvider(BaseProvider):
         system: Optional[str],
         max_tokens: int,
         temperature: float,
+        top_p: float = 0.9,
     ) -> AsyncIterator[str]:
         if not self.is_ready:
             raise RuntimeError("LocalProvider not loaded. Call load() first.")
@@ -964,6 +994,7 @@ class LocalProvider(BaseProvider):
             prompt_tokens=prompt_tokens,
             max_tokens=max_tokens,
             temperature=temperature,
+            top_p=top_p,
             system_text=system_str,
             user_text=user_text,
         )

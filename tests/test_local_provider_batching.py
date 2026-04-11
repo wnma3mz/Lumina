@@ -19,10 +19,10 @@ from contextlib import suppress
 from pathlib import Path
 
 import pytest
-import mlx.core as mx
+mx = pytest.importorskip("mlx.core", reason="mlx not available on this platform")
 
-import lumina.providers.local as local_mod
-from lumina.providers.local import LocalProvider, _RequestSlot
+import lumina.providers.local as local_mod  # noqa: E402
+from lumina.providers.local import LocalProvider, _RequestSlot  # noqa: E402
 
 
 MODEL_PATH = Path.home() / ".lumina" / "models" / "qwen3.5-0.8b-4bit"
