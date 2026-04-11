@@ -814,6 +814,13 @@ class LocalProvider(BaseProvider):
                         slot.done = True
                         self._put_token_local(slot, None)
                         self._batch_slots.pop(uid, None)
+        except Exception as e:
+            logger.error("mlx_batch_scheduler crashed: %s", e, exc_info=True)
+            for slot in list(self._batch_slots.values()):
+                if not slot.done:
+                    slot.done = True
+                    self._put_token_local(slot, RuntimeError(f"Scheduler crashed: {e}"))
+            self._batch_slots.clear()
         finally:
             if self._batch_generator is not None:
                 self._batch_generator.close()
@@ -907,22 +914,31 @@ class LocalProvider(BaseProvider):
 
     async def _legacy_scheduler(self) -> None:
         loop = asyncio.get_running_loop()
-        while True:
+        try:
+            while True:
+                with self._active_lock:
+                    has_active = bool(self._active)
+
+                if not has_active and self._prefill_queue.empty():
+                    self._not_empty.clear()
+                    await self._not_empty.wait()
+
+                prefill_list: List[_RequestSlot] = []
+                while len(prefill_list) < self.max_new_prefill_per_iter:
+                    try:
+                        prefill_list.append(self._prefill_queue.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+
+                await loop.run_in_executor(None, self._run_one_iter, prefill_list)
+        except Exception as e:
+            logger.error("legacy_scheduler crashed: %s", e, exc_info=True)
             with self._active_lock:
-                has_active = bool(self._active)
-
-            if not has_active and self._prefill_queue.empty():
-                self._not_empty.clear()
-                await self._not_empty.wait()
-
-            prefill_list: List[_RequestSlot] = []
-            while len(prefill_list) < self.max_new_prefill_per_iter:
-                try:
-                    prefill_list.append(self._prefill_queue.get_nowait())
-                except asyncio.QueueEmpty:
-                    break
-
-            await loop.run_in_executor(None, self._run_one_iter, prefill_list)
+                slots = list(self._active)
+            for slot in slots:
+                if not slot.done:
+                    slot.done = True
+                    self._put_token_local(slot, RuntimeError(f"Scheduler crashed: {e}"))
 
     # ══════════════════════════════════════════════════════════════════════════
     # Layer 5 — 公共接口

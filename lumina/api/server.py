@@ -159,9 +159,15 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
     async def _extract_and_stream_summary(pdf_path: str):
         """提取 PDF 文字，流式生成摘要，yield SSE 数据行。"""
         import fitz
-        doc = fitz.open(pdf_path)
-        text = "".join(p.get_text() for p in doc)[:8000]
-        doc.close()
+
+        def _extract_text() -> str:
+            doc = fitz.open(pdf_path)
+            try:
+                return "".join(p.get_text() for p in doc)[:8000]
+            finally:
+                doc.close()
+
+        text = await asyncio.to_thread(_extract_text)
         async for token in llm.generate_stream(text, task="summarize"):
             yield f"data: {json.dumps({'text': token})}\n\n"
         yield "data: [DONE]\n\n"
@@ -483,8 +489,10 @@ def _cleanup_after(tmp_dir: str, delay: int = 30):
 
 async def _delayed_rmtree(path: str, delay: int = 300):
     """延迟删除临时目录（在 asyncio 协程内使用）。"""
-    await asyncio.sleep(delay)
-    shutil.rmtree(path, ignore_errors=True)
+    try:
+        await asyncio.sleep(delay)
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 async def raw_request_disconnected(request) -> bool:

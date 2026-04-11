@@ -9,6 +9,7 @@ import glob
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import List
 
@@ -16,6 +17,7 @@ logger = logging.getLogger("lumina.pdf")
 
 _DEFAULT_BASE_URL = "http://127.0.0.1:31821/v1"
 _DEFAULT_MODEL = "lumina"
+_env_lock = threading.Lock()
 
 
 def _configure_pdf2zh_env(base_url: str, model: str, api_key: str):
@@ -123,7 +125,8 @@ def translate_pdfs(
         logger.error("pdf2zh 未正确安装，请重新安装 Lumina。")
         sys.exit(1)
 
-    _configure_pdf2zh_env(base_url, model, api_key)
+    with _env_lock:
+        _configure_pdf2zh_env(base_url, model, api_key)
 
     files = _collect_files(paths)
     if not files:

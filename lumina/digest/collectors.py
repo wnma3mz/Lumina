@@ -273,15 +273,9 @@ def collect_browser_history(n: int = 50) -> str:
             chrome_db = (Path.home() / "Library" / "Application Support" /
                          "Google" / "Chrome" / "Default" / "History")
         if chrome_db.exists():
-            tmp_fd, tmp_str = tempfile.mkstemp(suffix=".db", prefix="lumina_chrome_")
-            tmp = Path(tmp_str)
             try:
-                os.close(tmp_fd)
-            except OSError:
-                pass
-            shutil.copy2(str(chrome_db), str(tmp))
-            try:
-                with sqlite3.connect(str(tmp)) as conn:
+                uri = chrome_db.as_uri() + "?mode=ro&immutable=1"
+                with sqlite3.connect(uri, uri=True) as conn:
                     chrome_offset = 11644473600 * 1_000_000
                     cutoff_chrome = int(cursor * 1_000_000 + chrome_offset)
                     rows = conn.execute(
@@ -297,8 +291,6 @@ def collect_browser_history(n: int = 50) -> str:
                         newest_ts = ts_unix
             except Exception as e:
                 logger.debug("chrome history: %s", e)
-            finally:
-                tmp.unlink(missing_ok=True)
 
         # Firefox — macOS / Windows 路径
         if _sys.platform == "win32":
@@ -310,15 +302,9 @@ def collect_browser_history(n: int = 50) -> str:
                 places_db = profile_dir / "places.sqlite"
                 if not places_db.exists():
                     continue
-                tmp_fd2, tmp_str2 = tempfile.mkstemp(suffix=".db", prefix="lumina_ff_")
-                tmp = Path(tmp_str2)
                 try:
-                    os.close(tmp_fd2)
-                except OSError:
-                    pass
-                shutil.copy2(str(places_db), str(tmp))
-                try:
-                    with sqlite3.connect(str(tmp)) as conn:
+                    uri = places_db.as_uri() + "?mode=ro&immutable=1"
+                    with sqlite3.connect(uri, uri=True) as conn:
                         cutoff_ff = int(cursor * 1_000_000)
                         rows = conn.execute(
                             "SELECT title, url, last_visit_date FROM moz_places "
@@ -334,9 +320,6 @@ def collect_browser_history(n: int = 50) -> str:
                                 newest_ts = ts_unix
                 except Exception as e:
                     logger.debug("firefox history: %s", e)
-                finally:
-                    tmp.unlink(missing_ok=True)
-                break  # 只处理第一个 profile
 
         if newest_ts is not None:
             _set_cursor(name, newest_ts - 1)
@@ -377,28 +360,14 @@ def collect_notes_app() -> str:
         # CoreData epoch = Unix epoch - 978307200（2001-01-01 与 1970-01-01 的差值）
         cursor_core = cursor - 978307200
 
-        import shutil as _shutil
-        tmp_dir = tempfile.mkdtemp(prefix="lumina_notes_")
-        try:
-            tmp_db = Path(tmp_dir) / "notes.db"
-            _shutil.copy2(str(db_path), str(tmp_db))
-            # 必须同时复制 WAL / SHM，否则 Notes.app 写入的未 checkpoint 数据会丢失
-            for suffix in ("-wal", "-shm"):
-                src = db_path.with_name(db_path.name + suffix)
-                if src.exists():
-                    try:
-                        _shutil.copy2(str(src), str(tmp_db.with_name(tmp_db.name + suffix)))
-                    except Exception:
-                        pass
-            with _sqlite3.connect(str(tmp_db)) as conn:
-                rows = conn.execute(
-                    "SELECT ZTITLE1, ZSNIPPET, ZMODIFICATIONDATE1 FROM ZICCLOUDSYNCINGOBJECT "
-                    "WHERE ZMODIFICATIONDATE1 > ? AND ZTITLE1 IS NOT NULL "
-                    "ORDER BY ZMODIFICATIONDATE1 DESC LIMIT 20",
-                    (cursor_core,),
-                ).fetchall()
-        finally:
-            _shutil.rmtree(tmp_dir, ignore_errors=True)
+        uri = db_path.as_uri() + "?mode=ro&immutable=1"
+        with _sqlite3.connect(uri, uri=True) as conn:
+            rows = conn.execute(
+                "SELECT ZTITLE1, ZSNIPPET, ZMODIFICATIONDATE1 FROM ZICCLOUDSYNCINGOBJECT "
+                "WHERE ZMODIFICATIONDATE1 > ? AND ZTITLE1 IS NOT NULL "
+                "ORDER BY ZMODIFICATIONDATE1 DESC LIMIT 20",
+                (cursor_core,),
+            ).fetchall()
 
         if not rows:
             return ""
@@ -447,45 +416,32 @@ def collect_calendar() -> str:
         if not _CALENDAR_DB.exists():
             return ""
 
-        tmp_cal_dir = tempfile.mkdtemp(prefix="lumina_calendar_")
-        try:
-            tmp_db = Path(tmp_cal_dir) / "calendar.db"
-            shutil.copy2(str(_CALENDAR_DB), str(tmp_db))
-            for suffix in ("-wal", "-shm"):
-                src = _CALENDAR_DB.with_name(_CALENDAR_DB.name + suffix)
-                if src.exists():
-                    try:
-                        shutil.copy2(str(src), str(tmp_db.with_name(tmp_db.name + suffix)))
-                    except Exception:
-                        pass
+        now = time.time()
+        now_core = now - _CALENDAR_CORE_OFFSET
 
-            now = time.time()
-            now_core = now - _CALENDAR_CORE_OFFSET
+        # 窗口：从今天 0 点到 history_hours 之后
+        from datetime import date
+        today_midnight = datetime.combine(date.today(), datetime.min.time()).timestamp()
+        window_start = today_midnight - _CALENDAR_CORE_OFFSET
+        window_end = now_core + cfg.history_hours * 3600
 
-            # 窗口：从今天 0 点到 history_hours 之后
-            from datetime import date
-            today_midnight = datetime.combine(date.today(), datetime.min.time()).timestamp()
-            window_start = today_midnight - _CALENDAR_CORE_OFFSET
-            window_end = now_core + cfg.history_hours * 3600
-
-            with sqlite3.connect(str(tmp_db)) as conn:
-                rows = conn.execute(
-                    """
-                    SELECT oc.occurrence_date, oc.occurrence_end_date,
-                           ci.summary, ci.all_day, ci.description,
-                           c.title as cal_title
-                    FROM OccurrenceCache oc
-                    JOIN CalendarItem ci ON oc.event_id = ci.ROWID
-                    LEFT JOIN Calendar c ON oc.calendar_id = c.ROWID
-                    WHERE oc.day >= ? AND oc.day <= ?
-                      AND ci.hidden = 0
-                    ORDER BY oc.occurrence_date
-                    LIMIT 30
-                    """,
-                    (window_start, window_end),
-                ).fetchall()
-        finally:
-            shutil.rmtree(tmp_cal_dir, ignore_errors=True)
+        uri = _CALENDAR_DB.as_uri() + "?mode=ro&immutable=1"
+        with sqlite3.connect(uri, uri=True) as conn:
+            rows = conn.execute(
+                """
+                SELECT oc.occurrence_date, oc.occurrence_end_date,
+                       ci.summary, ci.all_day, ci.description,
+                       c.title as cal_title
+                FROM OccurrenceCache oc
+                JOIN CalendarItem ci ON oc.event_id = ci.ROWID
+                LEFT JOIN Calendar c ON oc.calendar_id = c.ROWID
+                WHERE oc.day >= ? AND oc.day <= ?
+                  AND ci.hidden = 0
+                ORDER BY oc.occurrence_date
+                LIMIT 30
+                """,
+                (window_start, window_end),
+            ).fetchall()
 
         if not rows:
             return ""
