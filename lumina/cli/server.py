@@ -342,6 +342,7 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
             self._refresh_ip_label()
             self.menu = [
                 rumps.MenuItem("打开界面", callback=self._open_ui),
+                rumps.MenuItem("打开设置", callback=self._open_settings),
                 self._ip_item,
                 self._digest_toggle_item,
                 self._ptt_toggle_item,
@@ -437,6 +438,10 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
         def _open_ui(self, _):
             import subprocess
             subprocess.Popen(["open", f"http://127.0.0.1:{cfg.port}"])
+
+        def _open_settings(self, _):
+            import subprocess
+            subprocess.Popen(["open", f"http://127.0.0.1:{cfg.port}/#settings"])
 
         def _restart(self, _):
             server.should_exit = True

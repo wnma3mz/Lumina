@@ -748,7 +748,14 @@ function luminaApp() {
 
     // ── Init ──
     init() {
-      this.loadDigest();
+      // URL hash 跳转：#settings / #digest / #translate / #summarize
+      const hash = location.hash.slice(1);
+      if (['digest', 'translate', 'summarize', 'settings'].includes(hash)) {
+        this.tab = hash;
+        if (hash === 'settings') this.loadSettings();
+      } else {
+        this.loadDigest();
+      }
       // 每 5 分钟静默刷新（仅日报 tab 激活时）
       this.digest._autoTimer = setInterval(() => {
         if (this.tab === 'digest') this.loadDigest();
