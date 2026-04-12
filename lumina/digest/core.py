@@ -322,6 +322,20 @@ async def maybe_generate_digest(llm, force_full: bool = False) -> None:
         return
     _state.sync_from_digest_file()
 
+    # 距上次生成不足 refresh_hours 则跳过，避免启动时重复采集
+    cfg = get_cfg()
+    with _state._lock:
+        last_ts = _state.last_generated_ts
+    if last_ts is not None:
+        elapsed = time.time() - last_ts
+        cooldown = cfg.refresh_hours * 3600
+        if elapsed < cooldown:
+            logger.info(
+                "Digest: skipping, last generated %.0f min ago (cooldown %.0f min)",
+                elapsed / 60, cooldown / 60,
+            )
+            return
+
     lock = _state.get_digest_lock()
     if lock.locked():
         logger.debug("Digest: locked, skipping")
