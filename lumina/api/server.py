@@ -58,6 +58,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     from lumina.services.pdf import PdfJobManager
     from lumina.api.routers import pdf as pdf_router
     from lumina.api.routers import chat as chat_router
+    from lumina.api.routers import config as config_router
     from lumina.api.routers import digest as digest_router
     from lumina.api.routers import audio as audio_router
     from lumina.api.routers import text as text_router
@@ -81,6 +82,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     # 注册路由（不再调用 init_router）
     app.include_router(pdf_router.router)
     app.include_router(chat_router.router)
+    app.include_router(config_router.router)
     app.include_router(digest_router.router)
     app.include_router(audio_router.router)
     app.include_router(text_router.router)
