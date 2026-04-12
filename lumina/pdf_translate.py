@@ -13,10 +13,11 @@ import threading
 from pathlib import Path
 from typing import List
 
+from lumina.config import DEFAULT_API_BASE_URL_V1, DEFAULT_API_KEY, DEFAULT_MODEL
+
 logger = logging.getLogger("lumina.pdf")
 
-_DEFAULT_BASE_URL = "http://127.0.0.1:31821/v1"
-_DEFAULT_MODEL = "lumina"
+_DEFAULT_BASE_URL = DEFAULT_API_BASE_URL_V1
 _env_lock = threading.Lock()
 
 
@@ -47,10 +48,12 @@ def _normalize_pdf_url(url: str) -> str:
 def _download_url(url: str) -> str:
     """
     下载远程 PDF，优先命中本地缓存（~/.lumina/cache/pdf/）。
-    缓存命中时直接返回缓存路径；未命中时下载后写入缓存再返回。
+    缓存命中时直接返回缓存路径；未命中时流式下载后写入缓存再返回。
     """
+    import os
+    import tempfile
     url = _normalize_pdf_url(url)
-    from lumina.pdf_cache import get_cached, put_cache
+    from lumina.pdf_cache import get_cached, put_cache_file
 
     cached = get_cached(url)
     if cached:
@@ -64,13 +67,24 @@ def _download_url(url: str) -> str:
         sys.exit(1)
 
     logger.info("Downloading PDF: %s", url)
-    # 下载外部 URL 时允许走系统代理（HTTP_PROXY / HTTPS_PROXY）
-    with httpx.Client(timeout=60, follow_redirects=True) as client:
-        resp = client.get(url)
-        resp.raise_for_status()
-
-    cached = put_cache(url, resp.content)
-    return str(cached)
+    tmp_fd, tmp_str = tempfile.mkstemp(suffix=".pdf", prefix="lumina_dl_")
+    tmp_path = Path(tmp_str)
+    committed = False
+    try:
+        os.close(tmp_fd)
+        # 下载外部 URL 时允许走系统代理（HTTP_PROXY / HTTPS_PROXY）
+        with httpx.Client(timeout=60, follow_redirects=True) as client:
+            with client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                with open(tmp_str, "wb") as f:
+                    for chunk in resp.iter_bytes(chunk_size=65536):
+                        f.write(chunk)
+        cached = put_cache_file(url, tmp_path)
+        committed = True
+        return str(cached)
+    finally:
+        if not committed:
+            tmp_path.unlink(missing_ok=True)
 
 
 def _collect_files(paths: List[str]) -> List[str]:
@@ -109,8 +123,8 @@ def translate_pdfs(
     lang_out: str = "zh",
     threads: int = 4,
     base_url: str = _DEFAULT_BASE_URL,
-    model: str = _DEFAULT_MODEL,
-    api_key: str = "lumina",
+    model: str = DEFAULT_MODEL,
+    api_key: str = DEFAULT_API_KEY,
 ) -> List[tuple]:
     """
     调用 pdf2zh 翻译一批 PDF。
