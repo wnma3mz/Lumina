@@ -21,9 +21,12 @@ from pathlib import Path
 import pytest
 mx = pytest.importorskip("mlx.core", reason="mlx not available on this platform")
 
-import lumina.providers.local as local_mod  # noqa: E402
+import lumina.providers.local as local_mod  # noqa: E402  (needed for _make_cache patch target)
 import lumina.providers.mlx_loader as mlx_loader_mod  # noqa: E402
 from lumina.providers.local import LocalProvider, _RequestSlot  # noqa: E402
+from lumina.providers.mlx_loader import _DEFAULT_MODEL_REPO_ID  # noqa: E402
+from lumina.providers.system_prompt_cache import SystemPromptCacheEntry as _SystemPromptCacheEntry  # noqa: E402
+
 
 
 MODEL_PATH = Path.home() / ".lumina" / "models" / "qwen3.5-0.8b-4bit"
@@ -388,7 +391,7 @@ def test_load_falls_back_to_default_repo_when_default_local_dir_missing(monkeypa
 
     provider.load()
 
-    assert load_calls == [local_mod._DEFAULT_MODEL_REPO_ID]
+    assert load_calls == [_DEFAULT_MODEL_REPO_ID]
 
 
 def test_load_uses_existing_local_model_dir(monkeypatch, tmp_path):
@@ -436,7 +439,7 @@ def test_find_cached_repo_snapshot_prefers_latest(monkeypatch, tmp_path):
     os.utime(new_snapshot, (new_ts, new_ts))
     monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", str(hub_dir))
 
-    assert provider._loader._find_cached_repo_snapshot(local_mod._DEFAULT_MODEL_REPO_ID) == str(new_snapshot)
+    assert provider._loader._find_cached_repo_snapshot(_DEFAULT_MODEL_REPO_ID) == str(new_snapshot)
 
 
 def test_system_prompt_cache_reuses_prefix_cache(monkeypatch):
@@ -503,7 +506,7 @@ def test_prepare_batch_generator_prompt_falls_back_when_prefix_mismatches():
     provider._model = object()
     provider._tokenizer = object()
     provider._spc = SystemPromptCache(provider._model, provider._tokenizer)
-    provider._spc._cache["sys"] = local_mod._SystemPromptCacheEntry(
+    provider._spc._cache["sys"] = _SystemPromptCacheEntry(
         system_text="sys",
         prefix_tokens=[9, 9],
         prompt_cache=[FakeCacheLayer((mx.array([1]),))],
@@ -545,7 +548,7 @@ def test_prepare_batch_generator_prompt_reconstructs_full_prompt_when_cache_hits
     provider._model = object()
     provider._tokenizer = object()
     provider._spc = SystemPromptCache(provider._model, provider._tokenizer)
-    provider._spc._cache["sys"] = local_mod._SystemPromptCacheEntry(
+    provider._spc._cache["sys"] = _SystemPromptCacheEntry(
         system_text="sys",
         prefix_tokens=[1, 2],
         prompt_cache=[FakeCacheLayer((mx.array([7, 8]),))],

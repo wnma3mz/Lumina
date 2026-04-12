@@ -31,13 +31,10 @@ from typing import Optional
 
 from lumina.config import DIGEST_CONTEXT_LOG_DIR as _CONTEXT_LOG_DIR
 from lumina.config import DIGEST_PATH as _DIGEST_PATH
-from lumina.digest.collectors import COLLECTORS as _COLLECTORS_LIST
+from lumina.digest.collectors import COLLECTORS as _COLLECTORS
 from lumina.digest.config import get_cfg, override_history_hours
 
 logger = logging.getLogger("lumina.digest")
-
-# 注册的采集器列表——新增数据源在 lumina/digest/collectors/__init__.py 的 COLLECTORS 中追加
-_COLLECTORS = _COLLECTORS_LIST
 
 # 当前进程启动时间，用于识别旧状态
 _PROCESS_STARTED_TS = time.time()

@@ -61,7 +61,7 @@ except ImportError:
 
 from lumina.engine.scheduler import GenerationRequest
 from .base import BaseProvider
-from .mlx_loader import MlxModelLoader, _DEFAULT_MODEL_REPO_ID  # noqa: F401 (re-export)
+from .mlx_loader import MlxModelLoader
 from .mlx_prompt import MlxPromptBuilder
 from .system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
 
@@ -75,9 +75,6 @@ _WARMUP_DECODE_STEPS = 4
 
 logger = logging.getLogger("lumina")
 
-
-# Backward-compat alias for tests that import _SystemPromptCacheEntry from local
-_SystemPromptCacheEntry = SystemPromptCacheEntry
 
 
 @dataclass

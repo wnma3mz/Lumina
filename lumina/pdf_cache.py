@@ -12,11 +12,9 @@ from pathlib import Path
 from typing import Optional
 
 
-from lumina.config import PDF_CACHE_DIR
+from lumina.config import PDF_CACHE_DIR as _CACHE_DIR
 
 logger = logging.getLogger("lumina.pdf_cache")
-
-CACHE_DIR = PDF_CACHE_DIR
 
 
 def _cache_path(url: str) -> Path:
@@ -26,7 +24,7 @@ def _cache_path(url: str) -> Path:
     fname = url.split("/")[-1].split("?")[0] or "download.pdf"
     if not fname.lower().endswith(".pdf"):
         fname += ".pdf"
-    return CACHE_DIR / f"{digest}_{fname}"
+    return _CACHE_DIR / f"{digest}_{fname}"
 
 
 def get_cached(url: str) -> Optional[Path]:
@@ -42,7 +40,7 @@ def put_cache(url: str, data: bytes) -> Path:
     将下载内容原子写入缓存，返回缓存文件路径。
     先写 .tmp 再 rename，避免并发写入产生损坏文件。
     """
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest = _cache_path(url)
     tmp = dest.with_suffix(".tmp")
     try:
@@ -60,7 +58,7 @@ def put_cache_file(url: str, src_path: Path) -> Path:
     将已流式写入的临时文件原子移动到缓存，返回缓存文件路径。
     优先 rename（同文件系统）；跨文件系统时 fallback 到 copy2 + unlink。
     """
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest = _cache_path(url)
     try:
         src_path.rename(dest)
