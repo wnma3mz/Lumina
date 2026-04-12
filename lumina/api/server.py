@@ -3,10 +3,14 @@ Lumina HTTP 服务
 
 提供 OpenAI 兼容接口 + 语音录制转写接口 + PWA 前端。
 路由逻辑拆分到 lumina/api/routers/，业务服务在 lumina/services/。
+
+依赖注入：各路由从 request.app.state 获取 llm / transcriber / pdf_manager，
+不再使用模块级全局变量和 init_router() 模式。
 """
 import asyncio
 import sys as _sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -22,9 +26,6 @@ try:
 except Exception:
     _LUMINA_VERSION = "0.3.0"
 
-# 服务启动时间戳，用于前端检测服务重启
-_SERVER_START_TIME = time.time()
-
 # ── 静态文件路径 ───────────────────────────────────────────────────────────────
 _STATIC_DIR = (
     Path(_sys._MEIPASS) / "lumina" / "api" / "static"
@@ -33,7 +34,27 @@ _STATIC_DIR = (
 )
 
 
-def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
+@asynccontextmanager
+async def _default_lifespan(app: FastAPI):
+    """默认 lifespan：精确设置服务启动时间戳。
+
+    create_app() 在初始化时已设置估算值；lifespan 在 uvicorn 真正就绪后
+    用更精确的时间戳覆盖，供 /v1/digest 等接口判断服务是否重启。
+    """
+    app.state.server_start_time = time.time()
+    yield
+
+
+def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastAPI:
+    """创建并配置 FastAPI 应用。
+
+    Args:
+        llm:        LLMEngine 实例，挂载到 app.state.llm。
+        transcriber: Transcriber 实例，挂载到 app.state.transcriber。
+        lifespan:   可选的自定义 lifespan 上下文管理器。
+                    传入 None 时使用 _default_lifespan（仅更新启动时间戳）。
+                    cli/server.py 传入包含 uvicorn loop 捕获逻辑的 closure。
+    """
     from lumina.services.pdf import PdfJobManager
     from lumina.api.routers import pdf as pdf_router
     from lumina.api.routers import chat as chat_router
@@ -41,7 +62,14 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
     from lumina.api.routers import audio as audio_router
     from lumina.api.routers import text as text_router
 
-    app = FastAPI(title="Lumina", version=_LUMINA_VERSION)
+    _lifespan = lifespan if lifespan is not None else _default_lifespan
+    app = FastAPI(title="Lumina", version=_LUMINA_VERSION, lifespan=_lifespan)
+
+    # 挂载依赖到 app.state（替代 init_router 全局变量模式）
+    app.state.llm = llm
+    app.state.transcriber = transcriber
+    app.state.pdf_manager = PdfJobManager()
+    app.state.server_start_time = time.time()  # lifespan 会用精确值覆盖
 
     app.add_middleware(
         CORSMiddleware,
@@ -50,15 +78,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber) -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 初始化各 router，注入依赖
-    manager = PdfJobManager()
-    pdf_router.init_router(manager, llm)
-    chat_router.init_router(llm)
-    digest_router.init_router(llm, _SERVER_START_TIME)
-    audio_router.init_router(transcriber)
-    text_router.init_router(llm)
-
-    # 注册 router
+    # 注册路由（不再调用 init_router）
     app.include_router(pdf_router.router)
     app.include_router(chat_router.router)
     app.include_router(digest_router.router)

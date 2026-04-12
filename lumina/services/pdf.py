@@ -38,6 +38,7 @@ async def fetch_pdf_url(url: str) -> Path:
         return cached
     tmp_fd, tmp_str = tempfile.mkstemp(suffix=".pdf", prefix="lumina_dl_")
     tmp_path = Path(tmp_str)
+    _committed = False
     try:
         os.close(tmp_fd)
         async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
@@ -46,10 +47,13 @@ async def fetch_pdf_url(url: str) -> Path:
                 with open(tmp_str, "wb") as f:
                     async for chunk in resp.aiter_bytes(chunk_size=65536):
                         f.write(chunk)
-        return put_cache_file(url, tmp_path)
-    except Exception:
-        tmp_path.unlink(missing_ok=True)
-        raise
+        result = put_cache_file(url, tmp_path)
+        _committed = True
+        return result
+    finally:
+        # 无论 Exception 还是 asyncio.CancelledError（BaseException 子类）都清理临时文件
+        if not _committed:
+            tmp_path.unlink(missing_ok=True)
 
 
 async def stream_pdf_summary(pdf_path: str, llm) -> AsyncIterator[str]:

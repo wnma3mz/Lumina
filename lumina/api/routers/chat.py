@@ -21,17 +21,13 @@ from lumina.api.protocol import (
 
 router = APIRouter(tags=["chat"])
 
-_llm = None
 logger = logging.getLogger("lumina")
-
-
-def init_router(llm) -> None:
-    global _llm
-    _llm = llm
 
 
 @router.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest, raw: Request):
+    llm = raw.app.state.llm
+
     system_override: Optional[str] = None
     system_msg = next((m for m in request.messages if m.role == "system"), None)
     if system_msg is not None:
@@ -67,7 +63,7 @@ async def chat_completions(request: ChatCompletionRequest, raw: Request):
             media_type="text/event-stream",
         )
 
-    text = await _llm.generate(
+    text = await llm.generate(
         user_text,
         task="chat",
         max_tokens=request.max_tokens,
@@ -94,10 +90,11 @@ async def _stream_chat(
 ):
     from lumina.api.server import raw_request_disconnected
 
+    llm = raw_req.app.state.llm
     req_id = f"chatcmpl-{random_uuid()}"
     finish_reason = "stop"
     try:
-        async for token in _llm.generate_stream(
+        async for token in llm.generate_stream(
             user_text,
             task="chat",
             max_tokens=request.max_tokens,

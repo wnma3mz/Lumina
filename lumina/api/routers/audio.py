@@ -9,13 +9,6 @@ from lumina.api.protocol import RecordStopRequest, TranscriptionResponse
 
 router = APIRouter(prefix="/v1/audio", tags=["audio"])
 
-_transcriber = None
-
-
-def init_router(transcriber) -> None:
-    global _transcriber
-    _transcriber = transcriber
-
 
 @router.post("/transcriptions")
 async def transcriptions(
@@ -27,8 +20,9 @@ async def transcriptions(
         content_length = raw.headers.get("content-length")
         if content_length and int(content_length) > 100 * 1024 * 1024:
             raise HTTPException(413, "文件过大，最大支持 100MB")
+    transcriber = raw.app.state.transcriber
     wav_bytes = await file.read()
-    text = await _transcriber.transcribe(wav_bytes, language=language)
+    text = await transcriber.transcribe(wav_bytes, language=language)
     return TranscriptionResponse(text=text)
 
 

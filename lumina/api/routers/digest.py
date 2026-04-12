@@ -1,42 +1,34 @@
 """
 lumina/api/routers/digest.py — Digest / Daily Dashboard 路由
 """
-import time
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import Response
 
 router = APIRouter(prefix="/v1/digest", tags=["digest"])
 
-_llm = None
-_server_start_time: float = time.time()
-
-
-def init_router(llm, server_start_time: float) -> None:
-    global _llm, _server_start_time
-    _llm = llm
-    _server_start_time = server_start_time
-
 
 @router.get("")
-async def get_digest_api():
+async def get_digest_api(raw: Request):
     from lumina.digest import load_digest, get_status
     status = get_status()
     return {
         "content": load_digest(),
         "generating": status["generating"],
         "generated_at": status["generated_at"],
-        "server_start": _server_start_time,
+        "server_start": raw.app.state.server_start_time,
     }
 
 
 @router.post("/refresh")
-async def refresh_digest_api(background_tasks: BackgroundTasks):
+async def refresh_digest_api(background_tasks: BackgroundTasks, raw: Request):
     from lumina.digest import maybe_generate_digest
 
+    llm = raw.app.state.llm
+
     async def _run():
-        await maybe_generate_digest(_llm, force_full=True)
+        await maybe_generate_digest(llm, force_full=True)
 
     background_tasks.add_task(_run)
     return {"status": "refreshing"}

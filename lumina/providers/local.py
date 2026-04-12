@@ -61,6 +61,7 @@ try:
 except ImportError:
     _MLX_AVAILABLE = False
 
+from lumina.engine.scheduler import GenerationRequest
 from .base import BaseProvider
 from .system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
 
@@ -83,19 +84,19 @@ _SystemPromptCacheEntry = SystemPromptCacheEntry
 
 
 @dataclass
-class _RequestSlot:
-    """一个请求的完整生命周期状态。"""
-    request_id: str
-    prompt_tokens: mx.array
-    max_tokens: int
-    temperature: float
-    top_p: float = 0.9
+class _RequestSlot(GenerationRequest):
+    """一个请求的完整生命周期状态（mlx 专有扩展）。
+
+    继承 GenerationRequest（engine/scheduler.py）中的通用控制字段：
+      request_id, max_tokens, temperature, top_p, token_queue, done, n_tokens
+
+    此处只定义 mlx 专有字段，避免在 engine 层引入 mlx 依赖。
+    """
+    # dataclass 继承约束：父类有默认值的字段后不能出现无默认值字段，
+    # 故 prompt_tokens 改为带默认值（调用方仍通过 keyword arg 传入）。
+    prompt_tokens: mx.array = field(default_factory=lambda: mx.array([]))
     system_text: str = ""
     user_text: str = ""
-
-    # 调度线程把 token 文本 put 进来，None = 结束，Exception = 错误
-    # asyncio.Queue：跨线程安全（run_coroutine_threadsafe put）+ 协程 get
-    token_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
 
     # 调度线程写入（在 prefill 完成后）
     prompt_cache: Optional[List[Any]] = None
@@ -105,8 +106,6 @@ class _RequestSlot:
     batch_uid: Optional[int] = None
     _token_ids: List[int] = field(default_factory=list)
     decoded_text: str = ""
-    n_tokens: int = 0
-    done: bool = False
 
 
 class LocalProvider(BaseProvider):
@@ -751,47 +750,24 @@ class LocalProvider(BaseProvider):
         await scheduler.run(self._prefill_queue, self._not_empty)
 
     async def _legacy_scheduler(self) -> None:
-        loop = asyncio.get_running_loop()
-        try:
-            while True:
-                with self._active_lock:
-                    has_active = bool(self._active)
+        """Layer 4a — 委托给 EngineScheduler（engine/scheduler.py）。"""
+        from lumina.engine.scheduler import EngineScheduler
 
-                if not has_active and self._prefill_queue.empty():
-                    self._not_empty.clear()
-                    # clear() 后重新检查，防止 put+set 与 clear+wait 交错时丢唤醒
-                    with self._active_lock:
-                        has_active_now = bool(self._active)
-                    if not has_active_now and self._prefill_queue.empty():
-                        await self._not_empty.wait()
-
-                prefill_list: List[_RequestSlot] = []
-                while len(prefill_list) < self.max_new_prefill_per_iter:
-                    try:
-                        prefill_list.append(self._prefill_queue.get_nowait())
-                    except asyncio.QueueEmpty:
-                        break
-
-                await loop.run_in_executor(self._legacy_executor, self._run_one_iter, prefill_list)
-        except Exception as e:
-            logger.error("legacy_scheduler crashed: %s", e, exc_info=True)
+        def _get_active():
             with self._active_lock:
-                slots = list(self._active)
-            for slot in slots:
-                if not slot.done:
-                    slot.done = True
-                    self._put_token_local(slot, RuntimeError(f"Scheduler crashed: {e}"))
+                return list(self._active)
+
+        scheduler = EngineScheduler(
+            iteration_fn=self._run_one_iter,
+            get_active_fn=_get_active,
+            put_error_fn=self._put_token_local,
+            max_new_prefill_per_iter=self.max_new_prefill_per_iter,
+        )
+        try:
+            await scheduler.run(self._prefill_queue, self._not_empty, self._legacy_executor)
+        finally:
             with self._active_lock:
                 self._active.clear()
-            # 排空 prefill_queue，避免已入队但未被取走的请求永久悬挂
-            while True:
-                try:
-                    slot = self._prefill_queue.get_nowait()
-                    if not slot.done:
-                        slot.done = True
-                        self._put_token_local(slot, RuntimeError(f"Scheduler crashed: {e}"))
-                except asyncio.QueueEmpty:
-                    break
 
     # ══════════════════════════════════════════════════════════════════════════
     # Layer 5 — 公共接口

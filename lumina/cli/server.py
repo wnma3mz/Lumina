@@ -16,7 +16,10 @@ lumina/cli/server.py — server / stop / restart 子命令
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
+
+from fastapi import FastAPI
 
 logger = logging.getLogger("lumina")
 
@@ -71,10 +74,11 @@ def _run_digest_task(llm, uvicorn_loop: list = None):
     loop = uvicorn_loop[0] if uvicorn_loop else None
     if loop and loop.is_running():
         future = asyncio.run_coroutine_threadsafe(coro, loop)
-        try:
-            future.result(timeout=300)
-        except Exception as e:
-            logger.error("Digest task failed: %s", e)
+        # 非阻塞：不调用 future.result()，通过 done callback 记录错误
+        future.add_done_callback(
+            lambda f: logger.error("Digest task failed: %s", f.exception())
+            if f.exception() else None
+        )
     else:
         asyncio.run(coro)
 
@@ -132,19 +136,27 @@ def _start_daily_notify_timer(llm, uvicorn_loop: list = None):
             return
         from lumina.digest import maybe_generate_digest
         from lumina.digest.core import load_digest
-        try:
-            coro = maybe_generate_digest(llm, force_full=True)
-            loop = uvicorn_loop[0] if uvicorn_loop else None
-            if loop and loop.is_running():
-                asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=300)
-            else:
-                asyncio.run(coro)
-        except Exception as e:
-            logger.error("Daily notify: digest generation failed: %s", e)
-        digest = load_digest() or ""
-        lines = [ln.strip() for ln in digest.splitlines() if ln.strip() and not ln.startswith("<!--")]
-        summary = next((ln.lstrip("#").strip() for ln in lines if ln.startswith("#")), "今日日报已生成")
-        notify("Lumina 日报", summary[:60])
+
+        async def _generate_and_notify():
+            try:
+                await maybe_generate_digest(llm, force_full=True)
+            except Exception as e:
+                logger.error("Daily notify: digest generation failed: %s", e)
+            digest = load_digest() or ""
+            lines = [ln.strip() for ln in digest.splitlines()
+                     if ln.strip() and not ln.startswith("<!--")]
+            summary = next(
+                (ln.lstrip("#").strip() for ln in lines if ln.startswith("#")),
+                "今日日报已生成",
+            )
+            notify("Lumina 日报", summary[:60])
+
+        loop = uvicorn_loop[0] if uvicorn_loop else None
+        if loop and loop.is_running():
+            # 非阻塞：通知逻辑在协程内部完成，_fire 立即返回
+            asyncio.run_coroutine_threadsafe(_generate_and_notify(), loop)
+        else:
+            asyncio.run(_generate_and_notify())
         t = threading.Timer(86400, _fire)
         t.daemon = True
         t.start()
@@ -514,12 +526,23 @@ def cmd_server(args):
     from lumina import digest as _digest_mod
     _digest_mod.configure({"digest": cfg.digest} if hasattr(cfg, "digest") else {})
 
-    fastapi_app = create_app(llm, transcriber)
+    _uvicorn_loop: list = []
+
+    @asynccontextmanager
+    async def _cmd_lifespan(app: FastAPI):
+        """CLI 专用 lifespan：捕获 uvicorn event loop 供 threadsafe 调用。"""
+        import asyncio as _asyncio
+        import time as _time
+        from lumina.services.pdf import PdfJobManager
+        _uvicorn_loop.append(_asyncio.get_running_loop())
+        app.state.server_start_time = _time.time()
+        app.state.pdf_manager = PdfJobManager()
+        yield
+
+    fastapi_app = create_app(llm, transcriber, lifespan=_cmd_lifespan)
 
     print_ready_banner(cfg.host, cfg.port)
     write_pid()
-
-    _uvicorn_loop: list = []
 
     async def _startup_digest_coro():
         from lumina.digest import maybe_generate_digest
@@ -537,15 +560,11 @@ def cmd_server(args):
             return
         loop = _uvicorn_loop[0]
         future = asyncio.run_coroutine_threadsafe(_startup_digest_coro(), loop)
+        # 启动时首次生成摘要可以等待完成（阻塞 daemon 线程，不影响主线程）
         try:
             future.result(timeout=300)
         except Exception as e:
             logger.error("Digest startup failed: %s", e)
-
-    @fastapi_app.on_event("startup")
-    async def _on_startup():
-        import asyncio
-        _uvicorn_loop.append(asyncio.get_running_loop())
 
     if is_digest_enabled():
         threading.Thread(target=_startup_digest, daemon=True).start()
