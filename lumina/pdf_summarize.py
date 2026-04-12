@@ -7,9 +7,11 @@ from pathlib import Path
 
 import httpx
 
+from lumina.config import DEFAULT_API_BASE_URL, DEFAULT_API_KEY
+
 logger = logging.getLogger("lumina.summarize")
 
-_DEFAULT_BASE_URL = "http://127.0.0.1:31821"
+_DEFAULT_BASE_URL = DEFAULT_API_BASE_URL
 _MAX_CHARS = 8000  # 截取前 N 字符送给 LLM（避免超出上下文长度）
 
 
@@ -36,7 +38,7 @@ def _extract_text(pdf_path: str, max_chars: int = _MAX_CHARS) -> str:
 def summarize_pdf(
     path: str,
     base_url: str = _DEFAULT_BASE_URL,
-    api_key: str = "lumina",
+    api_key: str = DEFAULT_API_KEY,
     output: str = None,
     no_proxy: bool = True,
 ) -> str:

@@ -11,6 +11,13 @@ import argparse
 import os
 import sys
 
+from lumina.config import (
+    DEFAULT_API_BASE_URL,
+    DEFAULT_API_BASE_URL_V1,
+    DEFAULT_API_KEY,
+    DEFAULT_MODEL,
+)
+
 
 def main():
     # PyInstaller 打包后 multiprocessing 子进程会用 sys.executable 重新调用本进程，
@@ -67,9 +74,9 @@ def main():
     p_pdf.add_argument("--lang-in", dest="lang_in", default="en")
     p_pdf.add_argument("--lang-out", dest="lang_out", default="zh")
     p_pdf.add_argument("-t", "--threads", type=int, default=4)
-    p_pdf.add_argument("--base-url", dest="base_url", default="http://127.0.0.1:31821/v1")
-    p_pdf.add_argument("--model", default="lumina")
-    p_pdf.add_argument("--api-key", dest="api_key", default="lumina")
+    p_pdf.add_argument("--base-url", dest="base_url", default=DEFAULT_API_BASE_URL_V1)
+    p_pdf.add_argument("--model", default=DEFAULT_MODEL)
+    p_pdf.add_argument("--api-key", dest="api_key", default=DEFAULT_API_KEY)
     p_pdf.add_argument("--log-level", dest="log_level", default="INFO",
                        choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     p_pdf.set_defaults(func=cmd_pdf)
@@ -79,8 +86,8 @@ def main():
     p_sum.add_argument("paths", nargs="+", help="PDF file(s)")
     p_sum.add_argument("-o", "--output", default=None, help="Output directory (default: same as PDF)")
     p_sum.add_argument("--stdout", action="store_true", help="Print summary to stdout instead of file")
-    p_sum.add_argument("--base-url", dest="base_url", default="http://127.0.0.1:31821")
-    p_sum.add_argument("--api-key", dest="api_key", default="lumina")
+    p_sum.add_argument("--base-url", dest="base_url", default=DEFAULT_API_BASE_URL)
+    p_sum.add_argument("--api-key", dest="api_key", default=DEFAULT_API_KEY)
     p_sum.add_argument("--log-level", dest="log_level", default="INFO",
                        choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     p_sum.set_defaults(func=cmd_summarize)
@@ -91,9 +98,9 @@ def main():
     p_watch.add_argument("--lang-in", dest="lang_in", default="en")
     p_watch.add_argument("--lang-out", dest="lang_out", default="zh")
     p_watch.add_argument("-t", "--threads", type=int, default=4)
-    p_watch.add_argument("--base-url", dest="base_url", default="http://127.0.0.1:31821/v1")
-    p_watch.add_argument("--model", default="lumina")
-    p_watch.add_argument("--api-key", dest="api_key", default="lumina")
+    p_watch.add_argument("--base-url", dest="base_url", default=DEFAULT_API_BASE_URL_V1)
+    p_watch.add_argument("--model", default=DEFAULT_MODEL)
+    p_watch.add_argument("--api-key", dest="api_key", default=DEFAULT_API_KEY)
     p_watch.add_argument("--log-level", dest="log_level", default="INFO",
                          choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     p_watch.set_defaults(func=cmd_watch)
@@ -105,8 +112,8 @@ def main():
     p_pol.add_argument("--lang", default=None, choices=["zh", "en"],
                        help="Language to polish (default: auto-detect by filename)")
     p_pol.add_argument("--stdout", action="store_true", help="Print result to stdout")
-    p_pol.add_argument("--base-url", dest="base_url", default="http://127.0.0.1:31821")
-    p_pol.add_argument("--api-key", dest="api_key", default="lumina")
+    p_pol.add_argument("--base-url", dest="base_url", default=DEFAULT_API_BASE_URL)
+    p_pol.add_argument("--api-key", dest="api_key", default=DEFAULT_API_KEY)
     p_pol.add_argument("--log-level", dest="log_level", default="INFO",
                        choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     p_pol.set_defaults(func=cmd_polish)

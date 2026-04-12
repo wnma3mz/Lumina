@@ -32,16 +32,22 @@ lumina/
     setup.py           # ensure_model / lite_setup_wizard
     utils.py           # 公共工具：日志、config 路径、PID、Banner 等
   api/
-    server.py          # FastAPI 路由
-    static/index.html  # 单页 Web UI（无构建步骤，直接编辑）
+    server.py          # FastAPI app 创建，路由注册
+    sse.py             # SSE 流式辅助：stream_llm()
+    routers/           # 路由模块（pdf/chat/config/digest/audio/text）
+    static/index.html  # 单页 Web UI 源文件（直接编辑，启动时自动同步到 ~/.lumina/static/）
   providers/
     __init__.py        # 懒加载：LocalProvider / OpenAIProvider 按需 import（见下节）
     local.py           # mlx-lm 本地推理，含 Continuous Batching
+    mlx_loader.py      # Layer 0：模型路径解析 + 加载 + BatchGenerator 初始化
+    mlx_prompt.py      # Layer 1：chat_template 渲染 + tokenize + system prefix 提取
     openai.py          # OpenAI 兼容远程接口
+  services/
+    pdf.py             # PDF 业务服务层：PdfJobManager / fetch_pdf_url / stream_pdf_summary
   engine/llm.py        # 上层封装，提供 stream / chat 接口
   digest/
-    core.py            # 日报生成逻辑
-    collectors.py      # 活动数据采集（shell history, git, 剪贴板等）
+    core.py            # 日报生成逻辑（含冷却检查）
+    collectors/        # 活动数据采集插件目录（shell/git/browser/notes/markdown/ai 等）
   asr/                 # 语音转文字（mlx-whisper）
   pdf_translate.py     # lumina pdf 子命令实现
   pdf_summarize.py     # lumina summarize 子命令实现
@@ -112,10 +118,21 @@ def __getattr__(name: str):
 - **executor 超时后不阻塞**：`_collect_all()` 里 `ThreadPoolExecutor` 在 `finally` 中调用 `shutdown(wait=False)`，允许主协程在 30s 超时后立即返回，慢 collector 线程在后台继续完成后自然退出。**不要改成 `wait=True`**，否则整个 digest 生成会被单个慢 collector 卡住。
 - **`digest.enabled` 默认值**：`DigestConfig.enabled = False`（dataclass），`configure()` 中 key 缺失时也默认 `False`。**不要把 `configure()` 里的默认值改成 `True`**，否则与 dataclass 语义不一致，导致「配置文件没有 digest 段时误启用日报」。
 
-### 日报定时生成
+### 日报定时生成与冷却
 - `.app` 模式：`rumps.timer(3600)` 在 `_run_with_menubar()` 中触发
 - 命令行模式：`_start_digest_timer(llm)` 用 `threading.Timer` 循环，行为一致
 - 前端：5 分钟 `setInterval` 轮询 `/v1/digest`，比对 `generated_at` 只在内容变化时重渲染
+- **启动冷却**：`maybe_generate_digest()` 在生成前先检查上次生成时间（从 digest.md mtime 恢复），若距今不足 `refresh_hours`（默认 1h）则跳过，防止每次重启都重复采集
+- **采集顺序随机化**：`_collect_all()` 每次执行前 `random.shuffle(active)` 打乱 collector 顺序，确保各来源在 LLM token 上下文中均匀分布
+
+### 配置 Web UI（`/v1/config`）
+- **GET `/v1/config`**：返回完整运行时配置（来自 `get_config()` singleton）
+- **PATCH `/v1/config`**：部分更新，原子写回 `~/.lumina/config.json`，并热重载部分字段：
+  - `digest.*` → 调用 `configure()` 重新初始化 DigestConfig singleton（立即生效）
+  - `system_prompts.*` → 原地 mutate `app.state.llm._system_prompts` dict（立即生效）
+  - `ptt.*` → 仅写 config.json，依赖 PTT 文件 mtime watcher 自动重载
+  - `provider.*`、`whisper_model`、`host`、`port`、`log_level` → 写 config.json，响应附带 `"restart_required": true`，前端提示重启
+- **并发安全**：写操作通过模块级 `asyncio.Lock` 保护；临时文件 + `rename()` 原子写入
 
 ### PyInstaller + multiprocessing
 - `babeldoc`（pdf2zh 依赖）用 `multiprocessing.Process` 做字体子集化
@@ -163,13 +180,9 @@ uv run --with ruff ruff check --fix <改动的文件...>
   ```
   或在 `build_full.sh` 开头加上这两行（已加）。
 
-- **`.app` 里 static 文件有三份**：PyInstaller 打包后 `index.html` 存在于三个路径，FastAPI 实际 serve 的是 `Contents/Frameworks/lumina/api/static/`。直接改 `.app` 里的文件时必须三处同步更新，否则服务器返回旧内容：
-  ```bash
-  for d in "Contents/Frameworks" "Contents/Resources" "Lumina.app/Contents/Resources"; do
-    cp lumina/api/static/index.html "/Applications/Lumina.app/$d/lumina/api/static/index.html"
-  done
-  ```
-- **Web UI 默认 tab**：日报 → 翻译 → 总结
+- **静态文件单一来源**：启动时 `sync_static()`（`cli/utils.py`）将 bundle/源码内的 `static/` 同步到 `~/.lumina/static/`；FastAPI 的 `_static_dir()` 优先 serve `~/.lumina/static/`，fallback 到 bundle 路径。CLI 和 `.app` 两种启动方式都使用同一份最新文件，无需手动 cp。`.app` 里有三份 `index.html` 的历史问题已通过此机制消除。
+
+- **Web UI 默认 tab**：日报 → 翻译 → 总结 → 设置（支持 URL hash 直达，如 `/#settings`）
 
 - **备忘录（Notes.app）在 .app 包中无法读取**：根本原因是 macOS TCC 沙盒限制——打包后的 `.app` 没有 `com.apple.Notes` 权利和 Full Disk Access，无法访问 `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite`（`shutil.copy2` 和直接 `sqlite3.connect` 均返回 `Permission denied`）。
   - `uv run lumina server` 开发模式下可正常读取（终端继承用户权限）

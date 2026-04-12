@@ -144,3 +144,11 @@ LUMINA_HOME = Path.home() / ".lumina"
 DIGEST_PATH = LUMINA_HOME / "digest.md"
 DIGEST_CONTEXT_LOG_DIR = LUMINA_HOME / "digest_context_log"
 PDF_CACHE_DIR = LUMINA_HOME / "cache" / "pdf"
+
+# ── API 客户端默认常量 ────────────────────────────────────────────────────
+# CLI 子命令 / 业务模块调用本地服务时的统一默认值。
+_DEFAULT_PORT = 31821
+DEFAULT_API_BASE_URL = f"http://127.0.0.1:{_DEFAULT_PORT}"
+DEFAULT_API_BASE_URL_V1 = f"{DEFAULT_API_BASE_URL}/v1"
+DEFAULT_API_KEY = "lumina"
+DEFAULT_MODEL = "lumina"

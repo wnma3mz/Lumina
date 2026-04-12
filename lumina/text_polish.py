@@ -7,16 +7,18 @@ from pathlib import Path
 
 import httpx
 
+from lumina.config import DEFAULT_API_BASE_URL, DEFAULT_API_KEY
+
 logger = logging.getLogger("lumina.polish")
 
-_DEFAULT_BASE_URL = "http://127.0.0.1:31821"
+_DEFAULT_BASE_URL = DEFAULT_API_BASE_URL
 
 
 def polish_text(
     text: str,
     language: str = "zh",
     base_url: str = _DEFAULT_BASE_URL,
-    api_key: str = "lumina",
+    api_key: str = DEFAULT_API_KEY,
 ) -> str:
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     # 绕过系统代理，直连本地服务
@@ -35,7 +37,7 @@ def polish_file(
     path: str,
     language: str = "zh",
     base_url: str = _DEFAULT_BASE_URL,
-    api_key: str = "lumina",
+    api_key: str = DEFAULT_API_KEY,
     output: str = None,
 ) -> str:
     """

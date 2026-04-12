@@ -10,6 +10,7 @@ import threading
 import time
 from pathlib import Path
 
+from lumina.config import DEFAULT_API_BASE_URL_V1, DEFAULT_API_KEY, DEFAULT_MODEL
 from lumina.pdf_translate import translate_pdfs
 
 logger = logging.getLogger("lumina.watch")
@@ -77,9 +78,9 @@ class _PDFHandler:
 
 def watch(
     directory: str,
-    base_url: str = "http://127.0.0.1:31821/v1",
-    model: str = "lumina",
-    api_key: str = "lumina",
+    base_url: str = DEFAULT_API_BASE_URL_V1,
+    model: str = DEFAULT_MODEL,
+    api_key: str = DEFAULT_API_KEY,
     lang_in: str = "en",
     lang_out: str = "zh",
     threads: int = 4,
