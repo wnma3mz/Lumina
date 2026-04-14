@@ -43,6 +43,15 @@
     "hotkey": "cmd",
     "language": "zh"
   },
+  "request_history": {
+    "_readme": "LLM 请求历史记录。默认保存完整 prompt/response 正文用于 debug；历史按天滚动、压缩并自动清理",
+    "enabled": true,
+    "capture_full_body": true,
+    "retention_days": 14,
+    "max_total_mb": 512,
+    "compress_after_days": 1,
+    "cleanup_on_startup": true
+  },
   "system_prompts": {
     "translate_to_zh": "You are a professional translator. Translate the user's text into Simplified Chinese. Output only the translated text, no explanations.",
     "translate_to_en": "You are a professional translator. Translate the user's text into English. Output only the translated text, no explanations.",

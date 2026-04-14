@@ -18,6 +18,7 @@ from lumina.api.protocol import (
     UsageInfo,
     random_uuid,
 )
+from lumina.request_context import request_context
 
 router = APIRouter(tags=["chat"])
 
@@ -27,6 +28,7 @@ logger = logging.getLogger("lumina")
 @router.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest, raw: Request):
     llm = raw.app.state.llm
+    req_id = f"chatcmpl-{random_uuid()}"
 
     system_override: Optional[str] = None
     system_msg = next((m for m in request.messages if m.role == "system"), None)
@@ -59,19 +61,30 @@ async def chat_completions(request: ChatCompletionRequest, raw: Request):
 
     if request.stream:
         return StreamingResponse(
-            _stream_chat(request, raw, user_text, system_override),
+            _stream_chat(request, raw, user_text, req_id, system_override),
             media_type="text/event-stream",
         )
 
-    text = await llm.generate(
-        user_text,
-        task="chat",
-        max_tokens=request.max_tokens,
-        temperature=request.temperature,
-        top_p=request.top_p,
-        system=system_override,
-    )
+    with request_context(
+        origin="chat_api",
+        stream=False,
+        client_model=request.model,
+        request_id=req_id,
+    ):
+        text = await llm.generate(
+            user_text,
+            task="chat",
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            system=system_override,
+            top_k=request.top_k,
+            min_p=request.min_p,
+            presence_penalty=request.presence_penalty,
+            repetition_penalty=request.repetition_penalty,
+        )
     return ChatCompletionResponse(
+        id=req_id,
         model=request.model,
         choices=[
             ChatCompletionChoice(
@@ -86,34 +99,44 @@ async def _stream_chat(
     request: ChatCompletionRequest,
     raw_req: Request,
     user_text: str,
+    req_id: str,
     system_override: Optional[str] = None,
 ):
     from lumina.api.server import raw_request_disconnected
 
     llm = raw_req.app.state.llm
-    req_id = f"chatcmpl-{random_uuid()}"
     finish_reason = "stop"
     try:
-        async for token in llm.generate_stream(
-            user_text,
-            task="chat",
-            max_tokens=request.max_tokens,
-            temperature=request.temperature,
-            top_p=request.top_p,
-            system=system_override,
+        with request_context(
+            origin="chat_api",
+            stream=True,
+            client_model=request.model,
+            request_id=req_id,
         ):
-            chunk = ChatCompletionStreamResponse(
-                id=req_id,
-                model=request.model,
-                choices=[
-                    ChatCompletionStreamChoice(
-                        delta=ChatCompletionStreamDelta(content=token)
-                    )
-                ],
-            )
-            yield f"data: {chunk.model_dump_json()}\n\n"
-            if await raw_request_disconnected(raw_req):
-                break
+            async for token in llm.generate_stream(
+                user_text,
+                task="chat",
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                system=system_override,
+                top_k=request.top_k,
+                min_p=request.min_p,
+                presence_penalty=request.presence_penalty,
+                repetition_penalty=request.repetition_penalty,
+            ):
+                chunk = ChatCompletionStreamResponse(
+                    id=req_id,
+                    model=request.model,
+                    choices=[
+                        ChatCompletionStreamChoice(
+                            delta=ChatCompletionStreamDelta(content=token)
+                        )
+                    ],
+                )
+                yield f"data: {chunk.model_dump_json()}\n\n"
+                if await raw_request_disconnected(raw_req):
+                    break
     except Exception as e:
         logger.error("stream_chat error: %s", e)
         finish_reason = "error"

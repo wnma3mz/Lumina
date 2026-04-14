@@ -12,6 +12,14 @@ from typing import AsyncIterator, Optional
 import aiohttp
 
 from .base import BaseProvider
+from lumina.sampling import (
+    DEFAULT_MIN_P,
+    DEFAULT_PRESENCE_PENALTY,
+    DEFAULT_REPETITION_PENALTY,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TOP_K,
+    DEFAULT_TOP_P,
+)
 
 
 class OpenAIProvider(BaseProvider):
@@ -38,10 +46,16 @@ class OpenAIProvider(BaseProvider):
         user_text: str,
         system: Optional[str],
         max_tokens: int,
-        temperature: float,
         stream: bool,
-        top_p: float = 0.9,
+        temperature: float = DEFAULT_TEMPERATURE,
+        top_p: float = DEFAULT_TOP_P,
+        *,
+        top_k: int = DEFAULT_TOP_K,
+        min_p: float = DEFAULT_MIN_P,
+        presence_penalty: float = DEFAULT_PRESENCE_PENALTY,
+        repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
     ) -> dict:
+        effective_temperature = 0.0
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -50,8 +64,12 @@ class OpenAIProvider(BaseProvider):
             "model": self.model,
             "messages": messages,
             "max_tokens": max_tokens,
-            "temperature": temperature,
+            "temperature": effective_temperature,
             "top_p": top_p,
+            "top_k": top_k,
+            "min_p": min_p,
+            "presence_penalty": presence_penalty,
+            "repetition_penalty": repetition_penalty,
             "stream": stream,
         }
 
@@ -60,10 +78,26 @@ class OpenAIProvider(BaseProvider):
         user_text: str,
         system: Optional[str],
         max_tokens: int,
-        temperature: float,
-        top_p: float = 0.9,
+        temperature: float = DEFAULT_TEMPERATURE,
+        top_p: float = DEFAULT_TOP_P,
+        *,
+        top_k: int = DEFAULT_TOP_K,
+        min_p: float = DEFAULT_MIN_P,
+        presence_penalty: float = DEFAULT_PRESENCE_PENALTY,
+        repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
     ) -> AsyncIterator[str]:
-        payload = self._payload(user_text, system, max_tokens, temperature, stream=True, top_p=top_p)
+        payload = self._payload(
+            user_text,
+            system,
+            max_tokens,
+            stream=True,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            presence_penalty=presence_penalty,
+            repetition_penalty=repetition_penalty,
+        )
         url = f"{self.base_url}/chat/completions"
 
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
@@ -94,10 +128,26 @@ class OpenAIProvider(BaseProvider):
         user_text: str,
         system: Optional[str],
         max_tokens: int,
-        temperature: float,
-        top_p: float = 0.9,
+        temperature: float = DEFAULT_TEMPERATURE,
+        top_p: float = DEFAULT_TOP_P,
+        *,
+        top_k: int = DEFAULT_TOP_K,
+        min_p: float = DEFAULT_MIN_P,
+        presence_penalty: float = DEFAULT_PRESENCE_PENALTY,
+        repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
     ) -> str:
-        payload = self._payload(user_text, system, max_tokens, temperature, stream=False, top_p=top_p)
+        payload = self._payload(
+            user_text,
+            system,
+            max_tokens,
+            stream=False,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            presence_penalty=presence_penalty,
+            repetition_penalty=repetition_penalty,
+        )
         url = f"{self.base_url}/chat/completions"
 
         async with aiohttp.ClientSession(timeout=self.timeout) as session:

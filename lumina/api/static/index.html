@@ -201,6 +201,7 @@
   textarea.field-input { resize: vertical; min-height: 80px; line-height: 1.5; }
   select.field-input { appearance: none; -webkit-appearance: none; cursor: pointer; }
   .field-hint { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .field-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 
   /* Toggle switch */
   .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 2px 0; }
@@ -583,6 +584,63 @@
           </div>
         </div>
 
+        <!-- LLM 请求历史 -->
+        <div class="card">
+          <label>LLM 请求历史</label>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div class="toggle-row">
+              <span>启用请求历史</span>
+              <label class="toggle">
+                <input type="checkbox" x-model="settings.request_history.enabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-row">
+              <span>保存完整正文</span>
+              <label class="toggle">
+                <input type="checkbox" x-model="settings.request_history.capture_full_body">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="field-group">
+              <div class="field-label">保留天数</div>
+              <input class="field-input" type="number" min="0" max="365" step="1"
+                x-model.number="settings.request_history.retention_days">
+              <div class="field-hint">归档日志超过该天数后自动删除</div>
+            </div>
+            <div class="field-group">
+              <div class="field-label">最大总空间（MB）</div>
+              <input class="field-input" type="number" min="1" max="10240" step="1"
+                x-model.number="settings.request_history.max_total_mb">
+              <div class="field-hint">超出后会从最旧归档开始清理</div>
+            </div>
+            <div class="field-group">
+              <div class="field-label">多少天后压缩</div>
+              <input class="field-input" type="number" min="0" max="30" step="1"
+                x-model.number="settings.request_history.compress_after_days">
+              <div class="field-hint">当前日志按日滚动，旧日志会转成 gzip</div>
+            </div>
+            <div class="toggle-row">
+              <span>启动时自动清理</span>
+              <label class="toggle">
+                <input type="checkbox" x-model="settings.request_history.cleanup_on_startup">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="field-group">
+              <div class="field-label">存储位置</div>
+              <div class="field-hint"><code>~/.lumina/request_history/</code></div>
+              <div class="field-actions">
+                <button class="opt-btn"
+                  :class="{ selected: settings._pruning }"
+                  :disabled="settings._pruning"
+                  @click="pruneRequestHistory()"
+                  x-text="settings._pruning ? '清理中…' : '立即清理历史'"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- PTT 录音 -->
         <div class="card">
           <label>录音热键（PTT）</label>
@@ -724,9 +782,10 @@ function luminaApp() {
       provider: { type: 'local', model_path: '', openai: { base_url: '', api_key: '', model: '' } },
       whisper_model: '', host: '127.0.0.1', port: 31821, log_level: 'INFO',
       digest: { enabled: false, scan_dirs: [], history_hours: 24, refresh_hours: 1, notify_time: '20:00', enabled_collectors: null },
+      request_history: { enabled: true, capture_full_body: true, retention_days: 14, max_total_mb: 512, compress_after_days: 1, cleanup_on_startup: true },
       ptt: { enabled: false, hotkey: 'cmd', language: 'zh' },
       system_prompts: {},
-      _saving: false, _msg: '', _msgWarn: false, _restartRequired: false,
+      _saving: false, _pruning: false, _msg: '', _msgWarn: false, _restartRequired: false,
     },
 
     // ── Debug ──
@@ -965,7 +1024,7 @@ function luminaApp() {
         if (!res.ok) throw new Error(res.statusText);
         const data = await res.json();
         // 合并进 settings，保留 UI 私有字段
-        const priv = { _saving: false, _msg: '', _msgWarn: false, _restartRequired: false };
+        const priv = { _saving: false, _pruning: false, _msg: '', _msgWarn: false, _restartRequired: false };
         this.settings = Object.assign({}, data, priv);
       } catch(e) {
         this.settings._msg = '加载失败：' + e.message;
@@ -978,7 +1037,7 @@ function luminaApp() {
       this.settings._msg = '';
       this.settings._restartRequired = false;
       try {
-        const { _saving, _msg, _msgWarn, _restartRequired, ...payload } = this.settings;
+        const { _saving, _pruning, _msg, _msgWarn, _restartRequired, ...payload } = this.settings;
         const res = await fetch('/v1/config', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -998,6 +1057,32 @@ function luminaApp() {
         this.settings._msgWarn = true;
       } finally {
         this.settings._saving = false;
+      }
+    },
+
+    async pruneRequestHistory() {
+      this.settings._pruning = true;
+      this.settings._msg = '';
+      this.settings._msgWarn = false;
+      try {
+        const res = await fetch('/v1/config/request_history/prune', { method: 'POST' });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || res.statusText);
+        }
+        const data = await res.json();
+        const stats = data.stats || {};
+        const compressed = stats.compressed || 0;
+        const deleted = stats.deleted || 0;
+        const freedBytes = stats.freed_bytes || 0;
+        const freedMb = (freedBytes / (1024 * 1024)).toFixed(2);
+        this.settings._msg = `清理完成：压缩 ${compressed} 个文件，删除 ${deleted} 个文件，释放 ${freedMb} MB`;
+        this.settings._msgWarn = false;
+      } catch(e) {
+        this.settings._msg = '清理失败：' + e.message;
+        this.settings._msgWarn = true;
+      } finally {
+        this.settings._pruning = false;
       }
     },
 

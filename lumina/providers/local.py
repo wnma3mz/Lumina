@@ -54,7 +54,6 @@ import uuid
 try:
     import mlx.core as mx
     from mlx_lm.generate import _left_pad_prompts, _make_cache, cache as mlx_cache
-    from mlx_lm.sample_utils import make_sampler
     _MLX_AVAILABLE = True
 except ImportError:
     _MLX_AVAILABLE = False
@@ -64,6 +63,15 @@ from .base import BaseProvider
 from .mlx_loader import MlxModelLoader
 from .mlx_prompt import MlxPromptBuilder
 from .system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
+from lumina.sampling import (
+    DEFAULT_MIN_P,
+    DEFAULT_PRESENCE_PENALTY,
+    DEFAULT_REPETITION_PENALTY,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TOP_K,
+    DEFAULT_TOP_P,
+    build_mlx_sampler,
+)
 
 # 每次迭代最多接入的新 prefill 请求数。
 # 取 4 可以更快吸收一小波同时到达的短请求，降低后到请求的排队 TTFT。
@@ -412,7 +420,15 @@ class LocalProvider(BaseProvider):
         执行 prefill + 生成首 token。
         结果通过 slot.token_queue 传递。
         """
-        slot.sampler = make_sampler(temp=slot.temperature, top_p=slot.top_p)
+        slot.sampler = build_mlx_sampler(
+            temperature=slot.temperature,
+            top_p=slot.top_p,
+            min_p=slot.min_p,
+            top_k=slot.top_k,
+            presence_penalty=slot.presence_penalty,
+            repetition_penalty=slot.repetition_penalty,
+            token_ids=slot._token_ids,
+        )
         prompt_cache = mlx_cache.make_prompt_cache(self._model)
         try:
             prompt = self._prefill_prompt_cache(slot.prompt_tokens, prompt_cache)
@@ -473,7 +489,15 @@ class LocalProvider(BaseProvider):
             return [slot] if not slot.done else []
 
         for slot in slots:
-            slot.sampler = make_sampler(temp=slot.temperature, top_p=0.9)
+            slot.sampler = build_mlx_sampler(
+                temperature=slot.temperature,
+                top_p=slot.top_p,
+                min_p=slot.min_p,
+                top_k=slot.top_k,
+                presence_penalty=slot.presence_penalty,
+                repetition_penalty=slot.repetition_penalty,
+                token_ids=slot._token_ids,
+            )
 
         try:
             prompt_lists = [[int(tok) for tok in slot.prompt_tokens] for slot in slots]
@@ -650,13 +674,19 @@ class LocalProvider(BaseProvider):
         user_text: str,
         system: Optional[str],
         max_tokens: int,
-        temperature: float,
-        top_p: float = 0.9,
+        temperature: float = DEFAULT_TEMPERATURE,
+        top_p: float = DEFAULT_TOP_P,
+        *,
+        top_k: int = DEFAULT_TOP_K,
+        min_p: float = DEFAULT_MIN_P,
+        presence_penalty: float = DEFAULT_PRESENCE_PENALTY,
+        repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
     ) -> AsyncIterator[str]:
         if not self.is_ready:
             raise RuntimeError("LocalProvider not loaded. Call load() first.")
 
         self._ensure_worker()
+        effective_temperature = 0.0
 
         system_str = system if system is not None else "You are a helpful assistant."
         prompt_tokens = self._build_prompt_tokens(system_str, user_text)
@@ -665,8 +695,12 @@ class LocalProvider(BaseProvider):
             request_id=uuid.uuid4().hex,
             prompt_tokens=prompt_tokens,
             max_tokens=max_tokens,
-            temperature=temperature,
+            temperature=effective_temperature,
             top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            presence_penalty=presence_penalty,
+            repetition_penalty=repetition_penalty,
             system_text=system_str,
             user_text=user_text,
         )

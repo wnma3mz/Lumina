@@ -11,6 +11,7 @@ from lumina.api.protocol import (
     TranslateRequest,
 )
 from lumina.api.sse import stream_llm
+from lumina.request_context import request_context
 
 router = APIRouter(tags=["text"])
 
@@ -21,10 +22,11 @@ async def translate(request: TranslateRequest, raw: Request):
     task = "translate_to_zh" if request.target_language == "zh" else "translate_to_en"
     if request.stream:
         return StreamingResponse(
-            _stream_text(request.text, task, llm),
+            _stream_text(request.text, task, llm, origin="translate_api"),
             media_type="text/event-stream",
         )
-    text = await llm.generate(request.text, task=task)
+    with request_context(origin="translate_api", stream=False):
+        text = await llm.generate(request.text, task=task)
     return TextResponse(text=text)
 
 
@@ -33,10 +35,11 @@ async def summarize(request: SummarizeRequest, raw: Request):
     llm = raw.app.state.llm
     if request.stream:
         return StreamingResponse(
-            _stream_text(request.text, "summarize", llm),
+            _stream_text(request.text, "summarize", llm, origin="summarize_api"),
             media_type="text/event-stream",
         )
-    text = await llm.generate(request.text, task="summarize")
+    with request_context(origin="summarize_api", stream=False):
+        text = await llm.generate(request.text, task="summarize")
     return TextResponse(text=text)
 
 
@@ -46,13 +49,20 @@ async def polish(request: PolishRequest, raw: Request):
     task = "polish_zh" if request.language == "zh" else "polish_en"
     if request.stream:
         return StreamingResponse(
-            _stream_text(request.text, task, llm),
+            _stream_text(request.text, task, llm, origin="polish_api"),
             media_type="text/event-stream",
         )
-    text = await llm.generate(request.text, task=task)
+    with request_context(origin="polish_api", stream=False):
+        text = await llm.generate(request.text, task=task)
     return TextResponse(text=text)
 
 
-async def _stream_text(user_text: str, task: str, llm):
-    async for chunk in stream_llm(llm, user_text, task=task, log_label="stream_text"):
+async def _stream_text(user_text: str, task: str, llm, *, origin: str):
+    async for chunk in stream_llm(
+        llm,
+        user_text,
+        task=task,
+        log_label="stream_text",
+        origin=origin,
+    ):
         yield chunk

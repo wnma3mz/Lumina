@@ -9,7 +9,6 @@ LocalProvider 在 load() 后初始化：self._prompt_builder = MlxPromptBuilder(
 """
 from __future__ import annotations
 
-import inspect
 import logging
 from typing import List, Optional
 
@@ -37,14 +36,7 @@ class MlxPromptBuilder:
             "tokenize": False,
             "add_generation_prompt": True,
         }
-        if self._supports_enable_thinking is None:
-            try:
-                sig = inspect.signature(self._tokenizer.apply_chat_template)
-                self._supports_enable_thinking = "enable_thinking" in sig.parameters
-            except (TypeError, ValueError):
-                self._supports_enable_thinking = False
-        if self._supports_enable_thinking:
-            kwargs["enable_thinking"] = False
+        kwargs["enable_thinking"] = False
 
         return self._tokenizer.apply_chat_template(messages, **kwargs)
 

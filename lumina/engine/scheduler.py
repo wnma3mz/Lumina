@@ -18,6 +18,14 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
+from lumina.sampling import (
+    DEFAULT_MIN_P,
+    DEFAULT_PRESENCE_PENALTY,
+    DEFAULT_REPETITION_PENALTY,
+    DEFAULT_TOP_K,
+    DEFAULT_TOP_P,
+)
+
 logger = logging.getLogger("lumina")
 
 
@@ -34,7 +42,11 @@ class GenerationRequest:
     request_id: str
     max_tokens: int
     temperature: float
-    top_p: float = 0.9
+    top_p: float = DEFAULT_TOP_P
+    top_k: int = DEFAULT_TOP_K
+    min_p: float = DEFAULT_MIN_P
+    presence_penalty: float = DEFAULT_PRESENCE_PENALTY
+    repetition_penalty: float = DEFAULT_REPETITION_PENALTY
     # 调度线程把 token 文本 put 进来，None = 结束，Exception = 错误
     token_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     done: bool = False

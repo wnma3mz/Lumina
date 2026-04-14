@@ -18,13 +18,14 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
+from lumina.sampling import build_mlx_sampler
+
 if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger("lumina")
 
 try:
-    from mlx_lm.sample_utils import make_sampler
     _MLX_AVAILABLE = True
 except ImportError:
     _MLX_AVAILABLE = False
@@ -99,7 +100,18 @@ class MlxBatchScheduler:
                 if new_slots:
                     prompts = []
                     caches = []
-                    samplers = [make_sampler(temp=slot.temperature, top_p=slot.top_p) for slot in new_slots]
+                    samplers = [
+                        build_mlx_sampler(
+                            temperature=slot.temperature,
+                            top_p=slot.top_p,
+                            min_p=slot.min_p,
+                            top_k=slot.top_k,
+                            presence_penalty=slot.presence_penalty,
+                            repetition_penalty=slot.repetition_penalty,
+                            token_ids=slot._token_ids,
+                        )
+                        for slot in new_slots
+                    ]
                     max_tokens = [slot.max_tokens for slot in new_slots]
                     for slot in new_slots:
                         prompt_tokens, prompt_cache = self._prepare_prompt_fn(slot)

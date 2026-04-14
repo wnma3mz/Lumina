@@ -57,7 +57,13 @@ async def stream_pdf_summary(pdf_path: str, llm) -> AsyncIterator[str]:
     from lumina.pdf_summarize import _extract_text
     from lumina.api.sse import stream_llm
     text = await asyncio.to_thread(_extract_text, pdf_path)
-    async for chunk in stream_llm(llm, text, task="summarize", log_label="stream_summary"):
+    async for chunk in stream_llm(
+        llm,
+        text,
+        task="summarize",
+        log_label="stream_summary",
+        origin="pdf_summary",
+    ):
         yield chunk
 
 

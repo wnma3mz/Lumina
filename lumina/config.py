@@ -15,6 +15,7 @@ log_level            日志级别：DEBUG / INFO / WARNING / ERROR
 digest               日报配置（enabled / scan_dirs / history_hours / refresh_hours）
 system_prompts       各任务的 system prompt，可按需覆盖
 ptt                  PTT 配置（enabled / hotkey / language）
+request_history      LLM 请求历史记录配置（启用 / 保留 / 压缩 / 清理）
 
 环境变量优先级高于 config.json，可用于临时覆盖：
   LUMINA_PROVIDER_TYPE / LUMINA_MODEL_PATH
@@ -44,6 +45,16 @@ class PttConfig:
     enabled: bool = False
     hotkey: str = "f5"
     language: Optional[str] = "zh"   # None = Whisper 自动检测
+
+
+@dataclass
+class RequestHistoryConfig:
+    enabled: bool = True
+    capture_full_body: bool = True
+    retention_days: int = 14
+    max_total_mb: int = 512
+    compress_after_days: int = 1
+    cleanup_on_startup: bool = True
 
 
 @dataclass
@@ -120,6 +131,19 @@ class Config:
             language=pt.get("language", "zh") or None,
         )
 
+        # ── Request History ───────────────────────────────────────────────────
+        rh = data.get("request_history", {})
+        if not isinstance(rh, dict):
+            rh = {}
+        self.request_history = RequestHistoryConfig(
+            enabled=bool(rh.get("enabled", True)),
+            capture_full_body=bool(rh.get("capture_full_body", True)),
+            retention_days=max(0, int(rh.get("retention_days", 14))),
+            max_total_mb=max(1, int(rh.get("max_total_mb", 512))),
+            compress_after_days=max(0, int(rh.get("compress_after_days", 1))),
+            cleanup_on_startup=bool(rh.get("cleanup_on_startup", True)),
+        )
+
 
 # 全局单例
 _instance: Optional[Config] = None
@@ -144,6 +168,7 @@ LUMINA_HOME = Path.home() / ".lumina"
 DIGEST_PATH = LUMINA_HOME / "digest.md"
 DIGEST_CONTEXT_LOG_DIR = LUMINA_HOME / "digest_context_log"
 PDF_CACHE_DIR = LUMINA_HOME / "cache" / "pdf"
+REQUEST_HISTORY_DIR = LUMINA_HOME / "request_history"
 
 # ── API 客户端默认常量 ────────────────────────────────────────────────────
 # CLI 子命令 / 业务模块调用本地服务时的统一默认值。

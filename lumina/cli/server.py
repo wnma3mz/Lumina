@@ -512,6 +512,11 @@ def cmd_server(args):
     sync_static()
     config_path = getattr(args, "config", None) or resolve_config_path()
     cfg = get_config(config_path)
+    from lumina import request_history as _request_history
+    _request_history.configure(
+        {"request_history": cfg.request_history.__dict__},
+        run_startup_cleanup=True,
+    )
     setup_logging(cfg.log_level)
 
     provider = build_provider(cfg)
@@ -544,7 +549,10 @@ def cmd_server(args):
         _uvicorn_loop.append(_asyncio.get_running_loop())
         app.state.server_start_time = _time.time()
         app.state.pdf_manager = PdfJobManager()
-        yield
+        try:
+            yield
+        finally:
+            _request_history.shutdown()
 
     fastapi_app = create_app(llm, transcriber, lifespan=_cmd_lifespan)
 

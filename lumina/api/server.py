@@ -50,7 +50,12 @@ async def _default_lifespan(app: FastAPI):
     用更精确的时间戳覆盖，供 /v1/digest 等接口判断服务是否重启。
     """
     app.state.server_start_time = time.time()
-    yield
+    try:
+        yield
+    finally:
+        from lumina import request_history as _request_history
+
+        _request_history.shutdown()
 
 
 def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastAPI:

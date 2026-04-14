@@ -55,6 +55,15 @@ class PttPatch(BaseModel):
     language: Optional[str] = None
 
 
+class RequestHistoryPatch(BaseModel):
+    enabled: Optional[bool] = None
+    capture_full_body: Optional[bool] = None
+    retention_days: Optional[int] = None
+    max_total_mb: Optional[int] = None
+    compress_after_days: Optional[int] = None
+    cleanup_on_startup: Optional[bool] = None
+
+
 class ConfigPatch(BaseModel):
     provider: Optional[ProviderPatch] = None
     whisper_model: Optional[str] = None
@@ -63,6 +72,7 @@ class ConfigPatch(BaseModel):
     log_level: Optional[str] = None
     digest: Optional[DigestPatch] = None
     ptt: Optional[PttPatch] = None
+    request_history: Optional[RequestHistoryPatch] = None
     system_prompts: Optional[Dict[str, str]] = None
 
 
@@ -137,6 +147,14 @@ async def get_config_api():
             "enabled": cfg.ptt.enabled,
             "hotkey": cfg.ptt.hotkey,
             "language": cfg.ptt.language,
+        },
+        "request_history": {
+            "enabled": cfg.request_history.enabled,
+            "capture_full_body": cfg.request_history.capture_full_body,
+            "retention_days": cfg.request_history.retention_days,
+            "max_total_mb": cfg.request_history.max_total_mb,
+            "compress_after_days": cfg.request_history.compress_after_days,
+            "cleanup_on_startup": cfg.request_history.cleanup_on_startup,
         },
         "system_prompts": dict(cfg.system_prompts),
     }
@@ -233,6 +251,26 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
             data["ptt"] = pc
             # PTT 通过文件 mtime watcher 自动重载，不需要标 restart_required
 
+        # ── request_history ────────────────────────────────────────────────────
+        if patch.request_history is not None:
+            rh = patch.request_history
+            rc = data.get("request_history", {})
+            if not isinstance(rc, dict):
+                rc = {}
+            if rh.enabled is not None:
+                rc["enabled"] = rh.enabled
+            if rh.capture_full_body is not None:
+                rc["capture_full_body"] = rh.capture_full_body
+            if rh.retention_days is not None:
+                rc["retention_days"] = rh.retention_days
+            if rh.max_total_mb is not None:
+                rc["max_total_mb"] = rh.max_total_mb
+            if rh.compress_after_days is not None:
+                rc["compress_after_days"] = rh.compress_after_days
+            if rh.cleanup_on_startup is not None:
+                rc["cleanup_on_startup"] = rh.cleanup_on_startup
+            data["request_history"] = rc
+
         # ── system_prompts ────────────────────────────────────────────────────
         if patch.system_prompts is not None:
             sp = data.get("system_prompts", {})
@@ -263,4 +301,42 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
         except Exception as e:
             logger.warning("Config: system_prompts hot-reload failed: %s", e)
 
+    if patch.request_history is not None:
+        try:
+            from lumina import request_history as _request_history
+            from lumina.config import get_config
+
+            _request_history.configure({"request_history": data.get("request_history", {})})
+            cfg = get_config()
+            cfg.request_history.enabled = bool(data["request_history"].get("enabled", True))
+            cfg.request_history.capture_full_body = bool(
+                data["request_history"].get("capture_full_body", True)
+            )
+            cfg.request_history.retention_days = max(
+                0,
+                int(data["request_history"].get("retention_days", 14)),
+            )
+            cfg.request_history.max_total_mb = max(
+                1,
+                int(data["request_history"].get("max_total_mb", 512)),
+            )
+            cfg.request_history.compress_after_days = max(
+                0,
+                int(data["request_history"].get("compress_after_days", 1)),
+            )
+            cfg.request_history.cleanup_on_startup = bool(
+                data["request_history"].get("cleanup_on_startup", True)
+            )
+            logger.info("Config: request_history hot-reloaded")
+        except Exception as e:
+            logger.warning("Config: request_history hot-reload failed: %s", e)
+
     return {"ok": True, "restart_required": restart_required}
+
+
+@router.post("/v1/config/request_history/prune")
+async def prune_request_history_api():
+    from lumina import request_history as _request_history
+
+    stats = await asyncio.to_thread(_request_history.prune_now)
+    return {"ok": True, "stats": stats}

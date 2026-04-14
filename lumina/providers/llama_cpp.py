@@ -9,6 +9,7 @@ import threading
 from typing import AsyncIterator, Optional
 
 from .base import BaseProvider
+from lumina.sampling import DEFAULT_TEMPERATURE, DEFAULT_TOP_P
 
 
 class LlamaCppProvider(BaseProvider):
@@ -45,7 +46,13 @@ class LlamaCppProvider(BaseProvider):
         user_text: str,
         system: Optional[str],
         max_tokens: int,
-        temperature: float,
+        temperature: float = DEFAULT_TEMPERATURE,
+        top_p: float = DEFAULT_TOP_P,
+        *,
+        top_k: int = 20,
+        min_p: float = 0.0,
+        presence_penalty: float = 2.0,
+        repetition_penalty: float = 1.0,
     ) -> AsyncIterator[str]:
         """流式推理，逐 token yield。llama-cpp 同步流放入线程，通过 Queue 传给协程。"""
         if self._llm is None:
@@ -60,11 +67,13 @@ class LlamaCppProvider(BaseProvider):
         messages.append({"role": "user", "content": user_text})
 
         def _run():
+            effective_temperature = 0.0
             try:
                 for chunk in self._llm.create_chat_completion(  # type: ignore[union-attr]
                     messages=messages,
                     max_tokens=max_tokens,
-                    temperature=temperature,
+                    temperature=effective_temperature,
+                    top_p=top_p,
                     stream=True,
                 ):
                     delta = chunk["choices"][0].get("delta", {})

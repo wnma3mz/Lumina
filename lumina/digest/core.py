@@ -34,6 +34,7 @@ from lumina.config import DIGEST_CONTEXT_LOG_DIR as _CONTEXT_LOG_DIR
 from lumina.config import DIGEST_PATH as _DIGEST_PATH
 from lumina.digest.collectors import COLLECTORS as _COLLECTORS
 from lumina.digest.config import get_cfg, override_history_hours
+from lumina.request_context import request_context
 
 logger = logging.getLogger("lumina.digest")
 
@@ -290,11 +291,12 @@ async def generate_digest(llm) -> str:
         context = await _collect_all()
         _save_context_log(context, "full")
         logger.info("Digest: generating summary...")
-        summary = await llm.generate(
-            context, task="chat",
-            system=DIGEST_SYSTEM_PROMPT,
-            max_tokens=600, temperature=0.4,
-        )
+        with request_context(origin="digest", stream=False):
+            summary = await llm.generate(
+                context, task="chat",
+                system=DIGEST_SYSTEM_PROMPT,
+                max_tokens=600, temperature=0.4,
+            )
         now = datetime.now()
         entry = (f"<!-- generated: {now.isoformat()} -->\n"
                  f"# {now.strftime('%Y-%m-%d %H:%M')}\n\n"
