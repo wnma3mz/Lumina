@@ -18,15 +18,7 @@ from typing import AsyncIterator, Dict, Optional
 from lumina.providers.base import BaseProvider
 from lumina.request_context import get_request_context
 from lumina import request_history
-from lumina.sampling import (
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_MIN_P,
-    DEFAULT_PRESENCE_PENALTY,
-    DEFAULT_REPETITION_PENALTY,
-    DEFAULT_TEMPERATURE,
-    DEFAULT_TOP_K,
-    DEFAULT_TOP_P,
-)
+from lumina.sampling import resolve_sampling
 
 
 class LLMEngine:
@@ -125,21 +117,45 @@ class LLMEngine:
             "duration_ms": duration_ms,
         }
 
+    def _resolve_sampling(
+        self,
+        max_tokens: Optional[int],
+        temperature: Optional[float],
+        top_p: Optional[float],
+        top_k: Optional[int],
+        min_p: Optional[float],
+        presence_penalty: Optional[float],
+        repetition_penalty: Optional[float],
+    ) -> dict:
+        from lumina.config import get_config
+        cfg = get_config()
+        return resolve_sampling(
+            cfg.provider.sampling,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            presence_penalty=presence_penalty,
+            repetition_penalty=repetition_penalty,
+        )
+
     async def generate_stream(
         self,
         user_text: str,
         task: str = "chat",
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-        temperature: float = DEFAULT_TEMPERATURE,
-        top_p: float = DEFAULT_TOP_P,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
         system: Optional[str] = None,
         *,
-        top_k: int = DEFAULT_TOP_K,
-        min_p: float = DEFAULT_MIN_P,
-        presence_penalty: float = DEFAULT_PRESENCE_PENALTY,
-        repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
+        top_k: Optional[int] = None,
+        min_p: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        repetition_penalty: Optional[float] = None,
     ) -> AsyncIterator[str]:
         system_prompt = self._resolve_system(task, system)
+        params = self._resolve_sampling(max_tokens, temperature, top_p, top_k, min_p, presence_penalty, repetition_penalty)
         started_at = datetime.now()
         started_perf = time.perf_counter()
         request_id = get_request_context().get("request_id") or uuid.uuid4().hex
@@ -150,13 +166,13 @@ class LLMEngine:
             async for token in self._provider.generate_stream(
                 user_text=user_text,
                 system=system_prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                min_p=min_p,
-                presence_penalty=presence_penalty,
-                repetition_penalty=repetition_penalty,
+                max_tokens=params["max_tokens"],
+                temperature=params["temperature"],
+                top_p=params["top_p"],
+                top_k=params["top_k"],
+                min_p=params["min_p"],
+                presence_penalty=params["presence_penalty"],
+                repetition_penalty=params["repetition_penalty"],
             ):
                 chunks.append(token)
                 yield token
@@ -181,30 +197,25 @@ class LLMEngine:
                 duration_ms=int((time.perf_counter() - started_perf) * 1000),
                 error=error,
             )
-            entry["max_tokens"] = max_tokens
-            entry["temperature"] = temperature
-            entry["top_p"] = top_p
-            entry["top_k"] = top_k
-            entry["min_p"] = min_p
-            entry["presence_penalty"] = presence_penalty
-            entry["repetition_penalty"] = repetition_penalty
+            entry.update(params)
             request_history.record(entry)
 
     async def generate(
         self,
         user_text: str,
         task: str = "chat",
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-        temperature: float = DEFAULT_TEMPERATURE,
-        top_p: float = DEFAULT_TOP_P,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
         system: Optional[str] = None,
         *,
-        top_k: int = DEFAULT_TOP_K,
-        min_p: float = DEFAULT_MIN_P,
-        presence_penalty: float = DEFAULT_PRESENCE_PENALTY,
-        repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
+        top_k: Optional[int] = None,
+        min_p: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        repetition_penalty: Optional[float] = None,
     ) -> str:
         system_prompt = self._resolve_system(task, system)
+        params = self._resolve_sampling(max_tokens, temperature, top_p, top_k, min_p, presence_penalty, repetition_penalty)
         started_at = datetime.now()
         started_perf = time.perf_counter()
         request_id = get_request_context().get("request_id") or uuid.uuid4().hex
@@ -215,13 +226,13 @@ class LLMEngine:
             response_text = await self._provider.generate(
                 user_text=user_text,
                 system=system_prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                min_p=min_p,
-                presence_penalty=presence_penalty,
-                repetition_penalty=repetition_penalty,
+                max_tokens=params["max_tokens"],
+                temperature=params["temperature"],
+                top_p=params["top_p"],
+                top_k=params["top_k"],
+                min_p=params["min_p"],
+                presence_penalty=params["presence_penalty"],
+                repetition_penalty=params["repetition_penalty"],
             )
             return response_text
         except asyncio.CancelledError as e:
@@ -245,11 +256,5 @@ class LLMEngine:
                 duration_ms=int((time.perf_counter() - started_perf) * 1000),
                 error=error,
             )
-            entry["max_tokens"] = max_tokens
-            entry["temperature"] = temperature
-            entry["top_p"] = top_p
-            entry["top_k"] = top_k
-            entry["min_p"] = min_p
-            entry["presence_penalty"] = presence_penalty
-            entry["repetition_penalty"] = repetition_penalty
+            entry.update(params)
             request_history.record(entry)

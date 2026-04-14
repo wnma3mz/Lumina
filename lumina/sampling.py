@@ -3,7 +3,10 @@
 """
 from __future__ import annotations
 
-from typing import Callable, Sequence
+from typing import TYPE_CHECKING, Callable, Optional, Sequence
+
+if TYPE_CHECKING:
+    from lumina.config import SamplingConfig
 
 DEFAULT_MAX_TOKENS = 512
 DEFAULT_TEMPERATURE = 0.0
@@ -57,3 +60,39 @@ def build_mlx_sampler(
         return base_sampler(adjusted)
 
     return sampler
+
+
+def resolve_sampling(
+    cfg_sampling: "SamplingConfig",
+    *,
+    temperature: Optional[float],
+    top_p: Optional[float],
+    top_k: Optional[int],
+    min_p: Optional[float],
+    presence_penalty: Optional[float],
+    repetition_penalty: Optional[float],
+    max_tokens: Optional[int],
+) -> dict:
+    """按优先级合并采样参数，返回所有字段均非 None 的完整 dict。
+
+    优先级（高→低）：
+      1. 调用方显式传入（非 None）
+      2. config.json provider.sampling（非 None）
+      3. sampling.py DEFAULT 常量
+    """
+    def _pick(api_val, cfg_val, default):
+        if api_val is not None:
+            return api_val
+        if cfg_val is not None:
+            return cfg_val
+        return default
+
+    return {
+        "temperature": _pick(temperature, cfg_sampling.temperature, DEFAULT_TEMPERATURE),
+        "top_p": _pick(top_p, cfg_sampling.top_p, DEFAULT_TOP_P),
+        "top_k": _pick(top_k, cfg_sampling.top_k, DEFAULT_TOP_K),
+        "min_p": _pick(min_p, cfg_sampling.min_p, DEFAULT_MIN_P),
+        "presence_penalty": _pick(presence_penalty, cfg_sampling.presence_penalty, DEFAULT_PRESENCE_PENALTY),
+        "repetition_penalty": _pick(repetition_penalty, cfg_sampling.repetition_penalty, DEFAULT_REPETITION_PENALTY),
+        "max_tokens": _pick(max_tokens, cfg_sampling.max_tokens, DEFAULT_MAX_TOKENS),
+    }

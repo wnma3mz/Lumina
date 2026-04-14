@@ -535,6 +535,49 @@
               </div>
             </div>
           </template>
+
+          <!-- 采样参数 -->
+          <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px;">
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">采样参数</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="field-group">
+                <div class="field-label">Temperature</div>
+                <input class="field-input" type="number" min="0" max="2" step="0.05"
+                  x-model.number="settings.provider.sampling.temperature">
+              </div>
+              <div class="field-group">
+                <div class="field-label">Top-P</div>
+                <input class="field-input" type="number" min="0" max="1" step="0.05"
+                  x-model.number="settings.provider.sampling.top_p">
+              </div>
+              <div class="field-group">
+                <div class="field-label">Top-K</div>
+                <input class="field-input" type="number" min="0" max="200" step="1"
+                  x-model.number="settings.provider.sampling.top_k">
+              </div>
+              <div class="field-group">
+                <div class="field-label">Min-P</div>
+                <input class="field-input" type="number" min="0" max="1" step="0.01"
+                  x-model.number="settings.provider.sampling.min_p">
+              </div>
+              <div class="field-group">
+                <div class="field-label">Presence Penalty</div>
+                <input class="field-input" type="number" min="-2" max="2" step="0.1"
+                  x-model.number="settings.provider.sampling.presence_penalty">
+              </div>
+              <div class="field-group">
+                <div class="field-label">Repetition Penalty</div>
+                <input class="field-input" type="number" min="0.5" max="2" step="0.05"
+                  x-model.number="settings.provider.sampling.repetition_penalty">
+              </div>
+              <div class="field-group">
+                <div class="field-label">Max Tokens</div>
+                <input class="field-input" type="number" min="64" max="8192" step="64"
+                  x-model.number="settings.provider.sampling.max_tokens">
+              </div>
+            </div>
+            <div class="field-hint" style="margin-top:6px;">API 请求中显式指定的参数优先级更高</div>
+          </div>
         </div>
 
         <!-- 语音模型 -->
@@ -779,7 +822,7 @@ function luminaApp() {
 
     // ── Settings ──
     settings: {
-      provider: { type: 'local', model_path: '', openai: { base_url: '', api_key: '', model: '' } },
+      provider: { type: 'local', model_path: '', sampling: { temperature: 0.6, top_p: 0.95, top_k: 20, min_p: 0.0, presence_penalty: 0.0, repetition_penalty: 1.0, max_tokens: 512 }, openai: { base_url: '', api_key: '', model: '' } },
       whisper_model: '', host: '127.0.0.1', port: 31821, log_level: 'INFO',
       digest: { enabled: false, scan_dirs: [], history_hours: 24, refresh_hours: 1, notify_time: '20:00', enabled_collectors: null },
       request_history: { enabled: true, capture_full_body: true, retention_days: 14, max_total_mb: 512, compress_after_days: 1, cleanup_on_startup: true },

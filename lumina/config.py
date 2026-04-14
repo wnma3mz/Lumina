@@ -5,6 +5,10 @@ config.json 字段说明
 ─────────────────────
 provider.type        "local"（mlx，macOS）/ "llama_cpp"（Windows/CPU）/ "openai"（远程）
 provider.model_path  本地模型目录，null 时使用内置默认路径
+provider.sampling    采样参数默认值（与模型绑定）：
+                       temperature / top_p / top_k / min_p
+                       presence_penalty / repetition_penalty / max_tokens
+                       字段缺失时 fallback 到 sampling.py 的 DEFAULT 常量
 provider.openai      type=openai 时必填：
                        base_url  服务地址，如 http://192.168.1.10:8080/v1
                        api_key   服务 API Key
@@ -58,6 +62,18 @@ class RequestHistoryConfig:
 
 
 @dataclass
+class SamplingConfig:
+    """Provider 级采样参数默认值。None 表示未配置，运行时 fallback 到 sampling.py DEFAULT 常量。"""
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    min_p: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+    max_tokens: Optional[int] = None
+
+
+@dataclass
 class LlamaCppConfig:
     model_path: str = ""        # GGUF 模型文件路径（本地绝对路径）
     n_gpu_layers: int = -1      # -1 = 全部放 GPU；0 = 纯 CPU
@@ -72,6 +88,7 @@ def _default_provider_type() -> str:
 class ProviderConfig:
     type: str = field(default_factory=_default_provider_type)  # "local" | "llama_cpp" | "openai"
     model_path: str = _DEFAULT_MODEL
+    sampling: SamplingConfig = field(default_factory=SamplingConfig)
     openai: OpenAIProviderConfig = field(default_factory=OpenAIProviderConfig)
     llama_cpp: LlamaCppConfig = field(default_factory=LlamaCppConfig)
 
@@ -86,12 +103,22 @@ class Config:
         p = data.get("provider", {})
         oa = p.get("openai", {})
         lc = p.get("llama_cpp", {})
+        sc = p.get("sampling", {}) if isinstance(p.get("sampling"), dict) else {}
         self.provider = ProviderConfig(
             type=os.environ.get("LUMINA_PROVIDER_TYPE") or p.get("type", _default_provider_type()),
             model_path=(
                 os.environ.get("LUMINA_MODEL_PATH")
                 or p.get("model_path")
                 or _DEFAULT_MODEL
+            ),
+            sampling=SamplingConfig(
+                temperature=float(sc["temperature"]) if "temperature" in sc else None,
+                top_p=float(sc["top_p"]) if "top_p" in sc else None,
+                top_k=int(sc["top_k"]) if "top_k" in sc else None,
+                min_p=float(sc["min_p"]) if "min_p" in sc else None,
+                presence_penalty=float(sc["presence_penalty"]) if "presence_penalty" in sc else None,
+                repetition_penalty=float(sc["repetition_penalty"]) if "repetition_penalty" in sc else None,
+                max_tokens=int(sc["max_tokens"]) if "max_tokens" in sc else None,
             ),
             openai=OpenAIProviderConfig(
                 base_url=os.environ.get("LUMINA_OPENAI_BASE_URL") or oa.get("base_url", ""),

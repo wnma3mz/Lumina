@@ -36,9 +36,10 @@ class MlxPromptBuilder:
             "tokenize": False,
             "add_generation_prompt": True,
         }
-        kwargs["enable_thinking"] = False
-
-        return self._tokenizer.apply_chat_template(messages, **kwargs)
+        try:
+            return self._tokenizer.apply_chat_template(messages, **kwargs, enable_thinking=False)
+        except TypeError:
+            return self._tokenizer.apply_chat_template(messages, **kwargs)
 
     def encode(self, system: str, user_text: str):
         """渲染后 tokenize，返回 mx.array。"""

@@ -34,9 +34,20 @@ class OpenAIPatch(BaseModel):
     model: Optional[str] = None
 
 
+class SamplingPatch(BaseModel):
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    min_p: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+    max_tokens: Optional[int] = None
+
+
 class ProviderPatch(BaseModel):
     type: Optional[str] = None
     model_path: Optional[str] = None
+    sampling: Optional[SamplingPatch] = None
     openai: Optional[OpenAIPatch] = None
 
 
@@ -125,6 +136,15 @@ async def get_config_api():
         "provider": {
             "type": cfg.provider.type,
             "model_path": cfg.provider.model_path,
+            "sampling": {
+                "temperature": cfg.provider.sampling.temperature,
+                "top_p": cfg.provider.sampling.top_p,
+                "top_k": cfg.provider.sampling.top_k,
+                "min_p": cfg.provider.sampling.min_p,
+                "presence_penalty": cfg.provider.sampling.presence_penalty,
+                "repetition_penalty": cfg.provider.sampling.repetition_penalty,
+                "max_tokens": cfg.provider.sampling.max_tokens,
+            },
             "openai": {
                 "base_url": cfg.provider.openai.base_url,
                 "api_key": cfg.provider.openai.api_key,
@@ -186,6 +206,20 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
             if p.model_path is not None:
                 prov["model_path"] = p.model_path
                 restart_required = True
+            if p.sampling is not None:
+                sc = prov.get("sampling", {})
+                if not isinstance(sc, dict):
+                    sc = {}
+                for field in ("temperature", "top_p", "min_p", "presence_penalty", "repetition_penalty"):
+                    val = getattr(p.sampling, field)
+                    if val is not None:
+                        sc[field] = val
+                for field in ("top_k", "max_tokens"):
+                    val = getattr(p.sampling, field)
+                    if val is not None:
+                        sc[field] = val
+                prov["sampling"] = sc
+                # sampling 参数热重载：更新 config singleton 即可，无需重启
             if p.openai is not None:
                 oa = prov.get("openai", {})
                 if not isinstance(oa, dict):
@@ -300,6 +334,25 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
             logger.info("Config: system_prompts hot-reloaded (%d keys)", len(patch.system_prompts))
         except Exception as e:
             logger.warning("Config: system_prompts hot-reload failed: %s", e)
+
+    # provider.sampling：热重载 config singleton 中的 sampling 字段
+    if patch.provider is not None and patch.provider.sampling is not None:
+        try:
+            from lumina.config import SamplingConfig, get_config
+            cfg = get_config()
+            sc_data = data.get("provider", {}).get("sampling", {})
+            cfg.provider.sampling = SamplingConfig(
+                temperature=float(sc_data["temperature"]) if "temperature" in sc_data else None,
+                top_p=float(sc_data["top_p"]) if "top_p" in sc_data else None,
+                top_k=int(sc_data["top_k"]) if "top_k" in sc_data else None,
+                min_p=float(sc_data["min_p"]) if "min_p" in sc_data else None,
+                presence_penalty=float(sc_data["presence_penalty"]) if "presence_penalty" in sc_data else None,
+                repetition_penalty=float(sc_data["repetition_penalty"]) if "repetition_penalty" in sc_data else None,
+                max_tokens=int(sc_data["max_tokens"]) if "max_tokens" in sc_data else None,
+            )
+            logger.info("Config: provider.sampling hot-reloaded")
+        except Exception as e:
+            logger.warning("Config: provider.sampling hot-reload failed: %s", e)
 
     if patch.request_history is not None:
         try:

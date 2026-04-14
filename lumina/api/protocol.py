@@ -17,15 +17,6 @@ from typing import List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from lumina.sampling import (
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_MIN_P,
-    DEFAULT_PRESENCE_PENALTY,
-    DEFAULT_REPETITION_PENALTY,
-    DEFAULT_TEMPERATURE,
-    DEFAULT_TOP_K,
-    DEFAULT_TOP_P,
-)
 
 
 def random_uuid() -> str:
@@ -48,13 +39,14 @@ class ChatCompletionRequest(BaseModel):
     model: str = "lumina"
     messages: List[ChatMessage]
     stream: bool = False
-    max_tokens: int = DEFAULT_MAX_TOKENS
-    temperature: float = DEFAULT_TEMPERATURE
-    top_p: float = DEFAULT_TOP_P
-    top_k: int = DEFAULT_TOP_K
-    min_p: float = DEFAULT_MIN_P
-    presence_penalty: float = DEFAULT_PRESENCE_PENALTY
-    repetition_penalty: float = DEFAULT_REPETITION_PENALTY
+    # 采样参数：None 表示"未指定"，由 LLMEngine 从 provider.sampling config 读取默认值
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    min_p: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    repetition_penalty: Optional[float] = None
 
 
 class ChatCompletionChoice(BaseModel):
