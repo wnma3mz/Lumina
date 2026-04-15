@@ -185,7 +185,7 @@ uv run --with ruff ruff check --fix <改动的文件...>
 ### 技术栈约定
 
 - **Tailwind 编译产物直接提交**：`style.css` 是用 Tailwind CLI 编译的产物（3600+ 行），直接 commit 到 `lumina/api/static/style.css`。模板里可以使用 Tailwind utility class（`flex`、`text-zinc-900`、`bg-indigo-500` 等）和自定义组件类（`bento-card`）。
-- **无运行时构建步骤**：`node_modules/`、`package.json`、`tailwind.config.js`、`input.css` 均在 `.gitignore` 中，不提交，不需要在本机执行 npm/tailwind 命令即可运行项目。需要修改 Tailwind 配置时才在本地执行 `npx tailwindcss` 重新编译，然后提交生成的 `style.css`。
+- **无运行时构建步骤**：`node_modules/`、`package.json`、`tailwind.config.js` 在 `.gitignore` 中，不提交。`input.css`（Tailwind 源文件）已提交到 `lumina/api/static/input.css`，不需要在本机执行 npm/tailwind 命令即可运行项目。需要修改 Tailwind 配置时在本地执行 `npx tailwindcss -i input.css -o style.css`，然后提交生成的 `style.css`。
 - **HTMX 服务端渲染**：局部刷新通过后端 Jinja2 模板返回 HTML 片段实现（`/fragments/*` 路由），片段内的样式依赖全局 `style.css`，不需要额外引入 CSS。
 - **PWA 支持**：`GET /manifest.json` 由 `server.py` 内联返回；`index.html` 包含 `<link rel="manifest">`、`apple-mobile-web-app-capable`、`theme-color` 等 meta，支持添加到主屏幕。
 
@@ -246,7 +246,7 @@ v0.8.0 起采用 **Bento Card** 设计风格，替代原有毛玻璃（glassmorp
 - **mlx 路径**：`libmlx.dylib` 必须在 `mlx/lib/`，`mlx.metallib` 必须同时放在 `mlx/` 和 `Contents/Frameworks/`
 - **Quick Action 错误「服务输入出现问题」**：Automator 调用 `lumina pdf` 时 multiprocessing spawn 子进程重走 CLI 导致的，已通过 `set_start_method("fork")` 修复，需重新打包才能生效
 - **前端模板入口**：`lumina/api/templates/index.html`（Jinja2），面板拆在 `templates/panels/*.html`，后端 HTML 片段在 `templates/*.html`。直接编辑模板文件，刷新浏览器即生效（FastAPI 每次请求都重新渲染，无需重启）。`lumina/api/static/index.html` 保留作为带内联 HTMX 的独立备份，仅供测试和离线使用，`GET /` 不再 serve 它。
-- **style.css 修改方式**：若只改颜色/自定义组件，可直接编辑 `lumina/api/static/style.css`。若需新增 Tailwind utility class，需在本地用 `npx tailwindcss -i input.css -o style.css` 重新编译（`input.css` 和 `tailwind.config.js` 不提交到 git，只提交编译产物 `style.css`）。
+- **style.css 修改方式**：若只改颜色/自定义组件，可直接编辑 `lumina/api/static/style.css`。若需新增 Tailwind utility class，在本地用 `npx tailwindcss -i lumina/api/static/input.css -o lumina/api/static/style.css` 重新编译，再提交 `style.css`（和必要时的 `input.css`）。
 - **打包前必须清理 pyc 缓存**：PyInstaller 优先使用 `__pycache__/*.pyc` 而非源码，修改 `.py` 后若 pyc 未更新则改动不会打入包内。每次打包前运行：
   ```bash
   find lumina -name "*.pyc" -delete && find lumina -name "__pycache__" -type d -exec rm -rf {} +
