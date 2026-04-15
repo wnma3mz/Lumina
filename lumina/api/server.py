@@ -115,9 +115,16 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     async def pwa_index(request: Request):
         css_path = _static_dir() / "style.css"
         css_ver = int(css_path.stat().st_mtime) if css_path.exists() else 0
+
+        import getpass
+        try:
+            username = getpass.getuser().capitalize()
+        except Exception:
+            username = ""
+
         return _tmpl.TemplateResponse(
             "index.html",
-            {"request": request, "css_ver": css_ver},
+            {"request": request, "css_ver": css_ver, "username": username},
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
 

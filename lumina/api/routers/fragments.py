@@ -64,8 +64,11 @@ def _parse_sections(content: str) -> list[dict]:
         m = re.search(r"^#\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})", s, re.MULTILINE)
         if m:
             title = m.group(1)
+            s = s.replace(m.group(0), "", 1).lstrip()
         else:
-            title = re.sub(r"^#+\s*", "", s.split("\n")[0]).strip() or f"条目 {i + 1}"
+            first_line = s.split("\n")[0]
+            title = re.sub(r"^#+\s*", "", first_line).strip() or f"条目 {i + 1}"
+            s = s.replace(first_line, "", 1).lstrip()
         # 来源图标
         lc = (title + " " + s).lower()
         filter_key: Optional[str] = next((k for k in _ICON_KEYS if k in lc), None)
@@ -148,6 +151,35 @@ async def fragment_digest(request: Request):
 
 # ── 数据来源图标行 ──────────────────────────────────────────────────────────────
 
+@router.get("/digest/storage", response_class=HTMLResponse)
+async def fragment_digest_storage(request: Request):
+    """返回动态的存储空间占用卡片 HTML 片段。"""
+    from lumina.config import get_config
+    from lumina import request_history
+    
+    recorder = request_history.get_recorder()
+    with recorder._lock:
+        total_bytes = recorder._total_bytes_locked()
+        
+    cfg = get_config()
+    max_mb = cfg.request_history.max_total_mb
+    used_mb = total_bytes / (1024 * 1024)
+    pct = min(100, int((used_mb / max_mb) * 100)) if max_mb > 0 else 0
+    
+    html = f"""
+          <div class="flex justify-between items-end mb-3">
+              <div>
+                  <p class="text-[10px] text-zinc-400 uppercase tracking-widest font-extrabold">本地存储空间</p>
+                  <p class="text-xl font-black mt-1">{used_mb:.1f} <span class="text-xs font-normal text-zinc-500">/ {max_mb} MB</span></p>
+              </div>
+              <button class="text-indigo-500 text-xs font-bold hover:underline" onclick="pruneRequestHistory(this)">立即清理</button>
+          </div>
+          <div class="w-full h-3 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden p-[2px]">
+              <div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000" style="width: {pct}%;"></div>
+          </div>
+    """
+    return HTMLResponse(html)
+
 @router.get("/digest/sources", response_class=HTMLResponse)
 async def fragment_digest_sources(request: Request):
     """返回数据来源图标行 HTML 片段。"""
@@ -178,8 +210,9 @@ async def fragment_digest_sources(request: Request):
     sources = []
     for key, name in names.items():
         info = collectors.get(key, {})
-        active = isinstance(info, dict) and info.get("chars", 0) > 0
-        sources.append({"key": key, "name": name, "icon": icons[key], "active": active})
+        chars = info.get("chars", 0) if isinstance(info, dict) else 0
+        active = chars > 0
+        sources.append({"key": key, "name": name, "icon": icons[key], "active": active, "chars": chars})
 
     return templates.TemplateResponse(
         "digest_sources.html",

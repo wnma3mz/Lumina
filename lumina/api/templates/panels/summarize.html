@@ -1,35 +1,46 @@
-    <div id="panel-summarize">
+<div id="panel-summarize" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+  <div class="bento-card flex flex-col gap-6">
+    <h3 class="text-xl font-bold">智能学术总结</h3>
+    <p class="text-zinc-500 text-sm -mt-4">上传文献，自动生成核心摘要与关键结论提取。</p>
 
-      <!-- PDF 上传区 -->
-      <div class="card">
-        <label>上传 PDF</label>
-        <div class="drop-zone" id="summarize-drop"
-             ondragover="event.preventDefault();this.classList.add('over')"
-             ondragleave="this.classList.remove('over')"
-             ondrop="event.preventDefault();this.classList.remove('over');handleDropZone(event,'summarize-file','summarize-filename')">
-          <input type="file" id="summarize-file" name="file" accept=".pdf"
-                 onchange="showFilename(this,'summarize-filename')">
-          <div class="icon">📂</div>
-          <div class="hint">点击选择或<span onclick="document.getElementById('summarize-file').click();event.stopPropagation()">拖入 PDF</span></div>
-          <div class="filename" id="summarize-filename"></div>
-        </div>
+    <!-- PDF 上传区 -->
+    <div>
+      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">上传 PDF</label>
+      <div class="border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-2xl p-8 text-center cursor-pointer transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/10 hover:border-indigo-400 group relative"
+           ondragover="event.preventDefault();this.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20')"
+           ondragleave="this.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20')"
+           ondrop="event.preventDefault();this.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');handleDropZone(event,'summarize-file','summarize-filename')">
+        <input type="file" id="summarize-file" name="file" accept=".pdf" class="absolute inset-0 opacity-0 cursor-pointer z-10"
+               onchange="showFilename(this,'summarize-filename')">
+        <div class="text-4xl mb-3 group-hover:scale-110 transition-transform">📂</div>
+        <div class="text-sm text-zinc-500">点击选择或<span class="text-indigo-500 font-bold ml-1">拖入 PDF</span></div>
+        <div class="mt-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200 break-all" id="summarize-filename"></div>
       </div>
-
-      <!-- URL 输入 -->
-      <div class="card">
-        <label>或输入 PDF 链接</label>
-        <div class="url-row">
-          <input class="field-input" type="url" id="summarize-url" placeholder="https://example.com/paper.pdf">
-        </div>
-      </div>
-
-      <!-- 提交按钮 -->
-      <button class="btn-primary" id="summarize-btn" onclick="startSummarize()">生成总结</button>
-
-      <!-- 加载指示器 -->
-      <div id="summarize-spinner" class="htmx-indicator" style="text-align:center;padding:16px;color:var(--sub);">生成中…</div>
-
-      <!-- 总结结果 -->
-      <div id="summarize-result"></div>
-
     </div>
+
+    <!-- URL 输入 -->
+    <div>
+      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">或输入 PDF 链接</label>
+      <input type="url" id="summarize-url" placeholder="https://example.com/paper.pdf" 
+             class="w-full px-4 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm">
+    </div>
+
+    <!-- 提交按钮 -->
+    <button class="w-full py-4 mt-auto bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-black tracking-wide hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-xl" id="summarize-btn" onclick="startSummarize()">生成深度总结</button>
+  </div>
+
+  <div class="bento-card flex flex-col gap-4">
+    <h3 class="text-xl font-bold mb-2">生成结果</h3>
+    <!-- 加载指示器 -->
+    <div id="summarize-spinner" class="htmx-indicator flex flex-col items-center justify-center text-zinc-400 py-8">
+      <div class="text-3xl mb-3 animate-spin">⏳</div>
+      <div class="text-sm">智能分析中，请耐心等待…</div>
+    </div>
+    <!-- 总结结果 -->
+    <div id="summarize-result" class="flex-1 flex flex-col prose dark:prose-invert prose-sm max-w-none">
+      <div class="flex-1 flex items-center justify-center text-zinc-400 text-sm h-full w-full">
+        等待处理...
+      </div>
+    </div>
+  </div>
+</div>

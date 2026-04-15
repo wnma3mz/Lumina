@@ -1,7 +1,10 @@
-    <div id="panel-settings"
-         hx-get="/fragments/config"
-         hx-trigger="revealed"
-         hx-swap="innerHTML"
-         hx-target="#panel-settings">
-      <div style="text-align:center;padding:32px;color:var(--sub);">加载中…</div>
+  <div id="panel-settings" class="w-full"
+       hx-get="/fragments/config"
+       hx-trigger="revealed"
+       hx-swap="innerHTML"
+       hx-target="#panel-settings">
+    <div class="flex items-center justify-center min-h-[300px] text-zinc-500">
+      <div class="text-3xl mb-4 animate-spin">⏳</div>
+      <div>加载设置中…</div>
     </div>
+  </div>

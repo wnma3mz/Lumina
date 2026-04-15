@@ -1,6 +1,8 @@
-<div class="digest-item-body" style="padding:4px 0;">
+<div class="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed prose dark:prose-invert prose-sm max-w-none">
   {% if date_header %}
-  <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">{{ date_header }}</div>
+  <div class="text-xs font-bold text-indigo-500 mb-3 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+    {{ date_header }}
+  </div>
   {% endif %}
   {{ html_content | safe }}
 </div>

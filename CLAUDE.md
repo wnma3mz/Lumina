@@ -32,10 +32,22 @@ lumina/
     setup.py           # ensure_model / lite_setup_wizard
     utils.py           # 公共工具：日志、config 路径、PID、Banner 等
   api/
-    server.py          # FastAPI app 创建，路由注册
+    server.py          # FastAPI app 创建，路由注册；提供 GET /manifest.json（PWA）
     sse.py             # SSE 流式辅助：stream_llm()
-    routers/           # 路由模块（pdf/chat/config/digest/audio/text）
-    static/index.html  # 单页 Web UI 源文件（直接编辑，启动时自动同步到 ~/.lumina/static/）
+    routers/           # 路由模块（pdf/chat/config/digest/audio/text/fragments）
+      fragments.py     # HTMX HTML 片段路由（Jinja2 渲染，返回可直接插入 DOM 的片段）
+    templates/         # Jinja2 模板（GET / 由此渲染，无静态 HTML）
+      index.html       # 主页面（HTMX + 纯 CSS tab 切换，内联 htmx.min.js，PWA meta）
+      panels/          # 各 tab 面板的初始 HTML（digest/translate/summarize/settings）
+      config_form.html # 设置表单片段（/fragments/config 返回）
+      digest_content.html  # 日报时间轴片段（/fragments/digest 返回）
+      digest_sources.html  # 数据来源图标行片段
+      pdf_progress.html / pdf_result.html / pdf_error.html  # PDF 任务状态片段
+      report_content.html  # 日报/周报/月报内容片段
+    static/
+      style.css        # Tailwind 编译产物（直接提交，无运行时构建）；含 bento-card 设计系统
+      logo.svg         # 应用图标
+      index.html       # 独立备份（含内联 HTMX），仅供离线测试，GET / 不再 serve 此文件
   providers/
     __init__.py        # 懒加载：LocalProvider / OpenAIProvider 按需 import（见下节）
     local.py           # mlx-lm 本地推理，含 Continuous Batching
@@ -121,7 +133,7 @@ def __getattr__(name: str):
 ### 日报定时生成与冷却
 - `.app` 模式：`rumps.timer(3600)` 在 `_run_with_menubar()` 中触发
 - 命令行模式：`_start_digest_timer(llm)` 用 `threading.Timer` 循环，行为一致
-- 前端：5 分钟 `setInterval` 轮询 `/v1/digest`，比对 `generated_at` 只在内容变化时重渲染
+- 前端：HTMX `hx-trigger="every 5m"` 轮询 `/fragments/digest`，后端每次重新渲染时间轴内容（无 JS 比对逻辑）
 - **启动冷却**：`maybe_generate_digest()` 在生成前先检查上次生成时间（从 digest.md mtime 恢复），若距今不足 `refresh_hours`（默认 1h）则跳过，防止每次重启都重复采集
 - **采集顺序随机化**：`_collect_all()` 每次执行前 `random.shuffle(active)` 打乱 collector 顺序，确保各来源在 LLM token 上下文中均匀分布
 
@@ -172,28 +184,28 @@ uv run --with ruff ruff check --fix <改动的文件...>
 
 ### 技术栈约定
 
-- **无构建步骤**：前端只有 HTML/CSS/原生 JS，无 Tailwind、无 npm、无编译。
-- **样式用 CSS 变量**：颜色、间距、圆角统一走 `:root` 变量（`--accent`、`--card`、`--radius`、`--shadow-sm` 等），不要硬编码具体值。
-- **HTMX 服务端渲染**：局部刷新通过后端返回 HTML 片段实现，片段内的样式依赖全局 CSS，不需要内联 Tailwind 类。
+- **Tailwind 编译产物直接提交**：`style.css` 是用 Tailwind CLI 编译的产物（3600+ 行），直接 commit 到 `lumina/api/static/style.css`。模板里可以使用 Tailwind utility class（`flex`、`text-zinc-900`、`bg-indigo-500` 等）和自定义组件类（`bento-card`）。
+- **无运行时构建步骤**：`node_modules/`、`package.json`、`tailwind.config.js`、`input.css` 均在 `.gitignore` 中，不提交，不需要在本机执行 npm/tailwind 命令即可运行项目。需要修改 Tailwind 配置时才在本地执行 `npx tailwindcss` 重新编译，然后提交生成的 `style.css`。
+- **HTMX 服务端渲染**：局部刷新通过后端 Jinja2 模板返回 HTML 片段实现（`/fragments/*` 路由），片段内的样式依赖全局 `style.css`，不需要额外引入 CSS。
+- **PWA 支持**：`GET /manifest.json` 由 `server.py` 内联返回；`index.html` 包含 `<link rel="manifest">`、`apple-mobile-web-app-capable`、`theme-color` 等 meta，支持添加到主屏幕。
+
+### 设计语言（Bento Card 风格）
+
+v0.8.0 起采用 **Bento Card** 设计风格，替代原有毛玻璃（glassmorphism）风格：
+
+- **`bento-card` 类**：圆角卡片，白色背景 / 深色模式自动切换，细边框 + 轻阴影。
+- **颜色体系**：zinc（中性灰）+ indigo（主色调）+ 各来源色（emerald=git, blue=browser, amber=clipboard, purple=notes...）。
+- **深色模式**：通过 `dark:` Tailwind variant + `<html class="dark">` 切换（JS 读写 `localStorage.theme`，跟随系统偏好）。
+- **不要引入外部图标库**：优先用 emoji；SVG 图标只用于 logo.svg。
 
 ### 布局
 
-- 优先 Flex 布局，确保在不同屏幕宽度下自适应。
-- 圆角统一 `border-radius: var(--radius)` (16px)，小组件用 `12px`。
-- 阴影统一 `box-shadow: var(--shadow-sm)`，模态框等浮层用 `var(--shadow)`。
+- Flex / Grid 布局优先，响应式使用 Tailwind `md:` 断点。
+- 设置页采用 `grid-cols-4`（左侧 `md:col-span-1` 导航，右侧 `md:col-span-3` 内容）。
 
 ### 交互反馈
 
-所有可点击元素必须有视觉反馈：
-```css
-/* 按钮标准写法 */
-transition: all .18s, transform .1s;
-cursor: pointer;
-/* hover */
-opacity: 0.85;
-/* active */
-transform: scale(0.95);
-```
+按钮用 Tailwind `hover:opacity-80 active:scale-95 transition-all` 组合，或在 `style.css` 里定义语义组件类。
 
 ### z-index 层级规范
 
@@ -210,6 +222,7 @@ transform: scale(0.95);
 - `hx-swap="outerHTML"` 会替换元素本身，导致 `id` 丢失，不可用于需要后续操作的容器。**需要保留 id 时一律用 `hx-swap="innerHTML"`**。
 - 后端 HTMX 端点必须返回 **HTML**（`HTMLResponse` 或 `TemplateResponse`），不能返回 JSON——HTMX 不解析 JSON，会直接把原始文本插入 DOM。
 - 需要在 HTMX 请求后触发 JS 逻辑，用 `hx-on::after-request` 而非 `hx-on::load`（前者在响应完成后执行，后者在元素首次插入时执行）。
+- `hx-trigger="revealed"` 用于懒加载：元素首次出现在视口（或 CSS `:checked` 让它变为 display:flex）时自动触发请求，适合设置面板等非首屏内容。
 
 ### CSS 兄弟选择器（radio tab 切换）
 
@@ -227,16 +240,13 @@ transform: scale(0.95);
 
 `~` 只能选同级后续兄弟。把 radio 放在父容器外（如 `<body>` 直接子节点），而目标元素在内部 `<div>` 里，选择器永远失效。
 
-### 审美风格
-
-参考 Apple HIG：毛玻璃卡片（`backdrop-filter: blur(20px)`）、柔和渐变背景、深色模式通过 `@media (prefers-color-scheme: dark)` 自动切换。不要引入外部图标库，优先用 emoji。
-
 ## 已知问题 / 注意事项
 
 - **网络代理**：所有外部下载失败时用 `HTTP_PROXY=http://127.0.0.1:7890`
 - **mlx 路径**：`libmlx.dylib` 必须在 `mlx/lib/`，`mlx.metallib` 必须同时放在 `mlx/` 和 `Contents/Frameworks/`
 - **Quick Action 错误「服务输入出现问题」**：Automator 调用 `lumina pdf` 时 multiprocessing spawn 子进程重走 CLI 导致的，已通过 `set_start_method("fork")` 修复，需重新打包才能生效
-- **前端无构建步骤**：前端入口是 `lumina/api/templates/index.html`（Jinja2），面板拆在 `templates/panels/*.html`，后端 HTML 片段在 `templates/*.html`。直接编辑模板文件，刷新浏览器即生效（FastAPI 每次请求都重新渲染，无需重启）。`lumina/api/static/index.html` 保留作为带内联 HTMX 的独立备份，仅供测试和离线使用，`GET /` 不再 serve 它。
+- **前端模板入口**：`lumina/api/templates/index.html`（Jinja2），面板拆在 `templates/panels/*.html`，后端 HTML 片段在 `templates/*.html`。直接编辑模板文件，刷新浏览器即生效（FastAPI 每次请求都重新渲染，无需重启）。`lumina/api/static/index.html` 保留作为带内联 HTMX 的独立备份，仅供测试和离线使用，`GET /` 不再 serve 它。
+- **style.css 修改方式**：若只改颜色/自定义组件，可直接编辑 `lumina/api/static/style.css`。若需新增 Tailwind utility class，需在本地用 `npx tailwindcss -i input.css -o style.css` 重新编译（`input.css` 和 `tailwind.config.js` 不提交到 git，只提交编译产物 `style.css`）。
 - **打包前必须清理 pyc 缓存**：PyInstaller 优先使用 `__pycache__/*.pyc` 而非源码，修改 `.py` 后若 pyc 未更新则改动不会打入包内。每次打包前运行：
   ```bash
   find lumina -name "*.pyc" -delete && find lumina -name "__pycache__" -type d -exec rm -rf {} +
@@ -254,4 +264,4 @@ transform: scale(0.95);
 
 ## 版本
 
-当前：`v0.7.0`（`pyproject.toml` 和 `scripts/lumina_full.spec` 中的 `CFBundleShortVersionString`）
+当前：`v0.8.0`（`pyproject.toml` 和 `scripts/lumina_full.spec` 中的 `CFBundleShortVersionString`）

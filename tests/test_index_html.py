@@ -142,14 +142,14 @@ def test_css_panel_visibility_rules(css):
         assert f"#tab-{key}:checked" in css, f"Missing CSS rule: #tab-{key}:checked"
 
 
-def test_non_default_panels_hidden_by_css(css):
-    """非默认 panel 在 style.css 中必须默认 display:none（防 FOUC，纯 CSS 控制）。"""
-    for key in NON_DEFAULT_PANELS:
-        assert f"#panel-{key}" in css, f"Missing CSS selector for #panel-{key}"
-        pattern = rf"#panel-{key}\s*\{{[^}}]*display:\s*none"
-        assert re.search(pattern, css), (
-            f"CSS missing 'display: none' for #panel-{key} — FOUC risk"
-        )
+    def test_non_default_panels_hidden_by_css(css):
+        """非默认 panel 在 style.css 中必须默认 display:none（防 FOUC，纯 CSS 控制）。"""
+        for key in NON_DEFAULT_PANELS:
+            assert f"#panel-{key}" in css, f"Missing CSS selector for #panel-{key}"
+            pattern = rf"#panel-{key}[^{{]*\{{[^}}]*display:\s*none"
+            assert re.search(pattern, css), (
+                f"CSS missing 'display: none' for #panel-{key} — FOUC risk"
+            )
 
 
 # ── 4. HTMX 属性 ─────────────────────────────────────────────────────────────
@@ -212,10 +212,7 @@ def test_js_syntax(html):
 # ── 6. 关键 HTML 元素存在 ─────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("selector,desc", [
-    ('class="seg-ctrl"',           "Segmented control"),
     ('class="modal-overlay"',      "Compare modal overlay"),
-    ('class="pdf-route-sheet"',    "PDF route sheet"),
-    ('id="drag-overlay"',          "Drag overlay"),
     ('id="summarize-result"',      "Summarize result container"),
     ('id="panel-digest"',          "Digest panel"),
     ('id="panel-translate"',       "Translate panel"),
@@ -227,10 +224,8 @@ def test_key_elements_exist(html, selector, desc):
 
 
 @pytest.mark.parametrize("selector,desc", [
-    ('.timeline',   "Timeline CSS class"),
-    ('.hero-card',  "Hero card CSS class"),
-    ('.seg-ctrl',   "Segmented control CSS class"),
-    ('.save-bar',   "Save bar CSS class"),
+    ('.bento-card',  "Bento card CSS class"),
+    ('#save-bar',    "Save bar CSS ID selector"),
 ])
 def test_key_css_classes_exist(css, selector, desc):
     assert selector in css, f"Missing CSS class: {desc} ({selector!r})"

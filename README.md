@@ -146,20 +146,22 @@ http://127.0.0.1:31821/v1
 ### 架构
 
 ```
-┌──────────────────────────────────────────────────┐
-│               HTTP Client                         │
-│  (浏览器插件 / lumina pdf / lumina summarize)      │
-└──────────────────┬───────────────────────────────┘
-                   │ OpenAI 兼容 API
-┌──────────────────▼───────────────────────────────┐
-│               FastAPI Server                      │
-│  /v1/chat/completions  /v1/translate              │
-│  /v1/summarize  /v1/audio/transcriptions          │
-│  /v1/digest  /v1/digest/refresh  /v1/digest/export│
-└──────────────────┬───────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│       浏览器 / PWA（http://127.0.0.1:31821）          │
+│       浏览器插件 / lumina pdf / lumina summarize      │
+└──────────────────┬───────────────────────────────────┘
+                   │
+┌──────────────────▼───────────────────────────────────┐
+│                  FastAPI Server                       │
+│  GET  /          → Jinja2 模板渲染 Web UI（HTMX PWA）│
+│  GET  /fragments/* → HTMX HTML 片段（局部刷新）      │
+│  POST /v1/chat/completions  POST /v1/translate        │
+│  POST /v1/pdf/*   GET /v1/digest  POST /v1/digest/refresh│
+│  POST /v1/audio/transcriptions                        │
+└──────────────────┬───────────────────────────────────┘
                    │
         ┌──────────▼──────────┐
-        │   LocalProvider     │  ←→  OpenAIProvider（Lite / 远程）
+        │   LocalProvider     │  ←→  OpenAIProvider（远程）
         │  mlx-lm 本地推理    │
         └─────────────────────┘
 ```
@@ -210,15 +212,20 @@ lumina/
   main.py              # CLI 入口
   config.py            # 配置加载
   api/
-    server.py          # FastAPI 路由
-    static/index.html  # Web UI（无构建步骤）
+    server.py          # FastAPI 路由（含 PWA manifest、CORS）
+    templates/         # Jinja2 模板（Web UI 主页 + HTMX 片段）
+      index.html       # 主页面（PWA，内联 HTMX）
+      panels/          # 各 tab 面板初始 HTML
+    routers/
+      fragments.py     # HTMX HTML 片段路由（/fragments/*）
+    static/
+      style.css        # 样式（含 bento-card 设计系统）
   providers/
     local.py           # mlx-lm 本地推理（Continuous Batching）
     openai.py          # OpenAI 兼容远程接口
   digest/
     core.py            # 日报生成调度
-    collectors.py      # 数据采集（shell / git / 浏览器 / 备忘录 / 日历 / AI）
-    cursor_store.py    # 采集器游标持久化
+    collectors/        # 数据采集（shell / git / 浏览器 / 备忘录 / 日历 / AI）
   asr/                 # Whisper 语音转文字
   pdf_translate.py     # lumina pdf 实现
   pdf_summarize.py     # lumina summarize 实现

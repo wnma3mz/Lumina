@@ -1,41 +1,63 @@
-    <div id="panel-translate">
+<div id="panel-translate" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+  <div class="bento-card flex flex-col gap-6">
+    <h3 class="text-xl font-bold">文献翻译实验室</h3>
+    <p class="text-zinc-500 text-sm -mt-4">提取 PDF 文本并进行高质量的中英双向翻译，支持双语对照。</p>
 
-      <!-- PDF 上传区 -->
-      <div class="card">
-        <label>上传 PDF</label>
-        <div class="drop-zone" id="translate-drop"
-             ondragover="event.preventDefault();this.classList.add('over')"
-             ondragleave="this.classList.remove('over')"
-             ondrop="event.preventDefault();this.classList.remove('over');handleDropZone(event,'translate-file','translate-filename')">
-          <input type="file" id="translate-file" name="file" accept=".pdf"
-                 onchange="showFilename(this,'translate-filename')">
-          <div class="icon">📂</div>
-          <div class="hint">点击选择或<span onclick="document.getElementById('translate-file').click();event.stopPropagation()">拖入 PDF</span></div>
-          <div class="filename" id="translate-filename"></div>
-        </div>
+    <!-- PDF 上传区 -->
+    <div>
+      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">上传 PDF</label>
+      <div class="border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-2xl p-8 text-center cursor-pointer transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/10 hover:border-indigo-400 group relative"
+           ondragover="event.preventDefault();this.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20')"
+           ondragleave="this.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20')"
+           ondrop="event.preventDefault();this.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');handleDropZone(event,'translate-file','translate-filename')">
+        <input type="file" id="translate-file" name="file" accept=".pdf" class="absolute inset-0 opacity-0 cursor-pointer z-10"
+               onchange="showFilename(this,'translate-filename')">
+        <div class="text-4xl mb-3 group-hover:scale-110 transition-transform">📂</div>
+        <div class="text-sm text-zinc-500">点击选择或<span class="text-indigo-500 font-bold ml-1">拖入 PDF</span></div>
+        <div class="mt-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200 break-all" id="translate-filename"></div>
       </div>
-
-      <!-- URL 输入 -->
-      <div class="card">
-        <label>或输入 PDF 链接</label>
-        <div class="url-row">
-          <input class="field-input" type="url" id="translate-url" placeholder="https://example.com/paper.pdf">
-        </div>
-      </div>
-
-      <!-- 翻译方向 -->
-      <div class="card">
-        <label>翻译方向</label>
-        <div class="radio-group">
-          <button class="radio-btn selected" id="lang-zh" onclick="setTranslateLang('zh')">英 → 中</button>
-          <button class="radio-btn" id="lang-en" onclick="setTranslateLang('en')">中 → 英</button>
-        </div>
-      </div>
-
-      <!-- 提交按钮 -->
-      <button class="btn-primary" id="translate-btn" onclick="startTranslate()">开始翻译</button>
-
-      <!-- 状态区（进度/结果，由 JS + HTMX 管理） -->
-      <div id="translate-status"></div>
-
     </div>
+
+    <!-- URL 输入 -->
+    <div>
+      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">或输入 PDF 链接</label>
+      <input type="url" id="translate-url" placeholder="https://example.com/paper.pdf" 
+             class="w-full px-4 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm">
+    </div>
+
+    <!-- 翻译方向 -->
+    <div>
+      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">翻译方向</label>
+      <div class="flex gap-4">
+        <button class="flex-1 py-3 rounded-xl border border-transparent bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-500/20 transition-all" id="lang-zh" onclick="setTranslateLangUI('zh')">英 → 中</button>
+        <button class="flex-1 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-transparent text-zinc-600 dark:text-zinc-400 font-bold text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all" id="lang-en" onclick="setTranslateLangUI('en')">中 → 英</button>
+      </div>
+      <script>
+        function setTranslateLangUI(lang) {
+          setTranslateLang(lang); // Call original function
+          const zh = document.getElementById('lang-zh');
+          const en = document.getElementById('lang-en');
+          
+          if(lang === 'zh') {
+            zh.className = 'flex-1 py-3 rounded-xl border border-transparent bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-500/20 transition-all';
+            en.className = 'flex-1 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-transparent text-zinc-600 dark:text-zinc-400 font-bold text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all';
+          } else {
+            en.className = 'flex-1 py-3 rounded-xl border border-transparent bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-500/20 transition-all';
+            zh.className = 'flex-1 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-transparent text-zinc-600 dark:text-zinc-400 font-bold text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all';
+          }
+        }
+      </script>
+    </div>
+
+    <!-- 提交按钮 -->
+    <button class="w-full py-4 mt-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-black tracking-wide hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-xl" id="translate-btn" onclick="startTranslate()">开始翻译</button>
+  </div>
+
+  <div class="bento-card flex flex-col gap-4">
+    <h3 class="text-xl font-bold mb-2">任务追踪</h3>
+    <!-- 状态区（进度/结果，由 JS + HTMX 管理） -->
+    <div id="translate-status" class="flex-1 flex flex-col items-center justify-center text-zinc-400 text-sm">
+      等待提交任务...
+    </div>
+  </div>
+</div>

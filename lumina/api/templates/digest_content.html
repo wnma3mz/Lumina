@@ -1,37 +1,63 @@
 {% if generating %}
-<div class="card" style="text-align:center;padding:32px 16px;color:var(--sub);">
-  <div style="font-size:28px;margin-bottom:12px;">⏳</div>
-  <div style="font-size:14px;">正在生成摘要…</div>
+<div class="bento-card flex flex-col items-center justify-center min-h-[300px] text-zinc-500">
+  <div class="text-4xl mb-4 animate-spin">⏳</div>
+  <div class="font-bold">正在生成摘要…</div>
 </div>
 {% elif not sections %}
-<div class="card" style="text-align:center;padding:32px 16px;color:var(--sub);">
-  <div style="font-size:28px;margin-bottom:12px;">📭</div>
-  <div style="font-size:14px;">暂无活动摘要</div>
-  <div style="font-size:12px;margin-top:8px;">点击刷新按钮生成今日摘要</div>
+<div class="bento-card flex flex-col items-center justify-center min-h-[300px] text-zinc-500">
+  <div class="text-4xl mb-4">📭</div>
+  <div class="font-bold">暂无活动摘要</div>
+  <div class="text-xs mt-2">点击右上方刷新按钮生成今日摘要</div>
 </div>
 {% else %}
 {% if hero_text %}
-<div style="padding:2px 0 12px;">
-  <div class="hero-label">今日总结</div>
-  <div class="hero-card">{{ hero_text }}</div>
+<div class="mb-8 px-4 border-l-4 border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10 py-3 rounded-r-2xl">
+  <div class="text-[10px] font-extrabold uppercase tracking-widest text-indigo-500 mb-1">今日总结</div>
+  <div class="text-zinc-700 dark:text-zinc-300 font-medium leading-relaxed">{{ hero_text }}</div>
 </div>
 {% endif %}
-<div class="timeline">
+
+<div class="flex-1 space-y-8 relative border-l-2 border-zinc-100 dark:border-zinc-800 ml-3 pl-8">
   {% for sec in sections %}
-  <div class="tl-item">
-    <div class="tl-dot{% if sec.filter_key %} src-{{ sec.filter_key }}{% endif %}">{{ sec.icon }}</div>
-    <div class="tl-card">
-      <details {% if sec.open %}open{% endif %}>
-        <summary class="tl-header">
-          <span>
-            <span style="color:var(--sub);font-size:11px;margin-right:5px;">{{ loop.index }}.</span>
-            <span>{{ sec.title }}</span>
-          </span>
-          <span style="color:var(--sub);font-size:12px;">›</span>
-        </summary>
-        <div class="tl-body digest-item-body">{{ sec.html | safe }}</div>
-      </details>
+  <div class="relative group">
+    <!-- Timeline Dot -->
+    <div class="absolute -left-[43px] top-1 w-6 h-6 rounded-full 
+        {% if sec.filter_key == 'shell' %}bg-indigo-500
+        {% elif sec.filter_key == 'git' %}bg-emerald-500
+        {% elif sec.filter_key == 'clipboard' %}bg-amber-500
+        {% elif sec.filter_key == 'browser' %}bg-blue-500
+        {% elif sec.filter_key == 'notes' %}bg-purple-500
+        {% elif sec.filter_key == 'calendar' %}bg-rose-500
+        {% elif sec.filter_key == 'markdown' %}bg-cyan-500
+        {% elif sec.filter_key == 'ai' %}bg-fuchsia-500
+        {% else %}bg-zinc-400{% endif %}
+        border-4 border-white dark:border-zinc-900 shadow-md group-hover:scale-125 transition-transform flex items-center justify-center">
+        <span class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-white">{{ sec.icon }}</span>
     </div>
+
+    <!-- Content Area as details -->
+    <details class="group/detail" {% if loop.index == 1 %}open{% endif %}>
+      <summary class="flex justify-between items-start mb-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+          <h4 class="font-extrabold text-lg text-zinc-900 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              <span class="inline-block transition-transform group-open/detail:rotate-90 mr-1 text-sm text-zinc-400">▶</span>
+              {{ sec.title }}
+          </h4>
+          <span class="text-[10px] font-bold text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded">条目 {{ loop.index }}</span>
+      </summary>
+      
+      <div class="mt-4 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed prose dark:prose-invert prose-sm max-w-none">
+          {{ sec.html | safe }}
+      </div>
+
+      <!-- Tags (Optional, based on filter_key) -->
+      {% if sec.filter_key %}
+      <div class="mt-3 flex gap-2">
+          <span class="text-[10px] font-bold px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">
+              {{ sec.filter_key }}
+          </span>
+      </div>
+      {% endif %}
+    </details>
   </div>
   {% endfor %}
 </div>
