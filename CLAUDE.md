@@ -168,12 +168,75 @@ uv run --with ruff ruff check --fix <改动的文件...>
 - **禁止在未经用户明确许可的情况下 push 到远端**（包括 `git push`、`gh release`）
 - commit 可以随时做，push / release 必须等用户说「可以 push」或「发包」
 
+## 前端开发准则
+
+### 技术栈约定
+
+- **无构建步骤**：前端只有 HTML/CSS/原生 JS，无 Tailwind、无 npm、无编译。
+- **样式用 CSS 变量**：颜色、间距、圆角统一走 `:root` 变量（`--accent`、`--card`、`--radius`、`--shadow-sm` 等），不要硬编码具体值。
+- **HTMX 服务端渲染**：局部刷新通过后端返回 HTML 片段实现，片段内的样式依赖全局 CSS，不需要内联 Tailwind 类。
+
+### 布局
+
+- 优先 Flex 布局，确保在不同屏幕宽度下自适应。
+- 圆角统一 `border-radius: var(--radius)` (16px)，小组件用 `12px`。
+- 阴影统一 `box-shadow: var(--shadow-sm)`，模态框等浮层用 `var(--shadow)`。
+
+### 交互反馈
+
+所有可点击元素必须有视觉反馈：
+```css
+/* 按钮标准写法 */
+transition: all .18s, transform .1s;
+cursor: pointer;
+/* hover */
+opacity: 0.85;
+/* active */
+transform: scale(0.95);
+```
+
+### z-index 层级规范
+
+| 层 | 值 | 用途 |
+|---|---|---|
+| 内容 | 默认 | 正常文档流 |
+| 保存栏 | 100 | `#save-bar`（底部固定栏） |
+| Sheet | 200 | `pdf-route-sheet`（底部滑出面板） |
+| 模态框 | 300 | `compare-modal`（对比浮层） |
+| 拖拽遮罩 | 400 | `#drag-overlay` |
+
+### HTMX 使用规范
+
+- `hx-swap="outerHTML"` 会替换元素本身，导致 `id` 丢失，不可用于需要后续操作的容器。**需要保留 id 时一律用 `hx-swap="innerHTML"`**。
+- 后端 HTMX 端点必须返回 **HTML**（`HTMLResponse` 或 `TemplateResponse`），不能返回 JSON——HTMX 不解析 JSON，会直接把原始文本插入 DOM。
+- 需要在 HTMX 请求后触发 JS 逻辑，用 `hx-on::after-request` 而非 `hx-on::load`（前者在响应完成后执行，后者在元素首次插入时执行）。
+
+### CSS 兄弟选择器（radio tab 切换）
+
+本项目 tab 切换用 `<input type="radio"> + CSS :checked ~` 实现，**零 JS**：
+
+```html
+<!-- radio 必须与 .tabs、<main>、#save-bar 处于同一父元素下 -->
+<div id="app">
+  <input type="radio" id="tab-X" hidden>   <!-- 兄弟节点 -->
+  <div class="tabs">...</div>              <!-- 兄弟节点 -->
+  <main>...</main>                         <!-- 兄弟节点 -->
+  <div id="save-bar">...</div>             <!-- 兄弟节点 -->
+</div>
+```
+
+`~` 只能选同级后续兄弟。把 radio 放在父容器外（如 `<body>` 直接子节点），而目标元素在内部 `<div>` 里，选择器永远失效。
+
+### 审美风格
+
+参考 Apple HIG：毛玻璃卡片（`backdrop-filter: blur(20px)`）、柔和渐变背景、深色模式通过 `@media (prefers-color-scheme: dark)` 自动切换。不要引入外部图标库，优先用 emoji。
+
 ## 已知问题 / 注意事项
 
 - **网络代理**：所有外部下载失败时用 `HTTP_PROXY=http://127.0.0.1:7890`
 - **mlx 路径**：`libmlx.dylib` 必须在 `mlx/lib/`，`mlx.metallib` 必须同时放在 `mlx/` 和 `Contents/Frameworks/`
 - **Quick Action 错误「服务输入出现问题」**：Automator 调用 `lumina pdf` 时 multiprocessing spawn 子进程重走 CLI 导致的，已通过 `set_start_method("fork")` 修复，需重新打包才能生效
-- **前端无构建步骤**：`lumina/api/static/index.html` 直接编辑，改完立即生效（开发模式下刷新页面即可）
+- **前端无构建步骤**：前端入口是 `lumina/api/templates/index.html`（Jinja2），面板拆在 `templates/panels/*.html`，后端 HTML 片段在 `templates/*.html`。直接编辑模板文件，刷新浏览器即生效（FastAPI 每次请求都重新渲染，无需重启）。`lumina/api/static/index.html` 保留作为带内联 HTMX 的独立备份，仅供测试和离线使用，`GET /` 不再 serve 它。
 - **打包前必须清理 pyc 缓存**：PyInstaller 优先使用 `__pycache__/*.pyc` 而非源码，修改 `.py` 后若 pyc 未更新则改动不会打入包内。每次打包前运行：
   ```bash
   find lumina -name "*.pyc" -delete && find lumina -name "__pycache__" -type d -exec rm -rf {} +

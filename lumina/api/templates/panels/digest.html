@@ -1,0 +1,64 @@
+    <div id="panel-digest">
+
+      <!-- 子 tab bar (Segmented Control) -->
+      <div class="card" style="padding:8px 12px;">
+        <div class="seg-ctrl" id="digest-seg-ctrl">
+          <button class="seg-btn active" id="seg-snapshots"
+                  hx-get="/fragments/digest"
+                  hx-target="#digest-content"
+                  hx-swap="innerHTML"
+                  hx-indicator="#digest-loading"
+                  onclick="setDigestSeg('snapshots')">活动快照</button>
+          <button class="seg-btn" id="seg-daily"
+                  hx-get="/fragments/report/daily/latest"
+                  hx-target="#digest-content"
+                  hx-swap="innerHTML"
+                  hx-indicator="#digest-loading"
+                  onclick="setDigestSeg('daily')">日报</button>
+          <button class="seg-btn" id="seg-weekly"
+                  hx-get="/fragments/report/weekly/latest"
+                  hx-target="#digest-content"
+                  hx-swap="innerHTML"
+                  hx-indicator="#digest-loading"
+                  onclick="setDigestSeg('weekly')">周报</button>
+          <button class="seg-btn" id="seg-monthly"
+                  hx-get="/fragments/report/monthly/latest"
+                  hx-target="#digest-content"
+                  hx-swap="innerHTML"
+                  hx-indicator="#digest-loading"
+                  onclick="setDigestSeg('monthly')">月报</button>
+        </div>
+      </div>
+
+      <!-- 数据来源图标行 + 立即生成按钮（合并卡片） -->
+      <div class="card" style="padding:10px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div id="digest-sources"
+               hx-get="/fragments/digest/sources"
+               hx-trigger="load"
+               hx-swap="innerHTML"
+               style="flex:1;min-width:0;">
+            <div class="source-row" style="color:var(--sub);font-size:13px;">加载中…</div>
+          </div>
+          <button class="opt-btn selected" style="padding:5px 12px;font-size:13px;font-weight:600;flex-shrink:0;"
+                  hx-post="/v1/digest/refresh"
+                  hx-target="#digest-status"
+                  hx-swap="innerHTML"
+                  hx-indicator="#digest-loading"
+                  hx-on::after-request="setTimeout(function(){ htmx.trigger('#digest-content','refresh'); }, 3000)">立即生成</button>
+        </div>
+        <span id="digest-status" style="font-size:12px;color:var(--sub);display:block;margin-top:4px;min-height:16px;"></span>
+      </div>
+
+      <!-- 加载指示器 -->
+      <div id="digest-loading" class="htmx-indicator" style="text-align:center;padding:8px;color:var(--sub);font-size:13px;">加载中…</div>
+
+      <!-- 内容区：初始加载 + 每5分钟轮询 + 手动 refresh 事件 -->
+      <div id="digest-content"
+           hx-get="/fragments/digest"
+           hx-trigger="load, every 300s, refresh"
+           hx-swap="innerHTML">
+        <div style="text-align:center;padding:32px;color:var(--sub)">加载中…</div>
+      </div>
+
+    </div>

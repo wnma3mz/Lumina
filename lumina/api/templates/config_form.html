@@ -1,0 +1,330 @@
+<div id="settings-inner">
+
+<!-- 子 Tab 分段控制器 -->
+<div class="card" style="padding:8px 12px;margin-bottom:0;">
+  <div class="seg-ctrl" id="settings-seg-ctrl">
+    <button class="seg-btn active" onclick="switchSettingsSubTab('model', this)">模型</button>
+    <button class="seg-btn" onclick="switchSettingsSubTab('digest', this)">日报</button>
+    <button class="seg-btn" onclick="switchSettingsSubTab('interact', this)">交互</button>
+    <button class="seg-btn" onclick="switchSettingsSubTab('server', this)">服务器</button>
+  </div>
+</div>
+
+<!-- ── 模型 tab ── -->
+<div id="stab-model" class="settings-subtab" style="display:flex;flex-direction:column;gap:14px;">
+
+  <!-- LLM 提供商 -->
+  <div class="card">
+    <label>LLM 提供商</label>
+    <div class="field-group">
+      <div class="radio-group" id="provider-type-group">
+        <button type="button" class="radio-btn{% if cfg.provider.type == 'local' %} selected{% endif %}"
+                onclick="setProviderType('local')">本地模型</button>
+        <button type="button" class="radio-btn{% if cfg.provider.type == 'openai' %} selected{% endif %}"
+                onclick="setProviderType('openai')">OpenAI 兼容</button>
+      </div>
+      <input type="hidden" name="provider.type" id="provider-type-input" value="{{ cfg.provider.type }}">
+    </div>
+
+    {% if cfg.provider.type == 'local' %}
+    <div id="local-fields" style="display:block;margin-top:12px;">
+    {% else %}
+    <div id="local-fields" style="display:none;margin-top:12px;">
+    {% endif %}
+      <div class="field-group">
+        <div class="field-label">本地模型路径</div>
+        <input class="field-input" type="text" name="provider.model_path"
+               value="{{ cfg.provider.model_path }}"
+               placeholder="~/.lumina/models/qwen...">
+        <div class="field-hint">模型目录的绝对路径（留空使用默认）</div>
+      </div>
+    </div>
+
+    {% if cfg.provider.type == 'openai' %}
+    <div id="openai-fields" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+    {% else %}
+    <div id="openai-fields" style="display:none;flex-direction:column;gap:10px;margin-top:12px;">
+    {% endif %}
+      <div class="field-group">
+        <div class="field-label">Base URL</div>
+        <input class="field-input" type="url" name="provider.openai.base_url"
+               value="{{ cfg.provider.openai.base_url }}"
+               placeholder="http://192.168.1.10:8080/v1">
+      </div>
+      <div class="field-group">
+        <div class="field-label">API Key</div>
+        <input class="field-input" type="password" name="provider.openai.api_key"
+               value="{{ cfg.provider.openai.api_key }}"
+               placeholder="sk-...">
+      </div>
+      <div class="field-group">
+        <div class="field-label">模型名称</div>
+        <input class="field-input" type="text" name="provider.openai.model"
+               value="{{ cfg.provider.openai.model }}"
+               placeholder="gpt-4o">
+      </div>
+    </div>
+
+    <!-- 采样参数 -->
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">采样参数</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field-group">
+          <div class="field-label">Temperature</div>
+          <input class="field-input" type="number" min="0" max="2" step="0.05"
+                 name="provider.sampling.temperature" value="{{ cfg.provider.sampling.temperature }}">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Top-P</div>
+          <input class="field-input" type="number" min="0" max="1" step="0.05"
+                 name="provider.sampling.top_p" value="{{ cfg.provider.sampling.top_p }}">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Top-K</div>
+          <input class="field-input" type="number" min="0" max="200" step="1"
+                 name="provider.sampling.top_k" value="{{ cfg.provider.sampling.top_k }}">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Min-P</div>
+          <input class="field-input" type="number" min="0" max="1" step="0.01"
+                 name="provider.sampling.min_p" value="{{ cfg.provider.sampling.min_p }}">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Presence Penalty</div>
+          <input class="field-input" type="number" min="-2" max="2" step="0.1"
+                 name="provider.sampling.presence_penalty" value="{{ cfg.provider.sampling.presence_penalty }}">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Repetition Penalty</div>
+          <input class="field-input" type="number" min="0.5" max="2" step="0.05"
+                 name="provider.sampling.repetition_penalty" value="{{ cfg.provider.sampling.repetition_penalty }}">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Max Tokens</div>
+          <input class="field-input" type="number" min="64" max="8192" step="64"
+                 name="provider.sampling.max_tokens" value="{{ cfg.provider.sampling.max_tokens }}">
+        </div>
+      </div>
+      <div class="field-hint" style="margin-top:6px;">API 请求中显式指定的参数优先级更高</div>
+    </div>
+  </div>
+
+  <!-- 语音模型 -->
+  <div class="card">
+    <label>语音转文字</label>
+    <div class="field-group">
+      <div class="field-label">Whisper 模型</div>
+      <input class="field-input" type="text" name="whisper_model"
+             value="{{ cfg.whisper_model }}"
+             placeholder="mlx-community/whisper-tiny-mlx-4bit">
+      <div class="field-hint">修改后需重启服务生效</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 日报 tab ── -->
+<div id="stab-digest" class="settings-subtab" style="display:none;flex-direction:column;gap:14px;">
+
+  <!-- 日报 -->
+  <div class="card">
+    <label>日报</label>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="toggle-row">
+        <span>启用日报</span>
+        <label class="toggle">
+          <input type="checkbox" name="digest.enabled" {% if cfg.digest.get('enabled') %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="field-group">
+        <div class="field-label">历史时间窗口（小时）</div>
+        <input class="field-input" type="number" min="1" max="168" step="1"
+               name="digest.history_hours" value="{{ cfg.digest.get('history_hours', 24) }}">
+      </div>
+      <div class="field-group">
+        <div class="field-label">自动刷新间隔（小时）</div>
+        <input class="field-input" type="number" min="0.25" max="24" step="0.25"
+               name="digest.refresh_hours" value="{{ cfg.digest.get('refresh_hours', 1) }}">
+      </div>
+      <div class="field-group">
+        <div class="field-label">每日通知时间</div>
+        <input class="field-input" type="time" name="digest.notify_time"
+               value="{{ cfg.digest.get('notify_time', '') }}">
+        <div class="field-hint">留空禁用每日通知</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">周报生成日</div>
+        <select class="field-input" name="digest.weekly_report_day">
+          {% for i, day in [(0,'周一'), (1,'周二'), (2,'周三'), (3,'周四'), (4,'周五'), (5,'周六'), (6,'周日')] %}
+          <option value="{{ i }}" {% if cfg.digest.get('weekly_report_day', 0) == i %}selected{% endif %}>{{ day }}</option>
+          {% endfor %}
+        </select>
+        <div class="field-hint">每周在该日生成周报</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">月报生成日（每月第几日）</div>
+        <input class="field-input" type="number" min="1" max="28" step="1"
+               name="digest.monthly_report_day" value="{{ cfg.digest.get('monthly_report_day', 1) }}">
+        <div class="field-hint">每月该日生成月报（1-28）</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">扫描目录（每行一个）</div>
+        <textarea class="field-input" rows="5" name="digest.scan_dirs_text">{{ (cfg.digest.get('scan_dirs') or []) | join('\n') }}</textarea>
+        <div class="field-hint">留空则不扫描任何目录</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LLM 请求历史 -->
+  <div class="card">
+    <label>LLM 请求历史</label>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="toggle-row">
+        <span>启用请求历史</span>
+        <label class="toggle">
+          <input type="checkbox" name="request_history.enabled" {% if cfg.request_history.enabled %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>保存完整正文</span>
+        <label class="toggle">
+          <input type="checkbox" name="request_history.capture_full_body" {% if cfg.request_history.capture_full_body %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="field-group">
+        <div class="field-label">保留天数</div>
+        <input class="field-input" type="number" min="0" max="365" step="1"
+               name="request_history.retention_days" value="{{ cfg.request_history.retention_days }}">
+      </div>
+      <div class="field-group">
+        <div class="field-label">最大总空间（MB）</div>
+        <input class="field-input" type="number" min="1" max="10240" step="1"
+               name="request_history.max_total_mb" value="{{ cfg.request_history.max_total_mb }}">
+      </div>
+      <div class="field-group">
+        <div class="field-label">多少天后压缩</div>
+        <input class="field-input" type="number" min="0" max="30" step="1"
+               name="request_history.compress_after_days" value="{{ cfg.request_history.compress_after_days }}">
+      </div>
+      <div class="toggle-row">
+        <span>启动时自动清理</span>
+        <label class="toggle">
+          <input type="checkbox" name="request_history.cleanup_on_startup" {% if cfg.request_history.cleanup_on_startup %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="field-group">
+        <div class="field-label">存储位置</div>
+        <div class="field-hint"><code>~/.lumina/request_history/</code></div>
+        <div class="field-actions">
+          <button type="button" class="opt-btn"
+                  onclick="pruneRequestHistory(this)">立即清理历史</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 交互 tab ── -->
+<div id="stab-interact" class="settings-subtab" style="display:none;flex-direction:column;gap:14px;">
+
+  <!-- PTT 录音 -->
+  <div class="card">
+    <label>录音热键（PTT）</label>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="toggle-row">
+        <span>启用 PTT</span>
+        <label class="toggle">
+          <input type="checkbox" name="ptt.enabled" {% if cfg.ptt.enabled %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="field-group">
+        <div class="field-label">热键</div>
+        <input class="field-input" type="text" name="ptt.hotkey"
+               value="{{ cfg.ptt.hotkey }}"
+               placeholder="cmd / f5 / caps_lock">
+      </div>
+      <div class="field-group">
+        <div class="field-label">识别语言</div>
+        <select class="field-input" name="ptt.language">
+          <option value="zh" {% if cfg.ptt.language == 'zh' %}selected{% endif %}>中文</option>
+          <option value="en" {% if cfg.ptt.language == 'en' %}selected{% endif %}>English</option>
+          <option value="" {% if not cfg.ptt.language %}selected{% endif %}>自动检测</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- 系统提示词 -->
+  <div class="card">
+    <label>系统提示词</label>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      {% for item in system_prompt_items %}
+      <div class="field-group">
+        <div class="field-label">{{ item.label }}</div>
+        <textarea class="field-input" rows="3" name="system_prompts.{{ item.key }}">{{ item.value }}</textarea>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 服务器 tab ── -->
+<div id="stab-server" class="settings-subtab" style="display:none;flex-direction:column;gap:14px;">
+
+  <div class="card">
+    <label>服务器</label>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="field-group">
+        <div class="field-label">监听地址</div>
+        <input class="field-input" type="text" name="host"
+               value="{{ cfg.host }}" placeholder="127.0.0.1">
+        <div class="field-hint">0.0.0.0 允许局域网访问，修改后需重启</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">端口</div>
+        <input class="field-input" type="number" min="1024" max="65535"
+               name="port" value="{{ cfg.port }}">
+        <div class="field-hint">修改后需重启服务生效</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">日志级别</div>
+        <select class="field-input" name="log_level">
+          {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR'] %}
+          <option {% if cfg.log_level == level %}selected{% endif %}>{{ level }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 底部占位 -->
+<div style="height:80px;"></div>
+
+</div><!-- #settings-inner -->
+
+<script>
+function setProviderType(type) {
+  document.getElementById('provider-type-input').value = type;
+  document.querySelectorAll('#provider-type-group .radio-btn').forEach(function(b) { b.classList.remove('selected'); });
+  event.target.classList.add('selected');
+  document.getElementById('local-fields').style.display = type === 'local' ? 'block' : 'none';
+  document.getElementById('openai-fields').style.display = type === 'openai' ? 'flex' : 'none';
+}
+
+function switchSettingsSubTab(key, btn) {
+  document.querySelectorAll('#settings-seg-ctrl .seg-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.querySelectorAll('.settings-subtab').forEach(function(el) { el.style.display = 'none'; });
+  var tab = document.getElementById('stab-' + key);
+  if (tab) tab.style.display = 'flex';
+}
+</script>

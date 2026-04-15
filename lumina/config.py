@@ -112,13 +112,13 @@ class Config:
                 or _DEFAULT_MODEL
             ),
             sampling=SamplingConfig(
-                temperature=float(sc["temperature"]) if "temperature" in sc else None,
-                top_p=float(sc["top_p"]) if "top_p" in sc else None,
-                top_k=int(sc["top_k"]) if "top_k" in sc else None,
-                min_p=float(sc["min_p"]) if "min_p" in sc else None,
-                presence_penalty=float(sc["presence_penalty"]) if "presence_penalty" in sc else None,
-                repetition_penalty=float(sc["repetition_penalty"]) if "repetition_penalty" in sc else None,
-                max_tokens=int(sc["max_tokens"]) if "max_tokens" in sc else None,
+                temperature=float(sc["temperature"]) if "temperature" in sc else 0.7,
+                top_p=float(sc["top_p"]) if "top_p" in sc else 0.8,
+                top_k=int(sc["top_k"]) if "top_k" in sc else 20,
+                min_p=float(sc["min_p"]) if "min_p" in sc else 0.0,
+                presence_penalty=float(sc["presence_penalty"]) if "presence_penalty" in sc else 1.5,
+                repetition_penalty=float(sc["repetition_penalty"]) if "repetition_penalty" in sc else 1.0,
+                max_tokens=int(sc["max_tokens"]) if "max_tokens" in sc else 512,
             ),
             openai=OpenAIProviderConfig(
                 base_url=os.environ.get("LUMINA_OPENAI_BASE_URL") or oa.get("base_url", ""),
@@ -144,6 +144,8 @@ class Config:
         self.log_level: str = os.environ.get("LUMINA_LOG_LEVEL") or data.get("log_level", "INFO")
 
         # ── System Prompts ────────────────────────────────────────────────────
+        # 所有 system prompt 默认值统一来自 bundle 内置 config.json；
+        # cli/server.py 启动时会将 bundle 默认值与用户配置合并后注入运行时。
         self.system_prompts: Dict[str, str] = data.get("system_prompts", {})
 
         # ── Digest ────────────────────────────────────────────────────────────
@@ -194,6 +196,10 @@ def reset_config() -> None:
 LUMINA_HOME = Path.home() / ".lumina"
 DIGEST_PATH = LUMINA_HOME / "digest.md"
 DIGEST_CONTEXT_LOG_DIR = LUMINA_HOME / "digest_context_log"
+DIGEST_SNAPSHOTS_DIR = LUMINA_HOME / "snapshots"
+REPORTS_DAILY_DIR = LUMINA_HOME / "reports" / "daily"
+REPORTS_WEEKLY_DIR = LUMINA_HOME / "reports" / "weekly"
+REPORTS_MONTHLY_DIR = LUMINA_HOME / "reports" / "monthly"
 PDF_CACHE_DIR = LUMINA_HOME / "cache" / "pdf"
 REQUEST_HISTORY_DIR = LUMINA_HOME / "request_history"
 

@@ -1,0 +1,35 @@
+    <div id="panel-summarize">
+
+      <!-- PDF 上传区 -->
+      <div class="card">
+        <label>上传 PDF</label>
+        <div class="drop-zone" id="summarize-drop"
+             ondragover="event.preventDefault();this.classList.add('over')"
+             ondragleave="this.classList.remove('over')"
+             ondrop="event.preventDefault();this.classList.remove('over');handleDropZone(event,'summarize-file','summarize-filename')">
+          <input type="file" id="summarize-file" name="file" accept=".pdf"
+                 onchange="showFilename(this,'summarize-filename')">
+          <div class="icon">📂</div>
+          <div class="hint">点击选择或<span onclick="document.getElementById('summarize-file').click();event.stopPropagation()">拖入 PDF</span></div>
+          <div class="filename" id="summarize-filename"></div>
+        </div>
+      </div>
+
+      <!-- URL 输入 -->
+      <div class="card">
+        <label>或输入 PDF 链接</label>
+        <div class="url-row">
+          <input class="field-input" type="url" id="summarize-url" placeholder="https://example.com/paper.pdf">
+        </div>
+      </div>
+
+      <!-- 提交按钮 -->
+      <button class="btn-primary" id="summarize-btn" onclick="startSummarize()">生成总结</button>
+
+      <!-- 加载指示器 -->
+      <div id="summarize-spinner" class="htmx-indicator" style="text-align:center;padding:16px;color:var(--sub);">生成中…</div>
+
+      <!-- 总结结果 -->
+      <div id="summarize-result"></div>
+
+    </div>

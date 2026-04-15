@@ -40,12 +40,23 @@ else:
 # faster-whisper 模块级缓存，避免每次转写重新加载
 _fw_model_cache: dict = {}
 
+# 运行时由 set_asr_prompts() 注入（由 cli/server.py / 配置热更新调用）
+_asr_prompt_zh: Optional[str] = None
+_asr_prompt_en: Optional[str] = None
+
+
+def set_asr_prompts(zh: str, en: str) -> None:
+    """从 config.system_prompts 注入自定义 ASR initial prompt。"""
+    global _asr_prompt_zh, _asr_prompt_en
+    _asr_prompt_zh = zh or None
+    _asr_prompt_en = en or None
+
 
 def _make_initial_prompt(language: Optional[str]) -> Optional[str]:
     if language == "zh":
-        return "以下是普通话的语音识别结果，包含标准的中文标点符号。"
+        return _asr_prompt_zh
     if language == "en":
-        return "The following is a transcription in English."
+        return _asr_prompt_en
     return None
 
 

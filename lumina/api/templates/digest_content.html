@@ -1,0 +1,38 @@
+{% if generating %}
+<div class="card" style="text-align:center;padding:32px 16px;color:var(--sub);">
+  <div style="font-size:28px;margin-bottom:12px;">⏳</div>
+  <div style="font-size:14px;">正在生成摘要…</div>
+</div>
+{% elif not sections %}
+<div class="card" style="text-align:center;padding:32px 16px;color:var(--sub);">
+  <div style="font-size:28px;margin-bottom:12px;">📭</div>
+  <div style="font-size:14px;">暂无活动摘要</div>
+  <div style="font-size:12px;margin-top:8px;">点击刷新按钮生成今日摘要</div>
+</div>
+{% else %}
+{% if hero_text %}
+<div style="padding:2px 0 12px;">
+  <div class="hero-label">今日总结</div>
+  <div class="hero-card">{{ hero_text }}</div>
+</div>
+{% endif %}
+<div class="timeline">
+  {% for sec in sections %}
+  <div class="tl-item">
+    <div class="tl-dot{% if sec.filter_key %} src-{{ sec.filter_key }}{% endif %}">{{ sec.icon }}</div>
+    <div class="tl-card">
+      <details {% if sec.open %}open{% endif %}>
+        <summary class="tl-header">
+          <span>
+            <span style="color:var(--sub);font-size:11px;margin-right:5px;">{{ loop.index }}.</span>
+            <span>{{ sec.title }}</span>
+          </span>
+          <span style="color:var(--sub);font-size:12px;">›</span>
+        </summary>
+        <div class="tl-body digest-item-body">{{ sec.html | safe }}</div>
+      </details>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

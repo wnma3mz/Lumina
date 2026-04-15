@@ -1,0 +1,41 @@
+    <div id="panel-translate">
+
+      <!-- PDF 上传区 -->
+      <div class="card">
+        <label>上传 PDF</label>
+        <div class="drop-zone" id="translate-drop"
+             ondragover="event.preventDefault();this.classList.add('over')"
+             ondragleave="this.classList.remove('over')"
+             ondrop="event.preventDefault();this.classList.remove('over');handleDropZone(event,'translate-file','translate-filename')">
+          <input type="file" id="translate-file" name="file" accept=".pdf"
+                 onchange="showFilename(this,'translate-filename')">
+          <div class="icon">📂</div>
+          <div class="hint">点击选择或<span onclick="document.getElementById('translate-file').click();event.stopPropagation()">拖入 PDF</span></div>
+          <div class="filename" id="translate-filename"></div>
+        </div>
+      </div>
+
+      <!-- URL 输入 -->
+      <div class="card">
+        <label>或输入 PDF 链接</label>
+        <div class="url-row">
+          <input class="field-input" type="url" id="translate-url" placeholder="https://example.com/paper.pdf">
+        </div>
+      </div>
+
+      <!-- 翻译方向 -->
+      <div class="card">
+        <label>翻译方向</label>
+        <div class="radio-group">
+          <button class="radio-btn selected" id="lang-zh" onclick="setTranslateLang('zh')">英 → 中</button>
+          <button class="radio-btn" id="lang-en" onclick="setTranslateLang('en')">中 → 英</button>
+        </div>
+      </div>
+
+      <!-- 提交按钮 -->
+      <button class="btn-primary" id="translate-btn" onclick="startTranslate()">开始翻译</button>
+
+      <!-- 状态区（进度/结果，由 JS + HTMX 管理） -->
+      <div id="translate-status"></div>
+
+    </div>

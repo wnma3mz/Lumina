@@ -41,35 +41,6 @@ logger = logging.getLogger("lumina.digest")
 # 当前进程启动时间，用于识别旧状态
 _PROCESS_STARTED_TS = time.time()
 
-DIGEST_SYSTEM_PROMPT = """\
-你是用户的本地工作上下文助手，不是日报生成器。
-
-你的任务是根据用户最近的本地活动记录，帮助用户快速回答这几个问题：
-1. 我最近主要在做什么？
-2. 现在最可能处于哪个任务或项目阶段？
-3. 接下来最自然的下一步是什么？
-
-请遵循以下原则：
-- 优先提炼最核心的 1-3 个项目、任务或主题，不要平均概括所有活动。
-- 重点写对继续工作有帮助的信息，例如项目、文件、主题、操作、未完成事项、阻塞点、待确认点。
-- 终端命令、Git 提交、笔记、AI 对话通常比零散网页浏览更能反映真实工作重点。
-- 剪贴板、浏览器历史这类信息只有在明显相关时才写入。
-- 如果信息不足，不要臆测；可以保守表达。
-- 不要写空泛总结，不要写鼓励语，不要重复原始记录。
-
-请用 Markdown 输出，格式固定为：
-
-## 最近在推进
-用 2-4 句说明最近主要在做什么，尽量点出项目、主题或任务。
-
-## 当前上下文
-用 2-4 条简短要点说明当前做到哪、卡在哪、哪些线索值得记住。
-
-## 下一步建议
-用 2-3 条简短要点写最自然的后续动作，必须基于已有记录，不要发散。
-
-整体简洁、具体、可继续，总长度控制在 220-350 字。"""
-
 
 # ── DigestState ───────────────────────────────────────────────────────────────
 
@@ -285,7 +256,7 @@ def _save_context_log(context: str, label: str) -> None:
 
 
 async def generate_digest(llm) -> str:
-    """生成摘要，作为最新一条插入 digest.md 头部，历史记录永久保留。"""
+    """生成摘要，作为最新一条插入 digest.md 头部，历史记录永久保留。同时保存快照。"""
     _state.set_generating(True)
     try:
         context = await _collect_all()
@@ -293,8 +264,7 @@ async def generate_digest(llm) -> str:
         logger.info("Digest: generating summary...")
         with request_context(origin="digest", stream=False):
             summary = await llm.generate(
-                context, task="chat",
-                system=DIGEST_SYSTEM_PROMPT,
+                context, task="digest",
                 max_tokens=600, temperature=0.4,
             )
         now = datetime.now()
@@ -304,9 +274,63 @@ async def generate_digest(llm) -> str:
         _prepend_entry(entry)
         _state.set_generated(now.timestamp())
         logger.info("Digest: saved to %s", _DIGEST_PATH)
+        # 同时保存快照，供日报生成使用
+        try:
+            from lumina.digest.reports import save_snapshot
+            save_snapshot(entry, now)
+        except Exception as e:
+            logger.warning("Digest: failed to save snapshot: %s", e)
         return entry
     finally:
         _state.set_generating(False)
+
+
+async def generate_report(llm, report_type: str, key: str) -> Optional[str]:
+    """生成指定类型的报告（daily/weekly/monthly）并保存，返回内容。
+
+    report_type: "daily" | "weekly" | "monthly"
+    key:         对应格式的日期键（日报: YYYY-MM-DD，周报: YYYY-Www，月报: YYYY-MM）
+    """
+    from datetime import date
+    from lumina.digest.reports import (
+        build_daily_input, build_weekly_input, build_monthly_input,
+        save_report,
+    )
+
+    # task 名对应 config.system_prompts 中的 key，由 LLMEngine._resolve_system 查找
+    task_names = {
+        "daily": "daily_report",
+        "weekly": "weekly_report",
+        "monthly": "monthly_report",
+    }
+    builders = {
+        "daily": lambda: build_daily_input(date.fromisoformat(key)),
+        "weekly": lambda: build_weekly_input(key),
+        "monthly": lambda: build_monthly_input(key),
+    }
+    max_tokens_map = {"daily": 700, "weekly": 900, "monthly": 1100}
+
+    if report_type not in task_names:
+        raise ValueError(f"Unknown report_type: {report_type!r}")
+
+    input_text = builders[report_type]()
+    if not input_text:
+        logger.warning("Report(%s/%s): no input data available", report_type, key)
+        return None
+
+    logger.info("Report(%s/%s): generating...", report_type, key)
+    with request_context(origin="digest", stream=False):
+        content = await llm.generate(
+            input_text, task=task_names[report_type],
+            max_tokens=max_tokens_map[report_type],
+            temperature=0.3,
+        )
+
+    header = f"<!-- generated: {datetime.now().isoformat()} -->\n"
+    full_content = header + content.strip() + "\n"
+    save_report(report_type, key, full_content)
+    logger.info("Report(%s/%s): saved", report_type, key)
+    return full_content
 
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────

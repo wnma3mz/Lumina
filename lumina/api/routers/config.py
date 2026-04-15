@@ -58,6 +58,8 @@ class DigestPatch(BaseModel):
     refresh_hours: Optional[float] = None
     notify_time: Optional[str] = None
     enabled_collectors: Optional[List[str]] = None
+    weekly_report_day: Optional[int] = None
+    monthly_report_day: Optional[int] = None
 
 
 class PttPatch(BaseModel):
@@ -125,6 +127,17 @@ def _deep_set(base: dict, override: dict) -> dict:
     return result
 
 
+def _public_system_prompts(prompts: Optional[Dict[str, str]]) -> Dict[str, str]:
+    """过滤用户可见的 prompt key，隐藏 _readme 这类内部字段。"""
+    if not isinstance(prompts, dict):
+        return {}
+    return {
+        str(k): str(v)
+        for k, v in prompts.items()
+        if isinstance(k, str) and not k.startswith("_")
+    }
+
+
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 
 @router.get("/v1/config")
@@ -162,6 +175,8 @@ async def get_config_api():
             "refresh_hours": cfg.digest.get("refresh_hours", 1) if isinstance(cfg.digest, dict) else 1,
             "notify_time": cfg.digest.get("notify_time", "20:00") if isinstance(cfg.digest, dict) else "20:00",
             "enabled_collectors": cfg.digest.get("enabled_collectors") if isinstance(cfg.digest, dict) else None,
+            "weekly_report_day": cfg.digest.get("weekly_report_day", 0) if isinstance(cfg.digest, dict) else 0,
+            "monthly_report_day": cfg.digest.get("monthly_report_day", 1) if isinstance(cfg.digest, dict) else 1,
         },
         "ptt": {
             "enabled": cfg.ptt.enabled,
@@ -176,7 +191,7 @@ async def get_config_api():
             "compress_after_days": cfg.request_history.compress_after_days,
             "cleanup_on_startup": cfg.request_history.cleanup_on_startup,
         },
-        "system_prompts": dict(cfg.system_prompts),
+        "system_prompts": _public_system_prompts(cfg.system_prompts),
     }
 
 
@@ -268,6 +283,10 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
                 dc["notify_time"] = d.notify_time
             if d.enabled_collectors is not None:
                 dc["enabled_collectors"] = d.enabled_collectors
+            if d.weekly_report_day is not None:
+                dc["weekly_report_day"] = max(0, min(6, int(d.weekly_report_day)))
+            if d.monthly_report_day is not None:
+                dc["monthly_report_day"] = max(1, min(28, int(d.monthly_report_day)))
             data["digest"] = dc
 
         # ── ptt ───────────────────────────────────────────────────────────────
@@ -329,8 +348,17 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
     # system_prompts：原地 mutate LLMEngine._system_prompts
     if patch.system_prompts is not None:
         try:
+            from lumina.asr.transcriber import set_asr_prompts as _set_asr_prompts
+            from lumina.config import get_config
+
+            cfg = get_config()
             llm = request.app.state.llm
             llm._system_prompts.update(patch.system_prompts)
+            cfg.system_prompts.update(patch.system_prompts)
+            _set_asr_prompts(
+                zh=cfg.system_prompts.get("asr_zh", ""),
+                en=cfg.system_prompts.get("asr_en", ""),
+            )
             logger.info("Config: system_prompts hot-reloaded (%d keys)", len(patch.system_prompts))
         except Exception as e:
             logger.warning("Config: system_prompts hot-reload failed: %s", e)

@@ -168,3 +168,23 @@ async def write_upload(upload_file, dest: str) -> None:
         with open(dest, "wb") as f:
             shutil.copyfileobj(upload_file.file, f)
     await asyncio.to_thread(_sync_copy)
+
+
+def extract_pdf_pairs(dual_pdf_path: str, max_pairs: int = 200) -> list[dict]:
+    """解析 pdf2zh 双语 PDF，按 block 交替提取原文/译文段落对。"""
+    try:
+        import fitz
+    except ImportError:
+        raise RuntimeError("pymupdf 未安装")
+    doc = fitz.open(dual_pdf_path)
+    pairs = []
+    for page_num, page in enumerate(doc):
+        blocks = page.get_text("blocks")
+        text_blocks = [b[4].strip() for b in blocks if b[6] == 0 and b[4].strip()]
+        for i in range(0, len(text_blocks) - 1, 2):
+            pairs.append({"page": page_num + 1, "original": text_blocks[i], "translated": text_blocks[i + 1]})
+            if len(pairs) >= max_pairs:
+                doc.close()
+                return pairs
+    doc.close()
+    return pairs

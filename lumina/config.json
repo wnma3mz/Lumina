@@ -6,11 +6,11 @@
     "model_path": null,
     "sampling": {
       "_readme": "采样参数默认值，与当前 provider/模型绑定。API 请求中显式指定的参数优先级更高。",
-      "temperature": 0.6,
-      "top_p": 0.95,
+      "temperature": 0.7,
+      "top_p": 0.8,
       "top_k": 20,
       "min_p": 0.0,
-      "presence_penalty": 0.0,
+      "presence_penalty": 1.5,
       "repetition_penalty": 1.0,
       "max_tokens": 512
     },
@@ -26,25 +26,33 @@
   "port": 31821,
   "log_level": "INFO",
   "digest": {
-    "_readme": "日报功能配置。enabled=true 开启定时采集与生成；scan_dirs 填 [] 表示不扫描任何目录，缺省时使用内置默认列表；enabled_collectors 为 null 时全部启用，填列表可按需只启用部分来源；notify_time 为每日推送时间（HH:MM），留空禁用",
-    "enabled": false,
+    "_readme": "日报功能配置。enabled=true 开启定时采集与生成；scan_dirs 填 [] 表示不扫描任何目录，缺省时使用内置默认列表；enabled_collectors 为 null 时全部启用，填列表可按需只启用部分来源；notify_time 为每日推送时间（HH:MM），留空禁用；weekly_report_day: 0=周一…6=周日；monthly_report_day: 每月第几日（1-28）",
+    "enabled": true,
     "scan_dirs": [
       "~/Documents",
       "~/Desktop",
       "~/Projects",
+      "~/projects",
       "~/code",
       "~/dev",
+      "~/src",
+      "~/work",
       "~/workspace",
       "~/repos",
-      "~/Library/Mobile Documents/com~apple~CloudDocs",
-      "~/Library/Mobile Documents/iCloud~md~obsidian/Documents",
+      "~/notes",
+      "~/Notes",
       "~/Obsidian",
+      "~/obsidian",
       "~/Logseq",
-      "~/Notes"
+      "~/logseq",
+      "~/Library/Mobile Documents/com~apple~CloudDocs",
+      "~/Library/Mobile Documents/iCloud~md~obsidian/Documents"
     ],
     "history_hours": 24,
     "refresh_hours": 1,
     "notify_time": "20:00",
+    "weekly_report_day": 0,
+    "monthly_report_day": 1,
     "enabled_collectors": null
   },
   "ptt": {
@@ -63,11 +71,18 @@
     "cleanup_on_startup": true
   },
   "system_prompts": {
+    "_readme": "各任务的 system prompt，修改后重启生效。digest/daily_report/weekly_report/monthly_report 控制日报相关生成；asr_zh/asr_en 为语音转写的 initial_prompt。",
     "translate_to_zh": "You are a professional translator. Translate the user's text into Simplified Chinese. Output only the translated text, no explanations.",
     "translate_to_en": "You are a professional translator. Translate the user's text into English. Output only the translated text, no explanations.",
     "summarize": "你是一位专业的文档摘要助手。用简洁的中文总结用户提供的内容，不超过几句话。只输出摘要，不作任何解释。",
     "polish_zh": "你是一位中文写作顾问。请对用户的中文文本进行润色，改善语言表达、逻辑连贯性和措辞，但保持原意和风格。只输出润色后的文字，不解释改动。",
     "polish_en": "You are a professional English writing coach. Polish the user's English text to improve clarity, tone, and grammar while preserving the original meaning. Output only the polished text.",
-    "chat": "You are a helpful assistant."
+    "chat": "You are a helpful assistant.",
+    "digest": "你是用户的本地工作上下文助手，不是日报生成器。\n\n你的任务是根据用户最近的本地活动记录，帮助用户快速回答这几个问题：\n1. 我最近主要在做什么？\n2. 现在最可能处于哪个任务或项目阶段？\n3. 接下来最自然的下一步是什么？\n\n请遵循以下原则：\n- 优先提炼最核心的 1-3 个项目、任务或主题，不要平均概括所有活动。\n- 重点写对继续工作有帮助的信息，例如项目、文件、主题、操作、未完成事项、阻塞点、待确认点。\n- 终端命令、Git 提交、笔记、AI 对话通常比零散网页浏览更能反映真实工作重点。\n- 剪贴板、浏览器历史这类信息只有在明显相关时才写入。\n- 如果信息不足，不要臆测；可以保守表达。\n- 不要写空泛总结，不要写鼓励语，不要重复原始记录。\n\n请用 Markdown 输出，格式固定为：\n\n## 最近在推进\n用 2-4 句说明最近主要在做什么，尽量点出项目、主题或任务。\n\n## 当前上下文\n用 2-4 条简短要点说明当前做到哪、卡在哪、哪些线索值得记住。\n\n## 下一步建议\n用 2-3 条简短要点写最自然的后续动作，必须基于已有记录，不要发散。\n\n整体简洁、具体、可继续，总长度控制在 220-350 字。",
+    "daily_report": "你是用户的本地工作日报助手。\n\n你的任务是根据用户今天多次活动快照，生成一份结构清晰的工作日报。\n\n请遵循以下原则：\n- 提炼今天的主要工作成果，不是流水账。\n- 把相似主题的活动合并，突出项目进展、完成事项、遇到的问题。\n- TODO 项必须具体可执行，直接粘贴就能用，不要写模糊的方向。\n- 不要重复原始记录，不要写鼓励语，不要臆测。\n\n请用 Markdown 输出，格式固定为：\n\n## 今日完成\n用 3-5 条要点描述今天完成的主要事项，每条简洁具体。\n\n## 主要进展\n用 2-3 句话说明今天在哪个项目/主题上取得了推进，推进到哪个阶段。\n\n## 遇到的问题\n用 2-3 条列出今天的阻塞点或待解决问题，没有则写\"无明显阻塞\"。\n\n## TODO\n列出明天最应该处理的具体任务，每条格式为：\n- [ ] 具体动作（项目/文件/功能）\n要求：3-6 条，每条一句话，可直接粘贴到任务管理工具使用。\n\n整体简洁、具体，总长度控制在 300-450 字。",
+    "weekly_report": "你是用户的本地工作周报助手。\n\n你的任务是根据用户这一周每天的日报，生成一份结构清晰的工作周报。\n\n请遵循以下原则：\n- 按项目或主题归纳，不要按天重复列举。\n- 突出本周最重要的进展、决策或里程碑。\n- 诚实反映本周的问题与卡点，不要粉饰。\n- TODO 项要明确可执行，便于直接用于计划安排。\n\n请用 Markdown 输出，格式固定为：\n\n## 本周核心成果\n用 3-5 条要点列出本周最重要的完成事项或里程碑。\n\n## 项目进展\n按项目/主题分段，每段 2-3 句说明本周做了什么、到了哪个阶段。\n\n## 问题与风险\n用 2-4 条列出本周遇到的问题、阻塞或潜在风险，没有则写\"无明显问题\"。\n\n## TODO\n列出下周最重要的具体任务，每条格式为：\n- [ ] 具体动作（项目/功能/目标）\n要求：5-8 条，按优先级排列，每条可直接粘贴到任务管理工具使用。\n\n整体清晰、具体，总长度控制在 400-550 字。",
+    "monthly_report": "你是用户的本地工作月报助手。\n\n你的任务是根据用户这个月每周的周报，生成一份结构清晰的工作月报。\n\n请遵循以下原则：\n- 从月度视角提炼，关注战略性进展和整体趋势。\n- 合并相同主题的周报内容，不要逐周重复。\n- 诚实评估本月目标完成情况。\n- TODO 项要有战略意义，便于月度复盘和下月计划安排。\n\n请用 Markdown 输出，格式固定为：\n\n## 本月亮点\n用 3-5 条列出本月最重要的成果或里程碑。\n\n## 项目总结\n按项目分段，每段 3-4 句说明本月的整体进展、现状和下一阶段目标。\n\n## 问题复盘\n用 2-4 条列出本月的主要问题与教训，没有则写\"无明显问题\"。\n\n## TODO\n列出下月最重要的具体任务，每条格式为：\n- [ ] 具体动作（项目/里程碑/目标）\n要求：5-8 条，按优先级排列，明确可衡量，可直接粘贴到月度计划使用。\n\n整体战略性、简洁有力，总长度控制在 450-650 字。",
+    "asr_zh": "以下是普通话的语音识别结果，包含标准的中文标点符号。",
+    "asr_en": "The following is a transcription in English."
   }
 }

@@ -18,12 +18,26 @@ _MODEL_REPO_ID = "mlx-community/Qwen3.5-0.8B-4bit"
 _MODEL_CACHE_DIR = Path.home() / ".lumina" / "models" / "qwen3.5-0.8b-4bit"
 
 
+def _provider_type_from_config() -> str:
+    """从 config.json 读取 provider.type，读取失败时返回 'local'。"""
+    try:
+        with open(_USER_CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("provider", {}).get("type", "local")
+    except Exception:
+        return "local"
+
+
 def ensure_model():
     """
     Full 版启动时检测模型是否已下载；若无则从 HuggingFace 下载。
     下载完成后更新 LUMINA_MODEL_PATH 环境变量。
     """
     if _EDITION != "full":
+        return
+
+    # 若用户配置了非本地 provider，无需本地模型
+    if _provider_type_from_config() != "local":
         return
 
     from lumina.cli.utils import notify

@@ -1,0 +1,11 @@
+<div id="translate-status"
+     hx-get="/fragments/pdf/status/{{ job_id }}"
+     hx-trigger="every 2s"
+     hx-swap="outerHTML">
+  <div class="card" style="padding:16px;">
+    <div style="font-size:13px;color:var(--sub);margin-bottom:10px;">{{ status_text }}</div>
+    <div style="background:var(--border);border-radius:99px;height:6px;overflow:hidden;">
+      <div style="background:var(--accent);height:100%;border-radius:99px;transition:width .4s ease;width:{{ progress }}%;min-width:4%;"></div>
+    </div>
+  </div>
+</div>

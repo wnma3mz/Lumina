@@ -106,6 +106,69 @@ def _start_digest_timer(llm, interval: int = 3600, uvicorn_loop: list = None):
     logger.info("Digest timer started, next trigger in %.0fs (interval=%ds)", delay, interval)
 
 
+async def _maybe_backfill_reports(llm) -> None:
+    """服务启动时补生成缺失的报告。
+
+    对每种报告类型，判断「本周期的报告应该已经存在但缺失」时进行补生成：
+    - 日报：今天的日报不存在，且当前时间已经过了 notify_time（说明定时器已错过）
+    - 周报：本周（周一起算）已过去至少 1 天，上周的周报不存在
+    - 月报：本月已过去至少 1 天，上月的月报不存在
+    """
+    import datetime as _dt
+    from lumina.digest import generate_report
+    from lumina.digest.config import get_cfg
+    from lumina.digest.reports import (
+        daily_key, weekly_key, monthly_key,
+        load_report,
+    )
+    from lumina.cli.utils import is_digest_enabled
+
+    if not is_digest_enabled():
+        return
+
+    cfg = get_cfg()
+    now = _dt.datetime.now()
+    today = now.date()
+
+    # ── 日报：今天是否已过 notify_time 且报告不存在 ────────────────────────────
+    try:
+        notify_hour, notify_minute = map(int, (cfg.notify_time or "20:00").split(":"))
+    except Exception:
+        notify_hour, notify_minute = 20, 0
+    notify_passed = (now.hour, now.minute) >= (notify_hour, notify_minute)
+    if notify_passed and not load_report("daily", daily_key(today)):
+        logger.info("Backfill: today's daily report missing, generating...")
+        try:
+            await generate_report(llm, "daily", daily_key(today))
+        except Exception as e:
+            logger.warning("Backfill: daily report failed: %s", e)
+
+    # ── 周报：今天不是触发日（即本周已过去 >0 天），且上周周报不存在 ─────────────
+    weekly_day = cfg.weekly_report_day  # 0=Mon
+    days_since_report_day = (today.weekday() - weekly_day) % 7
+    if days_since_report_day > 0:
+        last_week = today - _dt.timedelta(days=days_since_report_day + 1)
+        wk = weekly_key(last_week)
+        if not load_report("weekly", wk):
+            logger.info("Backfill: weekly report %s missing, generating...", wk)
+            try:
+                await generate_report(llm, "weekly", wk)
+            except Exception as e:
+                logger.warning("Backfill: weekly report failed: %s", e)
+
+    # ── 月报：今天不是触发日（monthly_report_day），且上月月报不存在 ───────────
+    monthly_day = cfg.monthly_report_day  # 1-28
+    if today.day != monthly_day:
+        last_month = today.replace(day=1) - _dt.timedelta(days=1)
+        mk = monthly_key(last_month)
+        if not load_report("monthly", mk):
+            logger.info("Backfill: monthly report %s missing, generating...", mk)
+            try:
+                await generate_report(llm, "monthly", mk)
+            except Exception as e:
+                logger.warning("Backfill: monthly report failed: %s", e)
+
+
 def _start_daily_notify_timer(llm, uvicorn_loop: list = None):
     """每天在 config.digest.notify_time（默认 20:00）强制全量生成日报并发送通知。"""
     import asyncio
@@ -134,14 +197,42 @@ def _start_daily_notify_timer(llm, uvicorn_loop: list = None):
             t.daemon = True
             t.start()
             return
-        from lumina.digest import maybe_generate_digest
+        import datetime as _dt
+        from lumina.digest import maybe_generate_digest, generate_report
         from lumina.digest.core import load_digest
+        from lumina.digest.reports import daily_key, weekly_key, monthly_key
 
         async def _generate_and_notify():
+            now = _dt.datetime.now()
+            today = now.date()
             try:
                 await maybe_generate_digest(llm, force_full=True)
             except Exception as e:
                 logger.error("Daily notify: digest generation failed: %s", e)
+
+            # 日报：每天触发
+            try:
+                await generate_report(llm, "daily", daily_key(today))
+            except Exception as e:
+                logger.warning("Daily notify: daily report failed: %s", e)
+
+            # 周报：触发日可配置（默认周一，weekday_report_day=0）
+            _cfg = get_cfg()
+            if today.weekday() == _cfg.weekly_report_day:
+                try:
+                    last_week = today - _dt.timedelta(days=1)
+                    await generate_report(llm, "weekly", weekly_key(last_week))
+                except Exception as e:
+                    logger.warning("Daily notify: weekly report failed: %s", e)
+
+            # 月报：触发日可配置（默认每月 1 日，monthly_report_day=1）
+            if today.day == _cfg.monthly_report_day:
+                try:
+                    last_month = today - _dt.timedelta(days=1)
+                    await generate_report(llm, "monthly", monthly_key(last_month))
+                except Exception as e:
+                    logger.warning("Daily notify: monthly report failed: %s", e)
+
             digest = load_digest() or ""
             lines = [ln.strip() for ln in digest.splitlines()
                      if ln.strip() and not ln.startswith("<!--")]
@@ -512,6 +603,19 @@ def cmd_server(args):
     sync_static()
     config_path = getattr(args, "config", None) or resolve_config_path()
     cfg = get_config(config_path)
+
+    # 用 bundle 内置 config.json 的 system_prompts 作为默认值，
+    # 用户 ~/.lumina/config.json 中有的 key 优先（已由 get_config 读入 cfg.system_prompts）
+    import json as _json
+    _bundle_cfg_path = Path(__file__).parent.parent / "config.json"
+    try:
+        _bundle_prompts: dict = _json.loads(_bundle_cfg_path.read_text(encoding="utf-8")).get("system_prompts", {})
+        _bundle_prompts = {k: v for k, v in _bundle_prompts.items() if not k.startswith("_")}
+    except Exception:
+        _bundle_prompts = {}
+    _merged = {**_bundle_prompts, **cfg.system_prompts}
+    cfg.system_prompts = _merged
+
     from lumina import request_history as _request_history
     _request_history.configure(
         {"request_history": cfg.request_history.__dict__},
@@ -528,6 +632,13 @@ def cmd_server(args):
 
     transcriber = Transcriber(model=cfg.whisper_model or None)
     logger.info("Whisper model: %s", transcriber.model)
+
+    # 将配置中的 ASR prompts 注入 transcriber 模块
+    from lumina.asr.transcriber import set_asr_prompts as _set_asr_prompts
+    _set_asr_prompts(
+        zh=cfg.system_prompts.get("asr_zh", ""),
+        en=cfg.system_prompts.get("asr_en", ""),
+    )
 
     if is_port_in_use(cfg.host, cfg.port):
         msg = f"端口 {cfg.port} 已被占用，Lumina 可能已在运行。\n请查看菜单栏图标，或运行 lumina stop 后重试。"
@@ -562,6 +673,7 @@ def cmd_server(args):
     async def _startup_digest_coro():
         from lumina.digest import maybe_generate_digest
         await maybe_generate_digest(llm)
+        await _maybe_backfill_reports(llm)
 
     def _startup_digest():
         import asyncio

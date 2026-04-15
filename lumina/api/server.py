@@ -13,9 +13,11 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from lumina.asr.transcriber import Transcriber
 from lumina.engine.llm import LLMEngine
@@ -75,6 +77,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     from lumina.api.routers import digest as digest_router
     from lumina.api.routers import audio as audio_router
     from lumina.api.routers import text as text_router
+    from lumina.api.routers import fragments as fragments_router
 
     _lifespan = lifespan if lifespan is not None else _default_lifespan
     app = FastAPI(title="Lumina", version=_LUMINA_VERSION, lifespan=_lifespan)
@@ -99,12 +102,24 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     app.include_router(digest_router.router)
     app.include_router(audio_router.router)
     app.include_router(text_router.router)
+    app.include_router(fragments_router.router)
+
+    # ── 静态文件（CSS / SVG 等）─────────────────────────────────────────────────
+    app.mount("/static", StaticFiles(directory=str(_static_dir())), name="static")
 
     # ── PWA 前端 ──────────────────────────────────────────────────────────────
+    _templates_dir = Path(__file__).parent / "templates"
+    _tmpl = Jinja2Templates(directory=str(_templates_dir))
 
     @app.get("/")
-    async def pwa_index():
-        return FileResponse(_static_dir() / "index.html", media_type="text/html")
+    async def pwa_index(request: Request):
+        css_path = _static_dir() / "style.css"
+        css_ver = int(css_path.stat().st_mtime) if css_path.exists() else 0
+        return _tmpl.TemplateResponse(
+            "index.html",
+            {"request": request, "css_ver": css_ver},
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
 
     @app.get("/logo.svg")
     async def pwa_logo():

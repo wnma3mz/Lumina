@@ -1,0 +1,8 @@
+<div class="source-row">
+  {% for src in sources %}
+  <div class="source-dot {% if not src.active %}empty{% endif %}" title="{{ src.name }}">
+    <span class="s-icon">{{ src.icon }}</span>
+    <span class="s-label">{{ src.name }}</span>
+  </div>
+  {% endfor %}
+</div>

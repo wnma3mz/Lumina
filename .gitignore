@@ -11,11 +11,21 @@ models/
 uv.lock
 .DS_Store
 
+# Personal notes / media TODOs
+TODO_media.md
+
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# Node / Tailwind (no-build-step project — never commit these)
+node_modules/
+package-lock.json
+package.json
+tailwind.config.js
+lumina/node_modules/
 
 # Test artifacts (only keep the committed fixture)
 tests/fixtures/*.pdf
