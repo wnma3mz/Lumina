@@ -116,9 +116,12 @@ function escapeHtml(text) {
 function renderPlainTextResult(targetId, text, meta) {
   var el = document.getElementById(targetId);
   if (!el) return;
-  var metaHtml = meta ? '<div class="text-[11px] font-bold uppercase tracking-widest text-zinc-400 mb-4">' + escapeHtml(meta) + '</div>' : '';
-  var copyBtnHtml = '<button onclick="navigator.clipboard.writeText(decodeURIComponent(\'' + encodeURIComponent(text) + '\')); this.textContent=\'已复制\'; setTimeout(()=>this.textContent=\'📋 复制\', 2000)" class="absolute top-4 right-4 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 bg-white dark:bg-zinc-800 rounded shadow-sm border border-zinc-200 dark:border-zinc-700 transition-all z-10 flex items-center gap-1">📋 复制</button>';
-  el.innerHTML = '<div class="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 relative">' + metaHtml + copyBtnHtml + '<div class="whitespace-pre-wrap text-sm leading-7 text-zinc-700 dark:text-zinc-200">' + escapeHtml(text) + '</div></div>';
+  var copyBtnHtml = '<button onclick="navigator.clipboard.writeText(decodeURIComponent(\'' + encodeURIComponent(text) + '\')); this.textContent=\'已复制\'; setTimeout(()=>this.textContent=\'📋 复制\', 2000)" class="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 bg-white dark:bg-zinc-800 rounded shadow-sm border border-zinc-200 dark:border-zinc-700 transition-all flex items-center gap-1 shrink-0">📋 复制</button>';
+  var headerHtml = '<div class="flex items-start justify-between gap-4 mb-4">' + 
+    (meta ? '<div class="text-[11px] font-bold uppercase tracking-widest text-zinc-400 mt-1">' + escapeHtml(meta) + '</div>' : '<div></div>') + 
+    copyBtnHtml + 
+    '</div>';
+  el.innerHTML = '<div class="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5">' + headerHtml + '<div class="whitespace-pre-wrap text-sm leading-7 text-zinc-700 dark:text-zinc-200">' + escapeHtml(text) + '</div></div>';
 }
 
 function clearBatchPoll(kind) {
