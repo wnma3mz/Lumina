@@ -26,6 +26,7 @@ router = APIRouter(prefix="/fragments", tags=["fragments"])
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+_SNAPSHOT_SECTION_LIMIT = 6
 
 
 def _parse_sections(content: str) -> list[dict]:
@@ -65,6 +66,17 @@ def _system_prompt_items(prompts: Optional[dict]) -> list[dict[str, str]]:
 
 def _render_markdown(content: str) -> str:
     return render_markdown_html(content)
+
+
+def _load_recent_snapshot_content(now: Optional[datetime] = None) -> str:
+    from lumina.digest.reports import load_snapshots_for_date
+
+    target_day = (now or datetime.now()).date()
+    snapshots = [item.strip() for item in load_snapshots_for_date(target_day) if item.strip()]
+    if not snapshots:
+        return ""
+    recent = list(reversed(snapshots[-_SNAPSHOT_SECTION_LIMIT:]))
+    return "\n\n---\n\n".join(recent)
 
 
 def _format_generated_at_label(generated_at) -> str:
@@ -174,10 +186,10 @@ def _load_report_fragment_context(report_type: str, key: str) -> dict:
 @router.get("/digest", response_class=HTMLResponse)
 async def fragment_digest(request: Request):
     """返回日报时间轴 HTML 片段，包含 Hero Card 和各 section。"""
-    from lumina.digest import load_digest, get_status
+    from lumina.digest import get_status
 
     status = get_status()
-    content = load_digest() or ""
+    content = _load_recent_snapshot_content()
 
     generating = status.get("generating", False)
     time_label = _format_generated_at_label(status.get("generated_at"))

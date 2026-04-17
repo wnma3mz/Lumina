@@ -4,8 +4,11 @@ lumina/api/routers/text.py — 翻译 / 摘要 / 润色路由
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from lumina.api.rendering import render_markdown_html
 from lumina.api.protocol import (
     PolishRequest,
+    RenderMarkdownRequest,
+    RenderedHtmlResponse,
     SummarizeRequest,
     TextResponse,
     TranslateRequest,
@@ -55,6 +58,11 @@ async def polish(request: PolishRequest, raw: Request):
     with request_context(origin="polish_api", stream=False):
         text = await llm.generate(request.text, task=task)
     return TextResponse(text=text)
+
+
+@router.post("/v1/render_markdown")
+async def render_markdown(request: RenderMarkdownRequest):
+    return RenderedHtmlResponse(html=render_markdown_html(request.text))
 
 
 async def _stream_text(user_text: str, task: str, llm, *, origin: str):

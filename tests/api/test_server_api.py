@@ -197,6 +197,15 @@ async def test_summarize(client):
     assert "text" in r.json()
 
 
+async def test_render_markdown_returns_sanitized_html(client):
+    r = await client.post("/v1/render_markdown", json={"text": "# Title\n\n<script>alert(1)</script>\n\n- item"})
+    assert r.status_code == 200
+    data = r.json()
+    assert "<h1>Title</h1>" in data["html"]
+    assert "<li>item</li>" in data["html"]
+    assert "<script>" not in data["html"]
+
+
 async def test_polish_zh(client):
     r = await client.post("/v1/polish", json={"text": "文字", "language": "zh"})
     assert r.status_code == 200
@@ -248,7 +257,7 @@ async def test_digest_sources_fragment_renders_summary_and_expandable_details(cl
 
 async def test_digest_fragment_polls_while_generating(client):
     with patch("lumina.digest.get_status", return_value={"generating": True, "generated_at": None}), \
-         patch("lumina.digest.load_digest", return_value="# placeholder"):
+         patch("lumina.api.routers.fragments._load_recent_snapshot_content", return_value="# placeholder"):
         r = await client.get("/fragments/digest")
 
     assert r.status_code == 200
@@ -257,6 +266,28 @@ async def test_digest_fragment_polls_while_generating(client):
     assert 'hx-get="/fragments/digest"' in body
     assert 'hx-trigger="load delay:2s"' in body
     assert 'hx-target="#digest-content"' in body
+
+
+async def test_digest_fragment_only_shows_recent_snapshots_for_today(client):
+    snapshots = [
+        "<!-- generated: 2026-04-17T09:00:00 -->\n# 2026-04-17 09:00\n\nsnap 1",
+        "<!-- generated: 2026-04-17T10:00:00 -->\n# 2026-04-17 10:00\n\nsnap 2",
+        "<!-- generated: 2026-04-17T11:00:00 -->\n# 2026-04-17 11:00\n\nsnap 3",
+        "<!-- generated: 2026-04-17T12:00:00 -->\n# 2026-04-17 12:00\n\nsnap 4",
+        "<!-- generated: 2026-04-17T13:00:00 -->\n# 2026-04-17 13:00\n\nsnap 5",
+        "<!-- generated: 2026-04-17T14:00:00 -->\n# 2026-04-17 14:00\n\nsnap 6",
+        "<!-- generated: 2026-04-17T15:00:00 -->\n# 2026-04-17 15:00\n\nsnap 7",
+    ]
+    with patch("lumina.digest.get_status", return_value={"generating": False, "generated_at": "2026-04-17T15:00:00"}), \
+         patch("lumina.digest.reports.load_snapshots_for_date", return_value=snapshots), \
+         patch("lumina.api.routers.fragments._render_markdown", side_effect=lambda text: text):
+        r = await client.get("/fragments/digest")
+
+    assert r.status_code == 200
+    body = r.text
+    assert "snap 7" in body
+    assert "snap 2" in body
+    assert "snap 1" not in body
 
 
 async def test_report_fragment_defaults_to_latest_and_lists_options(client, tmp_path):

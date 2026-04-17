@@ -11,6 +11,14 @@ var _labBatchPollTimer = null;
 var _documentTask = 'translate';
 var _documentInputMode = 'text';
 var _labInputMode = 'url';
+var _currentTaskController = null;
+
+function cancelCurrentTask() {
+  if (_currentTaskController) {
+    _currentTaskController.abort();
+    _currentTaskController = null;
+  }
+}
 var _documentTasks = {
   translate: {
     label: '翻译',
@@ -22,7 +30,7 @@ var _documentTasks = {
     textHint: '适合网页正文、笔记、文章片段等直接翻译。',
     urlLabel: '输入 PDF 链接',
     urlHint: '适合线上论文、白皮书和可公开访问的 PDF 文档。',
-    fileLabel: '上传文件'
+    fileLabel: '上传 / 粘贴文件'
   },
   summarize: {
     label: '总结',
@@ -34,7 +42,7 @@ var _documentTasks = {
     textHint: '适合网页正文、笔记、聊天记录、会议纪要等非 PDF 内容。',
     urlLabel: '输入 PDF 链接',
     urlHint: '适合线上论文、研究报告和长篇 PDF 文档。',
-    fileLabel: '上传文件'
+    fileLabel: '上传 / 粘贴文件'
   }
 };
 var _labTasks = {};
@@ -105,11 +113,30 @@ function escapeHtml(text) {
     .replace(/'/g, '&#39;');
 }
 
-function renderPlainTextResult(targetId, text, meta) {
+async function renderRichTextResult(targetId, text, meta, signal) {
   var el = document.getElementById(targetId);
   if (!el) return;
-  var metaHtml = meta ? '<div class="text-[11px] font-bold uppercase tracking-widest text-zinc-400 mb-4">' + escapeHtml(meta) + '</div>' : '';
-  el.innerHTML = '<div class="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5">' + metaHtml + '<div class="whitespace-pre-wrap text-sm leading-7 text-zinc-700 dark:text-zinc-200">' + escapeHtml(text) + '</div></div>';
+  var contentHtml = '<div class="whitespace-pre-wrap text-sm leading-7 text-zinc-700 dark:text-zinc-200">' + escapeHtml(text) + '</div>';
+  try {
+    var res = await fetch('/v1/render_markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: signal,
+      body: JSON.stringify({ text: text || '' })
+    });
+    if (res.ok) {
+      var data = await res.json();
+      contentHtml = '<div class="prose prose-sm max-w-none dark:prose-invert prose-pre:rounded-xl prose-pre:bg-zinc-900 prose-code:before:content-none prose-code:after:content-none">' + (data.html || '') + '</div>';
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw e;
+  }
+  var copyBtnHtml = '<button onclick="navigator.clipboard.writeText(decodeURIComponent(\'' + encodeURIComponent(text) + '\')); this.textContent=\'已复制\'; setTimeout(()=>this.textContent=\'📋 复制\', 2000)" class="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 bg-white dark:bg-zinc-800 rounded shadow-sm border border-zinc-200 dark:border-zinc-700 transition-all flex items-center gap-1 shrink-0">📋 复制</button>';
+  var headerHtml = '<div class="flex items-start justify-between gap-4 mb-4">' + 
+    (meta ? '<div class="text-[11px] font-bold uppercase tracking-widest text-zinc-400 mt-1">' + escapeHtml(meta) + '</div>' : '<div></div>') + 
+    copyBtnHtml + 
+    '</div>';
+  el.innerHTML = '<div class="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5">' + headerHtml + contentHtml + '</div>';
 }
 
 function clearBatchPoll(kind) {
@@ -203,9 +230,59 @@ async function pollBatchJob(kind, targetId, jobId) {
   }
 }
 
-function showFilename(input, targetId) {
+function clearFileSelection(inputId, filenameId, previewId) {
+  var input = document.getElementById(inputId);
+  if (input) input.value = '';
+  showFilename({files: []}, filenameId, previewId);
+}
+
+function showFilename(input, targetId, previewId) {
   var el = document.getElementById(targetId);
-  if (el) el.textContent = input.files[0] ? input.files[0].name : '';
+  var file = input.files[0];
+  if (el) el.textContent = file ? file.name : '';
+
+  if (previewId) {
+    var preview = document.getElementById(previewId);
+    var placeholder = document.getElementById(previewId.replace('preview', 'placeholder'));
+    var clearBtn = document.getElementById(previewId.replace('preview', 'clear'));
+    if (preview) {
+      if (file && file.type.startsWith('image/')) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          preview.src = e.target.result;
+          preview.classList.remove('hidden');
+          if (placeholder) placeholder.classList.add('hidden');
+          if (clearBtn) { clearBtn.classList.remove('hidden'); clearBtn.classList.add('flex'); }
+        };
+        reader.readAsDataURL(file);
+      } else {
+        preview.src = '';
+        preview.classList.add('hidden');
+        if (placeholder) placeholder.classList.remove('hidden');
+        if (clearBtn) { clearBtn.classList.add('hidden'); clearBtn.classList.remove('flex'); }
+      }
+    }
+  } else if (file) {
+    var clearBtnDoc = document.getElementById(targetId.replace('filename', 'clear'));
+    if (clearBtnDoc) { clearBtnDoc.classList.remove('hidden'); clearBtnDoc.classList.add('flex'); }
+  } else {
+    var clearBtnDoc = document.getElementById(targetId.replace('filename', 'clear'));
+    if (clearBtnDoc) { clearBtnDoc.classList.add('hidden'); clearBtnDoc.classList.remove('flex'); }
+  }
+}
+
+function showUrlPreview(url, previewId) {
+  var container = document.getElementById(previewId + '-container');
+  var preview = document.getElementById(previewId);
+  if (!container || !preview) return;
+  url = (url || '').trim();
+  if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/'))) {
+    preview.src = url;
+    container.classList.remove('hidden');
+  } else {
+    preview.src = '';
+    container.classList.add('hidden');
+  }
 }
 
 function handleDropZone(event, fileInputId, filenameId) {
@@ -230,7 +307,7 @@ function handleLabDrop(event, target) {
   var dt = new DataTransfer();
   dt.items.add(file);
   input.files = dt.files;
-  showFilename(input, 'lab-filename');
+  showFilename(input, 'lab-filename', 'lab-file-preview');
 }
 
 function setDigestSeg(seg) {
@@ -411,7 +488,13 @@ async function runLabTask() {
 
   btn.disabled = true;
   btn.textContent = '处理中…';
-  result.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-12 w-full flex flex-col items-center justify-center border border-zinc-100 dark:border-zinc-800"><svg class="w-8 h-8 animate-spin text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><div class="text-sm font-bold text-zinc-500">处理中，请稍候…</div></div>';
+  result.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-12 w-full flex flex-col items-center justify-center border border-zinc-100 dark:border-zinc-800 relative"><button onclick="cancelCurrentTask()" class="absolute top-4 right-4 px-3 py-1.5 text-xs font-bold text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-all">取消</button><svg class="w-8 h-8 animate-spin text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><div class="text-sm font-bold text-zinc-500">处理中，请稍候…</div></div>';
+  if (window.innerWidth < 768) {
+    result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  cancelCurrentTask();
+  _currentTaskController = new AbortController();
 
   try {
     if (_labTask === 'image_ocr' || _labTask === 'image_caption') {
@@ -430,6 +513,7 @@ async function runLabTask() {
       var mediaRes = await fetch('/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: _currentTaskController.signal,
         body: JSON.stringify({
           model: 'lumina',
           messages: [
@@ -447,14 +531,19 @@ async function runLabTask() {
       if (!mediaRes.ok) throw new Error(((await mediaRes.json().catch(function() { return {}; })).detail) || mediaRes.statusText);
       var mediaData = await mediaRes.json();
       var mediaText = (((mediaData || {}).choices || [])[0] || {}).message;
-      renderPlainTextResult('lab-result', (mediaText && mediaText.content) || '', spec.label + ' · Chat');
+      await renderRichTextResult('lab-result', (mediaText && mediaText.content) || '', spec.label + ' · Chat', _currentTaskController.signal);
       return;
     }
 
     throw new Error('暂不支持的图片任务');
   } catch (e) {
-    result.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">错误：' + escapeHtml(e.message) + '</span></div>';
+    if (e.name === 'AbortError') {
+      result.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 w-full text-zinc-500 dark:text-zinc-400 font-bold flex items-start gap-2"><span class="text-sm">已取消处理。</span></div>';
+    } else {
+      result.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">错误：' + escapeHtml(e.message) + '</span></div>';
+    }
   } finally {
+    _currentTaskController = null;
     btn.disabled = false;
     btn.textContent = spec.button;
   }
@@ -522,7 +611,13 @@ async function startDocumentTask() {
 
   btn.disabled = true;
   btn.textContent = _documentTask === 'translate' ? (_documentInputMode === 'text' ? '翻译中…' : '处理中…') : '总结中…';
-  resultDiv.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-12 w-full flex flex-col items-center justify-center border border-zinc-100 dark:border-zinc-800"><svg class="w-8 h-8 animate-spin text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><div class="text-sm font-bold text-zinc-500">' + (_documentTask === 'translate' ? '处理中，请稍候…' : '生成中，请稍候…') + '</div></div>';
+  resultDiv.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-12 w-full flex flex-col items-center justify-center border border-zinc-100 dark:border-zinc-800 relative"><button onclick="cancelCurrentTask()" class="absolute top-4 right-4 px-3 py-1.5 text-xs font-bold text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-all">取消</button><svg class="w-8 h-8 animate-spin text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><div class="text-sm font-bold text-zinc-500">' + (_documentTask === 'translate' ? '处理中，请稍候…' : '生成中，请稍候…') + '</div></div>';
+  if (window.innerWidth < 768) {
+    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  cancelCurrentTask();
+  _currentTaskController = new AbortController();
 
   try {
     var res;
@@ -531,6 +626,7 @@ async function startDocumentTask() {
         res = await fetch('/v1/translate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: _currentTaskController.signal,
           body: JSON.stringify({ text: text, target_language: _translateLang })
         });
         if (!res.ok) {
@@ -538,7 +634,7 @@ async function startDocumentTask() {
           throw new Error(translateTextErr.detail || res.statusText);
         }
         var translateTextData = await res.json();
-        renderPlainTextResult('document-result', translateTextData.text || '', _translateLang === 'zh' ? '文本翻译 · 英 -> 中' : '文本翻译 · 中 -> 英');
+        await renderRichTextResult('document-result', translateTextData.text || '', _translateLang === 'zh' ? '文本翻译 · 英 -> 中' : '文本翻译 · 中 -> 英', _currentTaskController.signal);
         return;
       }
 
@@ -549,6 +645,7 @@ async function startDocumentTask() {
           res = await fetch('/v1/translate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: _currentTaskController.signal,
             body: JSON.stringify({ text: translateFileText, target_language: _translateLang })
           });
           if (!res.ok) {
@@ -556,18 +653,19 @@ async function startDocumentTask() {
             throw new Error(translateFileErr.detail || res.statusText);
           }
           var translateFileData = await res.json();
-          renderPlainTextResult('document-result', translateFileData.text || '', (selectedFile.name || '文本文件') + ' · 文件翻译');
+          await renderRichTextResult('document-result', translateFileData.text || '', (selectedFile.name || '文本文件') + ' · 文件翻译', _currentTaskController.signal);
           return;
         }
         if (!isPdfFile(selectedFile)) throw new Error('文件模式目前支持 PDF / TXT / MD');
         var translateFd = new FormData();
         translateFd.append('file', selectedFile);
         translateFd.append('lang_out', _translateLang);
-        res = await fetch('/v1/pdf/upload', { method: 'POST', body: translateFd });
+        res = await fetch('/v1/pdf/upload', { method: 'POST', signal: _currentTaskController.signal, body: translateFd });
       } else {
         res = await fetch('/v1/pdf/url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: _currentTaskController.signal,
           body: JSON.stringify({ url: url, action: 'translate', lang_out: _translateLang })
         });
       }
@@ -587,6 +685,7 @@ async function startDocumentTask() {
       res = await fetch('/v1/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: _currentTaskController.signal,
         body: JSON.stringify({ text: text })
       });
       if (!res.ok) {
@@ -594,7 +693,7 @@ async function startDocumentTask() {
         throw new Error(summarizeTextErr.detail || res.statusText);
       }
       var summarizeTextData = await res.json();
-      renderPlainTextResult('document-result', summarizeTextData.text || '', '文本摘要');
+      await renderRichTextResult('document-result', summarizeTextData.text || '', '文本摘要', _currentTaskController.signal);
       return;
     }
 
@@ -608,6 +707,7 @@ async function startDocumentTask() {
         res = await fetch('/v1/summarize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: _currentTaskController.signal,
           body: JSON.stringify({ text: summarizeFileText })
         });
         if (!res.ok) {
@@ -615,7 +715,7 @@ async function startDocumentTask() {
           throw new Error(summarizeFileErr.detail || res.statusText);
         }
         var summarizeFileData = await res.json();
-        renderPlainTextResult('document-result', summarizeFileData.text || '', (selectedFile.name || '文本文件') + ' · 文件总结');
+        await renderRichTextResult('document-result', summarizeFileData.text || '', (selectedFile.name || '文本文件') + ' · 文件总结', _currentTaskController.signal);
         return;
       }
       if (!isPdfFile(selectedFile)) throw new Error('文件模式目前支持 PDF / TXT / MD');
@@ -628,16 +728,148 @@ async function startDocumentTask() {
       headers['Content-Type'] = 'application/json';
       body = JSON.stringify({ url: url });
     }
-    res = await fetch(endpoint, { method: 'POST', headers: headers, body: body });
+    res = await fetch(endpoint, { method: 'POST', headers: headers, signal: _currentTaskController.signal, body: body });
     if (!res.ok) {
       var summarizeErr = await res.json().catch(function() { return { detail: res.statusText }; });
       throw new Error(summarizeErr.detail || res.statusText);
     }
     resultDiv.innerHTML = await res.text();
   } catch (e) {
-    resultDiv.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">错误：' + escapeHtml(e.message) + '</span></div>';
+    if (e.name === 'AbortError') {
+      resultDiv.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 w-full text-zinc-500 dark:text-zinc-400 font-bold flex items-start gap-2"><span class="text-sm">已取消处理。</span></div>';
+    } else {
+      resultDiv.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">错误：' + escapeHtml(e.message) + '</span></div>';
+    }
   } finally {
+    _currentTaskController = null;
     btn.disabled = false;
     btn.textContent = spec.button;
   }
 }
+
+document.addEventListener('paste', function(e) {
+  var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+  if (!items) return;
+  var targetFile = null;
+  var fileType = '';
+  var hasText = false;
+  
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('text/plain') === 0) hasText = true;
+  }
+  
+  if (hasText && e.target && (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'url' || e.target.type === 'search')))) {
+    return;
+  }
+
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].kind === 'file') {
+      var file = items[i].getAsFile();
+      if (file) {
+        if (file.type.indexOf('image/') === 0) {
+          targetFile = file;
+          fileType = 'image';
+          break;
+        } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          targetFile = file;
+          fileType = 'pdf';
+          break;
+        } else if (file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.md')) {
+          targetFile = file;
+          fileType = 'document';
+          break;
+        }
+      }
+    }
+  }
+
+  if (targetFile) {
+    e.preventDefault();
+    if (fileType === 'image') {
+      var tabImage = document.getElementById('tab-image');
+      if (tabImage && !tabImage.checked && typeof selectHomeTab === 'function') {
+        selectHomeTab('image');
+      }
+      setLabInputMode('file');
+      var dt = new DataTransfer();
+      dt.items.add(targetFile);
+      var input = document.getElementById('lab-file-input');
+      if (input) {
+        input.files = dt.files;
+        showFilename(input, 'lab-filename', 'lab-file-preview');
+      }
+      var dropZone = document.querySelector('#lab-input-file > div');
+      if (dropZone) {
+        dropZone.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
+        setTimeout(function() { dropZone.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }, 300);
+      }
+    } else if (fileType === 'pdf' || fileType === 'document') {
+      var tabDocument = document.getElementById('tab-document');
+      if (tabDocument && !tabDocument.checked && typeof selectHomeTab === 'function') {
+        selectHomeTab('document');
+      }
+      setDocumentInputMode('file');
+      var dt = new DataTransfer();
+      dt.items.add(targetFile);
+      var input = document.getElementById('document-file');
+      if (input) {
+        input.files = dt.files;
+        showFilename(input, 'document-filename');
+      }
+      var dropZone = document.querySelector('#document-input-file > div');
+      if (dropZone) {
+        dropZone.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
+        setTimeout(function() { dropZone.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }, 300);
+      }
+    }
+  } else if (hasText) {
+    e.preventDefault();
+    var textData = (e.clipboardData || e.originalEvent.clipboardData).getData('text/plain');
+    if (!textData) return;
+    textData = textData.trim();
+    
+    var isUrl = textData.startsWith('http://') || textData.startsWith('https://');
+    var lowerText = textData.toLowerCase();
+    var isImageUrl = isUrl && (lowerText.endsWith('.jpg') || lowerText.endsWith('.png') || lowerText.endsWith('.jpeg') || lowerText.endsWith('.gif') || lowerText.endsWith('.webp') || lowerText.endsWith('.bmp'));
+    var isPdfUrl = isUrl && lowerText.endsWith('.pdf');
+    
+    if (isImageUrl) {
+      var tabImage = document.getElementById('tab-image');
+      if (tabImage && !tabImage.checked && typeof selectHomeTab === 'function') {
+        selectHomeTab('image');
+      }
+      setLabInputMode('url');
+      var urlInput = document.getElementById('lab-url-input');
+      if (urlInput) {
+        urlInput.value = textData;
+        if (typeof showUrlPreview === 'function') showUrlPreview(textData, 'lab-url-preview');
+        urlInput.classList.add('ring-2', 'ring-indigo-500');
+        setTimeout(function() { urlInput.classList.remove('ring-2', 'ring-indigo-500'); }, 300);
+      }
+    } else if (isPdfUrl) {
+      var tabDocument = document.getElementById('tab-document');
+      if (tabDocument && !tabDocument.checked && typeof selectHomeTab === 'function') {
+        selectHomeTab('document');
+      }
+      setDocumentInputMode('url');
+      var docUrlInput = document.getElementById('document-url');
+      if (docUrlInput) {
+        docUrlInput.value = textData;
+        docUrlInput.classList.add('ring-2', 'ring-indigo-500');
+        setTimeout(function() { docUrlInput.classList.remove('ring-2', 'ring-indigo-500'); }, 300);
+      }
+    } else {
+      var tabDocument = document.getElementById('tab-document');
+      if (tabDocument && !tabDocument.checked && typeof selectHomeTab === 'function') {
+        selectHomeTab('document');
+      }
+      setDocumentInputMode('text');
+      var textInput = document.getElementById('document-text');
+      if (textInput) {
+        textInput.value = textData;
+        textInput.classList.add('ring-2', 'ring-indigo-500');
+        setTimeout(function() { textInput.classList.remove('ring-2', 'ring-indigo-500'); }, 300);
+      }
+    }
+  }
+});

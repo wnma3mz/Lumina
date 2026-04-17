@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import List
 
-from lumina.config import DEFAULT_API_BASE_URL_V1, DEFAULT_API_KEY, DEFAULT_MODEL
+from lumina.config import DEFAULT_API_BASE_URL_V1, DEFAULT_API_KEY
 
 logger = logging.getLogger("lumina.pdf")
 
@@ -116,6 +116,14 @@ def _collect_files(paths: List[str]) -> List[str]:
     return result
 
 
+def _translate_model_name(lang_out: str) -> str:
+    """
+    返回带翻译任务标识的 model name，供 Lumina 服务端识别并路由到翻译 task。
+    格式：lumina-translate-{lang_out}，如 lumina-translate-zh。
+    """
+    return f"lumina-translate-{lang_out.lower()}"
+
+
 def translate_pdfs(
     paths: List[str],
     output_dir: str,
@@ -123,7 +131,7 @@ def translate_pdfs(
     lang_out: str = "zh",
     threads: int = 4,
     base_url: str = _DEFAULT_BASE_URL,
-    model: str = DEFAULT_MODEL,
+    model: str = "",
     api_key: str = DEFAULT_API_KEY,
 ) -> List[tuple]:
     """
@@ -139,8 +147,11 @@ def translate_pdfs(
         logger.error("pdf2zh 未正确安装，请重新安装 Lumina。")
         sys.exit(1)
 
+    # 用带翻译标识的 model name，让 Lumina 服务端识别并路由到翻译 task
+    translate_model = model or _translate_model_name(lang_out)
+
     with _env_lock:
-        _configure_pdf2zh_env(base_url, model, api_key)
+        _configure_pdf2zh_env(base_url, translate_model, api_key)
 
     files = _collect_files(paths)
     if not files:
@@ -148,7 +159,7 @@ def translate_pdfs(
         sys.exit(1)
 
     logger.info("Translating %d PDF(s) -> %s", len(files), output_dir)
-    logger.info("Backend: %s  model: %s  %s → %s", base_url, model, lang_in, lang_out)
+    logger.info("Backend: %s  model: %s  %s → %s", base_url, translate_model, lang_in, lang_out)
 
     os.makedirs(output_dir, exist_ok=True)
 

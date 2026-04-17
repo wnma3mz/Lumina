@@ -125,6 +125,14 @@ class TextResponse(BaseModel):
     text: str
 
 
+class RenderMarkdownRequest(BaseModel):
+    text: str
+
+
+class RenderedHtmlResponse(BaseModel):
+    html: str
+
+
 class PolishRequest(BaseModel):
     text: str
     language: Literal["zh", "en"] = "zh"
