@@ -2,6 +2,7 @@
 lumina/api/routers/chat.py — Chat Completions 路由（OpenAI 兼容）
 """
 import logging
+import re
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -35,6 +36,10 @@ _TRANSLATE_MODEL_PREFIX = "lumina-translate-"
 # 翻译任务 max_tokens 下限：pdf2zh 不传 max_tokens，默认 512 会截断长段落
 _TRANSLATE_MIN_MAX_TOKENS = 2048
 
+# 重复检测：短语最小长度（字符数）和最少重复次数
+_REPEAT_MIN_PHRASE_LEN = 8
+_REPEAT_MAX_COUNT = 3
+
 
 def _resolve_translate_task(model: str) -> Optional[str]:
     """
@@ -47,6 +52,42 @@ def _resolve_translate_task(model: str) -> Optional[str]:
         lang = model.lower()[len(_TRANSLATE_MODEL_PREFIX):]
         return f"translate_to_{lang}" if lang else None
     return None
+
+
+def _dedup_translation(text: str) -> str:
+    """
+    检测并截断翻译输出中的重复 loop。
+
+    策略：寻找一段短语，使其在文本中「紧密连续」出现 >= 3 次，
+    即相邻两次出现之间的间隔 <= 5 字符（中间只有"，"、"并"等连接词）。
+    这能区分真正的 loop（紧密反复）和正常引用列表（年份/姓名分散出现）。
+    """
+    if not text or len(text) < 60:
+        return text
+    max_phrase = min(100, len(text) // 3)
+    for phrase_len in range(max_phrase, _REPEAT_MIN_PHRASE_LEN - 1, -1):
+        for start in range(0, len(text) - phrase_len * 3):
+            phrase = text[start:start + phrase_len]
+            if not any(c.isalpha() or '\u4e00' <= c <= '\u9fff' for c in phrase):
+                continue
+            try:
+                matches = list(re.finditer(re.escape(phrase), text))
+            except re.error:
+                continue
+            if len(matches) < _REPEAT_MAX_COUNT:
+                continue
+            # 严格判断「紧密连续」：前两个相邻出现之间的间隔均 <= 5 字符
+            gap01 = matches[1].start() - matches[0].end()
+            gap12 = matches[2].start() - matches[1].end()
+            if gap01 > 5 or gap12 > 5:
+                continue
+            cut = matches[1].end()
+            logger.warning(
+                "Translation loop detected (phrase_len=%d, count=%d, gap=%d/%d), truncating at %d/%d chars",
+                phrase_len, len(matches), gap01, gap12, cut, len(text),
+            )
+            return text[:cut].rstrip()
+    return text
 
 
 @router.post("/v1/chat/completions")
@@ -64,7 +105,8 @@ async def chat_completions(request: ChatCompletionRequest, raw: Request):
 
     # 翻译任务参数覆写：
     #   max_tokens 不足时补到下限（pdf2zh 不传 max_tokens，512 会截断长段落）
-    #   presence_penalty/repetition_penalty 归零（翻译需忠实复现原文词汇）
+    #   presence_penalty 保留适中值抑制重复循环（归零会导致模型陷入 loop）
+    #   repetition_penalty 适当加强进一步抑制重复
     max_tokens = request.max_tokens
     presence_penalty = request.presence_penalty
     repetition_penalty = request.repetition_penalty
@@ -72,9 +114,9 @@ async def chat_completions(request: ChatCompletionRequest, raw: Request):
         if max_tokens is None or max_tokens < _TRANSLATE_MIN_MAX_TOKENS:
             max_tokens = _TRANSLATE_MIN_MAX_TOKENS
         if presence_penalty is None:
-            presence_penalty = 0.0
+            presence_penalty = 1.0
         if repetition_penalty is None:
-            repetition_penalty = 1.0
+            repetition_penalty = 1.3
 
     if request.stream:
         return StreamingResponse(
@@ -104,6 +146,8 @@ async def chat_completions(request: ChatCompletionRequest, raw: Request):
         presence_penalty=presence_penalty,
         repetition_penalty=repetition_penalty,
     )
+    if translate_task:
+        text = _dedup_translation(text)
     return ChatCompletionResponse(
         id=req_id,
         model=request.model,
