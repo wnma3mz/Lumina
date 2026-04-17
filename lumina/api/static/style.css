@@ -2820,14 +2820,17 @@ body {
 
 #tab-digest:checked ~ main #panel-digest {
   display: grid;
+  min-height: 0;
 }
 
 #tab-document:checked ~ main #panel-document {
   display: grid;
+  min-height: 0;
 }
 
 #tab-image:checked ~ main #panel-image {
   display: grid;
+  min-height: 0;
 }
 
 #tab-settings:checked ~ main #panel-settings {
@@ -2885,6 +2888,15 @@ body {
 
 #tab-settings:checked ~ main:focus-within ~ #save-bar {
   display: none;
+}
+
+body.save-bar-visible #home-nav {
+  opacity: .55;
+  transform: translateX(-50%) scale(.96);
+}
+
+#home-nav {
+  transition: opacity .25s ease, transform .25s ease;
 }
 
 /* ── 遗留的一些基础动画或HTMX等 ── */

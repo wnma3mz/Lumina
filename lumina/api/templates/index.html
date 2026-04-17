@@ -42,6 +42,74 @@
     const isDark = document.documentElement.classList.toggle('dark');
     localStorage.theme = isDark ? 'dark' : 'light';
   }
+
+  function updateFloatingUiState() {
+    const saveBar = document.getElementById('save-bar');
+    const body = document.body;
+    if (!saveBar || !body) return;
+    const visible = window.getComputedStyle(saveBar).display !== 'none';
+    body.classList.toggle('save-bar-visible', visible);
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const hour = new Date().getHours();
+    let greeting = '你好';
+    if (hour < 5) greeting = '夜深了';
+    else if (hour < 9) greeting = '早安';
+    else if (hour < 11) greeting = '上午好';
+    else if (hour < 13) greeting = '中午好';
+    else if (hour < 18) greeting = '下午好';
+    else if (hour < 22) greeting = '晚上好';
+    else greeting = '夜深了';
+
+    const username = "{{ username }}";
+    if (username) greeting += '，' + username;
+
+    const greetingEl = document.getElementById('greeting');
+    if (greetingEl) greetingEl.textContent = greeting;
+
+    const storageKey = 'lumina.heroSlogan';
+    const fallback = [
+      '让 AI 留在本地',
+      '在你的电脑上思考',
+      '你的本地 AI 工作台',
+      '把智能留给自己',
+      '本地运行，安心使用'
+    ];
+    const sloganEl = document.getElementById('hero-slogan');
+    let candidates = [];
+    if (sloganEl) {
+      try {
+        candidates = JSON.parse(sloganEl.dataset.slogans || '[]');
+      } catch (_) {
+        candidates = [];
+      }
+    }
+    const pool = Array.isArray(candidates) && candidates.length ? candidates : fallback;
+    let slogan = '';
+    try {
+      slogan = sessionStorage.getItem(storageKey) || '';
+      if (!pool.includes(slogan)) {
+        slogan = pool[Math.floor(Math.random() * pool.length)];
+        sessionStorage.setItem(storageKey, slogan);
+      }
+    } catch (_) {
+      slogan = pool[Math.floor(Math.random() * pool.length)];
+    }
+    if (sloganEl) sloganEl.textContent = slogan;
+
+    updateFloatingUiState();
+    const saveBar = document.getElementById('save-bar');
+    if (saveBar && window.MutationObserver) {
+      new MutationObserver(updateFloatingUiState).observe(saveBar, {
+        attributes: true,
+        attributeFilter: ['class', 'style']
+      });
+    }
+    document.querySelectorAll('input[name="tab"]').forEach(function(el) {
+      el.addEventListener('change', updateFloatingUiState);
+    });
+  });
 </script>
 </head>
 <body class="min-h-screen text-zinc-900 dark:text-zinc-100 p-5 md:px-10 md:pt-8 md:pb-12 transition-colors duration-500">
@@ -52,13 +120,44 @@
   <input type="radio" name="tab" id="tab-{{ item.key }}" {% if loop.first %}checked{% endif %} hidden>
   {% endfor %}
 
+  <header class="mb-6 md:mb-8 flex items-center justify-between">
+    <div class="flex items-center gap-3 md:gap-4">
+      <div class="w-10 h-10 md:w-12 md:h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/20 shrink-0">L</div>
+      <div class="min-w-0">
+        <h1 class="text-lg md:text-xl font-extrabold tracking-tight" id="greeting">你好</h1>
+        <div class="flex items-center gap-2 mt-0.5 md:mt-1">
+          <span class="text-[10px] md:text-xs font-mono font-medium text-zinc-400 dark:text-zinc-500">v0.8.1</span>
+          <span class="w-1 h-1 bg-zinc-300 dark:bg-zinc-600 rounded-full block"></span>
+          <p
+            class="text-zinc-500 dark:text-zinc-400 text-[10px] md:text-xs truncate"
+            id="hero-slogan"
+            data-slogans='{{ slogan_candidates | default([]) | tojson | e }}'
+          >Lumina</p>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 md:gap-3">
+      <div class="glass pl-2 pr-3 py-1.5 md:pl-3 md:pr-4 md:py-2 rounded-xl flex items-center gap-2 text-[10px] md:text-xs font-semibold">
+        <div class="relative">
+          <span class="w-2 h-2 bg-emerald-500 rounded-full block"></span>
+          <span class="w-2 h-2 bg-emerald-500 rounded-full block absolute inset-0 animate-ping"></span>
+        </div>
+        Active
+      </div>
+      <button onclick="toggleTheme()" class="glass p-2 md:p-2.5 rounded-xl hover:bg-white/90 dark:hover:bg-zinc-800 transition-colors" aria-label="切换主题">
+        <span class="dark:hidden">🌙</span>
+        <span class="hidden dark:inline">☀️</span>
+      </button>
+    </div>
+  </header>
+
   <nav id="home-nav" class="fixed bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 glass px-2 py-2 md:px-3 md:py-3 rounded-3xl flex gap-1 md:gap-2 shadow-2xl items-center z-50 whitespace-nowrap">
     {% for item in home_tab_defs %}
     <label data-tab="{{ item.key }}" for="tab-{{ item.key }}" class="cursor-pointer px-4 py-2 md:px-6 md:py-3 rounded-2xl text-xs md:text-sm font-bold transition-all">{{ item.label }}</label>
     {% endfor %}
   </nav>
 
-  <main class="mb-32">
+  <main class="mb-32 transition-[opacity,transform] duration-300">
     {% include "panels/digest.html" %}
     {% include "panels/document.html" %}
     {% include "panels/lab.html" %}

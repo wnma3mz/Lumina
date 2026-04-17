@@ -113,6 +113,26 @@ function escapeHtml(text) {
     .replace(/'/g, '&#39;');
 }
 
+function scrollResultIntoView(targetEl) {
+  if (!targetEl || window.innerWidth >= 768) return;
+  targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function setActionButtonBusyState(btn, busyText) {
+  if (!btn) return;
+  if (!btn.dataset.idleText) btn.dataset.idleText = btn.textContent;
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.textContent = busyText;
+}
+
+function restoreActionButtonState(btn, fallbackText) {
+  if (!btn) return;
+  btn.disabled = false;
+  btn.setAttribute('aria-busy', 'false');
+  btn.textContent = btn.dataset.idleText || fallbackText || btn.textContent;
+}
+
 async function renderRichTextResult(targetId, text, meta, signal) {
   var el = document.getElementById(targetId);
   if (!el) return;
@@ -486,12 +506,9 @@ async function runLabTask() {
     }
   }
 
-  btn.disabled = true;
-  btn.textContent = '处理中…';
+  setActionButtonBusyState(btn, '处理中…');
   result.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-12 w-full flex flex-col items-center justify-center border border-zinc-100 dark:border-zinc-800 relative"><button onclick="cancelCurrentTask()" class="absolute top-4 right-4 px-3 py-1.5 text-xs font-bold text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-all">取消</button><svg class="w-8 h-8 animate-spin text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><div class="text-sm font-bold text-zinc-500">处理中，请稍候…</div></div>';
-  if (window.innerWidth < 768) {
-    result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
+  scrollResultIntoView(result);
 
   cancelCurrentTask();
   _currentTaskController = new AbortController();
@@ -544,8 +561,7 @@ async function runLabTask() {
     }
   } finally {
     _currentTaskController = null;
-    btn.disabled = false;
-    btn.textContent = spec.button;
+    restoreActionButtonState(btn, spec.button);
   }
 }
 
@@ -609,12 +625,9 @@ async function startDocumentTask() {
     }
   }
 
-  btn.disabled = true;
-  btn.textContent = _documentTask === 'translate' ? (_documentInputMode === 'text' ? '翻译中…' : '处理中…') : '总结中…';
+  setActionButtonBusyState(btn, _documentTask === 'translate' ? (_documentInputMode === 'text' ? '翻译中…' : '处理中…') : '总结中…');
   resultDiv.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-12 w-full flex flex-col items-center justify-center border border-zinc-100 dark:border-zinc-800 relative"><button onclick="cancelCurrentTask()" class="absolute top-4 right-4 px-3 py-1.5 text-xs font-bold text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-all">取消</button><svg class="w-8 h-8 animate-spin text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><div class="text-sm font-bold text-zinc-500">' + (_documentTask === 'translate' ? '处理中，请稍候…' : '生成中，请稍候…') + '</div></div>';
-  if (window.innerWidth < 768) {
-    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
+  scrollResultIntoView(resultDiv);
 
   cancelCurrentTask();
   _currentTaskController = new AbortController();
@@ -742,8 +755,7 @@ async function startDocumentTask() {
     }
   } finally {
     _currentTaskController = null;
-    btn.disabled = false;
-    btn.textContent = spec.button;
+    restoreActionButtonState(btn, spec.button);
   }
 }
 

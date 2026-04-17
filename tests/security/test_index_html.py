@@ -283,6 +283,7 @@ def test_hero_slogan_uses_session_storage(html):
     assert "data-slogans=" in html
     assert 'id="hero-slogan"' in html
     assert 'id="greeting"' in html
+    assert "Lumina Workspace" in html
 
 
 def test_home_visibility_uses_local_storage(html, page_scripts):
@@ -303,6 +304,7 @@ def test_document_panel_supports_tasks_and_three_input_modes(html):
     assert 'id="document-mode-directory"' in html
     assert "setDocumentTask('translate'" in html
     assert 'accept=".pdf,.txt,.md,.markdown,text/plain"' in html
+    assert 'max-h-[50vh]' in html
 
 
 def test_image_panel_supports_ocr_and_caption(html, page_scripts):
@@ -343,9 +345,20 @@ def test_digest_has_document_and_image_cards(html):
     assert "IMAGE" in html
     assert "默认摘要" in html
     assert 'aria-label="切换主题"' in html
+    assert "Today Overview" in html
 
 
 def test_digest_report_tabs_request_latest_reports(html):
     assert 'hx-get="/fragments/report/daily?key=latest"' in html
     assert 'hx-get="/fragments/report/weekly?key=latest"' in html
     assert 'hx-get="/fragments/report/monthly?key=latest"' in html
+
+
+def test_workspace_panels_share_three_column_desktop_skeleton(html):
+    assert 'id="panel-document" class="grid grid-cols-1 md:grid-cols-3' in html
+    assert 'id="panel-image" class="grid grid-cols-1 md:grid-cols-3' in html
+
+
+def test_save_bar_can_dim_home_nav(css, page_scripts):
+    assert "body.save-bar-visible #home-nav" in css
+    assert "updateFloatingUiState" in page_scripts

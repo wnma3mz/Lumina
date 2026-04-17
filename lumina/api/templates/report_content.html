@@ -12,19 +12,26 @@
     {% endif %}
     <label class="flex items-center gap-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">
       <span>选择日期</span>
-      <select
-        name="key"
-        class="min-w-[180px] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200 outline-none"
-        hx-get="/fragments/report/{{ report_type }}"
-        hx-trigger="change"
-        hx-target="#digest-content"
-        hx-swap="innerHTML"
-        hx-indicator="#digest-loading"
-      >
-        {% for item in report_options %}
-        <option value="{{ item.key }}" {% if item.key == selected_key %}selected{% endif %}>{{ item.label }}</option>
-        {% endfor %}
-      </select>
+      <span class="relative inline-flex items-center">
+        <select
+          name="key"
+          class="min-w-[180px] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 pl-3 pr-10 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200 outline-none appearance-none cursor-pointer"
+          hx-get="/fragments/report/{{ report_type }}"
+          hx-trigger="change"
+          hx-target="#digest-content"
+          hx-swap="innerHTML"
+          hx-indicator="#digest-loading"
+        >
+          {% for item in report_options %}
+          <option value="{{ item.key }}" {% if item.key == selected_key %}selected{% endif %}>{{ item.label }}</option>
+          {% endfor %}
+        </select>
+        <span class="pointer-events-none absolute right-3 text-zinc-400 dark:text-zinc-500">
+          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+      </span>
     </label>
   </div>
   <div class="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed prose dark:prose-invert prose-sm max-w-none">

@@ -1,4 +1,4 @@
-<div id="panel-image" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div id="panel-image" class="grid grid-cols-1 md:grid-cols-3 gap-8">
   <div class="bento-card flex flex-col gap-6">
     <div>
       <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300 px-3 py-1 text-[11px] font-bold tracking-widest uppercase">Image Tools</div>
@@ -62,7 +62,7 @@
     <button class="w-full py-4 mt-auto bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-black tracking-wide hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-xl" id="lab-run-btn" onclick="runLabTask()">{{ (image_task_defs[0].button if image_task_defs else '开始处理') }}</button>
   </div>
 
-  <div class="bento-card flex flex-col gap-4">
+  <div class="bento-card flex flex-col gap-4 md:col-span-2">
     <div class="flex items-center justify-between gap-3">
       <h3 class="text-xl font-bold mb-2">处理结果</h3>
       <div class="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Vision</div>

@@ -268,8 +268,9 @@ async def test_digest_fragment_polls_while_generating(client):
     assert 'hx-target="#digest-content"' in body
 
 
-async def test_digest_fragment_only_shows_recent_snapshots_for_today(client):
+async def test_digest_fragment_only_shows_recent_twenty_snapshots_for_today(client):
     snapshots = [
+        "<!-- generated: 2026-04-17T00:00:00 -->\n# 2026-04-17 00:00\n\nsnap 0",
         "<!-- generated: 2026-04-17T09:00:00 -->\n# 2026-04-17 09:00\n\nsnap 1",
         "<!-- generated: 2026-04-17T10:00:00 -->\n# 2026-04-17 10:00\n\nsnap 2",
         "<!-- generated: 2026-04-17T11:00:00 -->\n# 2026-04-17 11:00\n\nsnap 3",
@@ -287,7 +288,8 @@ async def test_digest_fragment_only_shows_recent_snapshots_for_today(client):
     body = r.text
     assert "snap 7" in body
     assert "snap 2" in body
-    assert "snap 1" not in body
+    assert "snap 1" in body
+    assert "snap 0" in body
 
 
 async def test_report_fragment_defaults_to_latest_and_lists_options(client, tmp_path):

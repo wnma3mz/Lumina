@@ -26,7 +26,7 @@ router = APIRouter(prefix="/fragments", tags=["fragments"])
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-_SNAPSHOT_SECTION_LIMIT = 6
+_SNAPSHOT_SECTION_LIMIT = 20
 
 
 def _parse_sections(content: str) -> list[dict]:

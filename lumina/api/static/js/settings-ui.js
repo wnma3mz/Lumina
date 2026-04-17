@@ -93,6 +93,7 @@ async function saveSettings() {
   } finally {
     btn.disabled = false;
     btn.textContent = '保存配置';
+    if (typeof updateFloatingUiState === 'function') updateFloatingUiState();
   }
 }
 
@@ -205,6 +206,9 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
   if (!event || !event.target || event.target.id !== 'panel-settings') return;
   if (typeof syncLocalHomeUiForm === 'function') {
     syncLocalHomeUiForm();
+  }
+  if (typeof updateFloatingUiState === 'function') {
+    updateFloatingUiState();
   }
 });
 

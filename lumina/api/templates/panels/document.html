@@ -1,4 +1,4 @@
-<div id="panel-document" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div id="panel-document" class="grid grid-cols-1 md:grid-cols-3 gap-8">
   <div class="bento-card flex flex-col gap-6">
     <div>
       <div class="inline-flex items-center gap-2 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 px-3 py-1 text-[11px] font-bold tracking-widest uppercase">Document Workspace</div>
@@ -26,7 +26,7 @@
 
     <div id="document-input-text" class="flex flex-col gap-3">
       <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider" id="document-text-label">输入原文</label>
-      <textarea id="document-text" placeholder="粘贴需要处理的正文..." class="w-full min-h-[220px] px-4 py-4 rounded-2xl bg-zinc-100 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm leading-relaxed resize-y"></textarea>
+      <textarea id="document-text" placeholder="粘贴需要处理的正文..." class="w-full min-h-[220px] max-h-[50vh] px-4 py-4 rounded-2xl bg-zinc-100 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm leading-relaxed resize-y"></textarea>
       <div class="text-xs text-zinc-400" id="document-text-hint">适合网页正文、笔记、文章片段等直接处理。</div>
     </div>
 
@@ -88,7 +88,7 @@
     <button class="w-full py-4 mt-auto bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-black tracking-wide hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-xl" id="document-run-btn" onclick="startDocumentTask()">开始翻译</button>
   </div>
 
-  <div class="bento-card flex flex-col gap-4">
+  <div class="bento-card flex flex-col gap-4 md:col-span-2">
     <div class="flex items-center justify-between gap-3">
       <h3 class="text-xl font-bold mb-2" id="document-output-title">任务结果</h3>
       <div class="text-[11px] font-bold uppercase tracking-widest text-zinc-400">即时反馈</div>
