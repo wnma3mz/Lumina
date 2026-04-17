@@ -32,7 +32,7 @@
   "port": 31821,
   "log_level": "INFO",
   "digest": {
-    "_readme": "日报功能配置。enabled=true 开启定时采集与生成；scan_dirs 填 [] 表示不扫描任何目录，缺省时使用内置默认列表；enabled_collectors 为 null 时全部启用，填列表可按需只启用部分来源；notify_time 为每日推送时间（HH:MM），留空禁用；weekly_report_day: 0=周一…6=周日；monthly_report_day: 每月第几日（1-28）；AI 会话仅受时间窗口和单条最大长度限制。",
+    "_readme": "日报功能配置。enabled=true 开启后台定时采集与生成（与前端界面显示无关）；scan_dirs 填 [] 表示不扫描任何目录，缺省时使用内置默认列表；enabled_collectors 为 null 时全部启用，填列表可按需只启用部分来源；notify_time 为每日推送时间（HH:MM），留空禁用推送；weekly_report_day: 0=周一…6=周日；monthly_report_day: 每月第几日（1-28）；AI 会话仅受时间窗口和单条最大长度限制。",
     "enabled": true,
     "scan_dirs": [
       "~/Documents",
@@ -93,7 +93,7 @@
     ]
   },
   "ui": {
-    "_readme": "前端界面配置。home.enabled_tabs 控制首页默认显示哪些一级入口；浏览器端仍可按本地偏好覆盖。document 为统一的文档工作台入口。image_modules 控制图片功能开放的模块。",
+    "_readme": "前端界面配置。home.enabled_tabs 控制首页默认显示哪些一级入口；digest_enabled/document_enabled/image_enabled 分别控制回顾/文档/图像功能的前端入口显示（与 digest.enabled 后台采集独立）；浏览器端仍可按本地偏好覆盖。document 为统一的文档工作台入口。image_modules 控制图片功能开放的模块。",
     "home": {
       "enabled_tabs": [
         "digest",
@@ -101,6 +101,8 @@
         "image",
         "settings"
       ],
+      "digest_enabled": true,
+      "document_enabled": true,
       "image_enabled": true,
       "image_modules": [
         "image_ocr",
@@ -108,12 +110,6 @@
       ],
       "allow_local_override": true
     }
-  },
-  "media": {
-    "_readme": "图片能力配置。OCR / Caption 走主 LLM provider，并分别使用 image_ocr / image_caption 的 system prompt。max_image_mb 控制上传大小。",
-    "ocr_model": "microsoft/trocr-base-printed",
-    "caption_model": "Salesforce/blip-image-captioning-base",
-    "max_image_mb": 12
   },
   "system_prompts": {
     "_readme": "各任务的 system prompt，修改后重启生效。digest/daily_report/weekly_report/monthly_report 控制日报相关生成；image_ocr/image_caption 控制图像任务；asr_zh/asr_en 为语音转写的 initial_prompt。",

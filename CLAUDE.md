@@ -38,7 +38,7 @@ lumina/
       fragments.py     # HTMX HTML 片段路由（Jinja2 渲染，返回可直接插入 DOM 的片段）
     templates/         # Jinja2 模板（GET / 由此渲染，无静态 HTML）
       index.html       # 主页面（HTMX + 纯 CSS tab 切换，内联 htmx.min.js，PWA meta）
-      panels/          # 各 tab 面板的初始 HTML（digest/translate/summarize/settings）
+      panels/          # 各 tab 面板的初始 HTML（digest/document/lab/settings）
       config_form.html # 设置表单片段（/fragments/config 返回）
       digest_content.html  # 日报时间轴片段（/fragments/digest 返回）
       digest_sources.html  # 数据来源图标行片段

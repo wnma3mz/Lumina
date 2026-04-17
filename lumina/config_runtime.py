@@ -196,6 +196,8 @@ def serialize_runtime_config(cfg: Any) -> dict[str, Any]:
         "ui": {
             "home": {
                 "enabled_tabs": cfg.ui.home.enabled_tabs,
+                "digest_enabled": cfg.ui.home.digest_enabled,
+                "document_enabled": cfg.ui.home.document_enabled,
                 "image_enabled": cfg.ui.home.image_enabled,
                 "image_modules": cfg.ui.home.image_modules,
                 "allow_local_override": cfg.ui.home.allow_local_override,
@@ -250,6 +252,8 @@ def update_runtime_config(cfg: Any, data: dict, *, sections: set[str]) -> None:
         cfg.ui = UIConfig(
             home=UIHomeConfig(
                 enabled_tabs=list(home.get("enabled_tabs", cfg.ui.home.enabled_tabs)),
+                digest_enabled=bool(home.get("digest_enabled", cfg.ui.home.digest_enabled)),
+                document_enabled=bool(home.get("document_enabled", cfg.ui.home.document_enabled)),
                 image_enabled=bool(home.get("image_enabled", cfg.ui.home.image_enabled)),
                 image_modules=list(home.get("image_modules", cfg.ui.home.image_modules)),
                 allow_local_override=bool(home.get("allow_local_override", cfg.ui.home.allow_local_override)),

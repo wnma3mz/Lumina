@@ -212,6 +212,54 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
   }
 });
 
+async function toggleFeature(featureName, enabled) {
+  try {
+    var payload = { ui: { home: {} } };
+    payload.ui.home[featureName + '_enabled'] = enabled;
+    
+    var res = await fetch('/v1/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (res.ok) {
+      // 动态更新 DOM：底部导航栏标签
+      var navLabel = document.querySelector('label[data-tab="' + featureName + '"]');
+      if (navLabel) {
+        navLabel.style.display = enabled ? '' : 'none';
+      }
+      
+      // 对于 Digest 面板中展示的其他入口卡片 (Document, Image) 也进行显隐控制
+      if (featureName === 'image' || featureName === 'document') {
+        var digestCard = document.getElementById('digest-' + featureName + '-card');
+        if (digestCard) {
+          if (enabled) {
+            digestCard.classList.remove('hidden');
+          } else {
+            digestCard.classList.add('hidden');
+          }
+        }
+      }
+      
+      // 动态更新 DOM：如果当前正好停留在被关闭的 tab，则切回一个默认的可用的 tab
+      var currentTabRadio = document.getElementById('tab-' + featureName);
+      if (!enabled && currentTabRadio && currentTabRadio.checked) {
+        var defaultTab = document.getElementById('tab-settings'); // 降级到设置页
+        if (featureName !== 'digest' && document.getElementById('tab-digest')) {
+          defaultTab = document.getElementById('tab-digest');
+        }
+        if (defaultTab) {
+          defaultTab.checked = true;
+          defaultTab.dispatchEvent(new Event('change'));
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Failed to toggle feature " + featureName + ":", e);
+  }
+}
+
 async function pruneRequestHistory(btn) {
   var msg = document.getElementById('settings-msg');
   if (btn) {

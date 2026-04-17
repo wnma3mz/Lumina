@@ -106,6 +106,8 @@ class RequestHistoryConfig:
 @dataclass
 class UIHomeConfig:
     enabled_tabs: list[str] = field(default_factory=lambda: list(_DEFAULT_HOME_TABS))
+    digest_enabled: bool = True
+    document_enabled: bool = True
     image_enabled: bool = True
     image_modules: list[str] = field(default_factory=lambda: list(_DEFAULT_IMAGE_MODULES))
     allow_local_override: bool = True
@@ -118,13 +120,6 @@ class UIHomeConfig:
 @dataclass
 class UIConfig:
     home: UIHomeConfig = field(default_factory=UIHomeConfig)
-
-
-@dataclass
-class MediaConfig:
-    ocr_model: str = "microsoft/trocr-base-printed"
-    caption_model: str = "Salesforce/blip-image-captioning-base"
-    max_image_mb: int = 12
 
 
 @dataclass
@@ -286,20 +281,12 @@ class Config:
         self.ui = UIConfig(
             home=UIHomeConfig(
                 enabled_tabs=enabled_tabs or list(_DEFAULT_HOME_TABS),
+                digest_enabled=bool(home.get("digest_enabled", True)),
+                document_enabled=bool(home.get("document_enabled", True)),
                 image_enabled=bool(home.get("image_enabled", home.get("lab_enabled", True))),
                 image_modules=image_modules or list(_DEFAULT_IMAGE_MODULES),
                 allow_local_override=bool(home.get("allow_local_override", True)),
             )
-        )
-
-        # ── Media ─────────────────────────────────────────────────────────────
-        media = data.get("media", {})
-        if not isinstance(media, dict):
-            media = {}
-        self.media = MediaConfig(
-            ocr_model=str(media.get("ocr_model", MediaConfig.ocr_model)),
-            caption_model=str(media.get("caption_model", MediaConfig.caption_model)),
-            max_image_mb=max(1, int(media.get("max_image_mb", MediaConfig.max_image_mb))),
         )
 
 

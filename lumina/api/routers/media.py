@@ -24,7 +24,7 @@ def _ensure_image_file(upload: UploadFile) -> str:
 
 
 def _validate_image_size(image_bytes: bytes) -> None:
-    max_mb = max(1, int(get_config().media.max_image_mb))
+    max_mb = 12
     max_bytes = max_mb * 1024 * 1024
     if not image_bytes:
         raise HTTPException(400, "图片内容为空")

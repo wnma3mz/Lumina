@@ -69,6 +69,12 @@ function getServerHomeTabs() {
   if (homeUi.image_enabled === false) {
     tabs = tabs.filter(function(tab) { return tab !== 'image'; });
   }
+  if (homeUi.digest_enabled === false) {
+    tabs = tabs.filter(function(tab) { return tab !== 'digest'; });
+  }
+  if (homeUi.document_enabled === false) {
+    tabs = tabs.filter(function(tab) { return tab !== 'document'; });
+  }
   return tabs.length ? tabs : _allHomeTabs.slice();
 }
 
@@ -105,7 +111,7 @@ function getEnabledLabTasks() {
 }
 
 function getEffectiveHomeTabs() {
-  return getLocalHomeTabs() || getServerHomeTabs();
+  return getServerHomeTabs();
 }
 
 function applyHomeTabVisibility() {

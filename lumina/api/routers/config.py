@@ -88,6 +88,8 @@ class BrandingPatch(BaseModel):
 
 class UIHomePatch(BaseModel):
     enabled_tabs: Optional[List[str]] = None
+    digest_enabled: Optional[bool] = None
+    document_enabled: Optional[bool] = None
     image_enabled: Optional[bool] = None
     image_modules: Optional[List[str]] = None
     allow_local_override: Optional[bool] = None
@@ -292,6 +294,10 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
                 from lumina.config import normalize_home_tabs
 
                 home["enabled_tabs"] = normalize_home_tabs(patch.ui.home.enabled_tabs)
+            if patch.ui.home.digest_enabled is not None:
+                home["digest_enabled"] = patch.ui.home.digest_enabled
+            if patch.ui.home.document_enabled is not None:
+                home["document_enabled"] = patch.ui.home.document_enabled
             if patch.ui.home.image_enabled is not None:
                 home["image_enabled"] = patch.ui.home.image_enabled
             if patch.ui.home.image_modules is not None:

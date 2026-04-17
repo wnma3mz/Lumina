@@ -124,7 +124,7 @@ class TestBasicLoad:
             **_base_config(),
             "ui": {
                 "home": {
-                    "enabled_tabs": ["digest", "translate", "summarize", "lab", "settings"],
+                    "enabled_tabs": ["digest", "document", "image", "settings"],
                 }
             },
         }

@@ -77,7 +77,7 @@
     </section>
 
     <!-- Document Entry -->
-    <section class="bento-card bg-indigo-600 dark:bg-indigo-600 text-white border-none group overflow-hidden relative cursor-pointer" onclick="selectHomeTab('document')">
+    <section id="digest-document-card" class="bento-card bg-indigo-600 dark:bg-indigo-600 text-white border-none group overflow-hidden relative cursor-pointer {% if not home_ui.document_enabled %}hidden{% endif %}" onclick="selectHomeTab('document')">
         <div class="relative z-10 h-full flex flex-col justify-between">
             <div>
                 <div class="text-[11px] uppercase tracking-[0.28em] text-indigo-100/80 font-bold">Workspace</div>
@@ -105,7 +105,7 @@
     </section>
 
     <!-- Image Entry -->
-    <section class="bento-card bg-emerald-600 dark:bg-emerald-600 text-white border-none group overflow-hidden relative cursor-pointer" onclick="selectHomeTab('image')">
+    <section id="digest-image-card" class="bento-card bg-emerald-600 dark:bg-emerald-600 text-white border-none group overflow-hidden relative cursor-pointer {% if not home_ui.image_enabled %}hidden{% endif %}" onclick="selectHomeTab('image')">
         <div class="relative z-10 h-full flex flex-col justify-between">
             <div>
                 <div class="text-[11px] uppercase tracking-[0.28em] text-emerald-100/80 font-bold">Vision</div>

@@ -182,7 +182,7 @@ class TestGetConfig:
 
     async def test_legacy_ui_tabs_are_normalized(self, config_path):
         payload = _base_config()
-        payload["ui"]["home"]["enabled_tabs"] = ["digest", "translate", "summarize", "lab", "settings"]
+        payload["ui"]["home"]["enabled_tabs"] = ["digest", "document", "image", "settings"]
         config_path.write_text(json.dumps(payload), encoding="utf-8")
 
         markdown_stub = types.SimpleNamespace(markdown=lambda text, extensions=None: text)
@@ -336,7 +336,7 @@ class TestPatchConfig:
     async def test_patch_ui_home_legacy_tabs_written_as_document(self, config_path, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            await c.patch("/v1/config", json={"ui": {"home": {"enabled_tabs": ["digest", "translate", "summarize", "lab", "settings"]}}})
+            await c.patch("/v1/config", json={"ui": {"home": {"enabled_tabs": ["digest", "document", "image", "settings"]}}})
         written = json.loads(config_path.read_text())
         assert written["ui"]["home"]["enabled_tabs"] == ["digest", "document", "image", "settings"]
 

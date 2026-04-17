@@ -1,8 +1,13 @@
-<div id="settings-inner" class="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-4 gap-8">
+<div id="settings-inner" class="w-full grid grid-cols-1 md:grid-cols-3 gap-8">
 
 <!-- 左侧边栏导航 -->
-<div class="md:col-span-1">
-  <div class="bento-card sticky top-8 flex flex-col gap-2 p-4" id="settings-seg-ctrl">
+<div class="md:col-span-1 flex flex-col gap-6">
+  <div class="bento-card sticky top-8 flex flex-col gap-2" id="settings-seg-ctrl">
+    <div class="mb-4">
+      <div class="inline-flex items-center gap-2 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 px-3 py-1 text-[11px] font-bold tracking-widest uppercase">Settings</div>
+      <h3 class="text-2xl font-bold mt-4">系统设置</h3>
+      <p class="text-zinc-500 text-sm mt-2 leading-relaxed">管理和配置 Lumina 的各项参数。</p>
+    </div>
     <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 transition-all seg-btn active" onclick="switchSettingsSubTab('model', this)">🤖 模型</button>
     <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('digest', this)">🌅 日报</button>
     <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('interact', this)">⌨️ 交互</button>
@@ -12,7 +17,7 @@
 </div>
 
 <!-- 右侧设置内容区 -->
-<div class="md:col-span-3">
+<div class="md:col-span-2">
 
 <!-- ── 模型 tab ── -->
 <div id="stab-model" class="settings-subtab flex flex-col gap-6">
@@ -373,65 +378,26 @@
 
     <div class="flex flex-col gap-4">
       <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
+        <span class="text-sm font-semibold">启用回顾功能</span>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="ui.home.digest_enabled" class="sr-only peer" {% if cfg.ui.home.digest_enabled %}checked{% endif %} onchange="toggleFeature('digest', this.checked)">
+          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
+        </label>
+      </div>
+      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
+        <span class="text-sm font-semibold">启用文档功能</span>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="ui.home.document_enabled" class="sr-only peer" {% if cfg.ui.home.document_enabled %}checked{% endif %} onchange="toggleFeature('document', this.checked)">
+          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
+        </label>
+      </div>
+      <div class="flex items-center justify-between py-2">
         <span class="text-sm font-semibold">启用图片功能</span>
         <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="ui.home.image_enabled" class="sr-only peer" {% if cfg.ui.home.image_enabled %}checked{% endif %}>
+          <input type="checkbox" name="ui.home.image_enabled" class="sr-only peer" {% if cfg.ui.home.image_enabled %}checked{% endif %} onchange="toggleFeature('image', this.checked)">
           <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
         </label>
       </div>
-
-      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
-        <span class="text-sm font-semibold">允许浏览器本地覆盖</span>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="ui.home.allow_local_override" class="sr-only peer" {% if cfg.ui.home.allow_local_override %}checked{% endif %}>
-          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
-        </label>
-      </div>
-
-      <div class="flex flex-col gap-3 mt-2">
-        <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">首页默认显示的入口</label>
-        <div class="grid grid-cols-2 gap-3">
-          {% for item in home_tab_defs %}
-          <label class="flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 text-sm font-semibold">
-            <input type="checkbox" name="ui.home.enabled_tabs[]" data-array-target="ui.home.enabled_tabs" value="{{ item.key }}" {% if item.key in cfg.ui.home.enabled_tabs %}checked{% endif %}>
-            <span>{{ item.label }}</span>
-          </label>
-          {% endfor %}
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-3 mt-2">
-        <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">图片功能开放的模块</label>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {% for item in image_task_defs %}
-          <label class="flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 text-sm font-semibold">
-            <input type="checkbox" name="ui.home.image_modules[]" data-array-target="ui.home.image_modules" value="{{ item.key }}" {% if item.key in cfg.ui.home.image_modules %}checked{% endif %}>
-            <span>{{ item.config_label }}</span>
-          </label>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="local-home-pref-box" class="bento-card flex flex-col gap-6">
-    <div>
-      <h3 class="text-lg font-bold">当前浏览器的首页偏好</h3>
-      <p class="text-xs text-zinc-500 mt-1">只影响你现在这个浏览器，不会写回服务器配置。</p>
-    </div>
-
-    <div class="grid grid-cols-2 gap-3">
-      {% for item in home_tab_defs %}
-      <label class="flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 text-sm font-semibold">
-        <input type="checkbox" data-local-home-tab value="{{ item.key }}">
-        <span>{{ item.label }}</span>
-      </label>
-      {% endfor %}
-    </div>
-
-    <div class="flex gap-3">
-      <button type="button" class="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold" onclick="saveLocalHomePrefs()">保存本地偏好</button>
-      <button type="button" class="px-4 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/50 text-sm font-bold text-zinc-600 dark:text-zinc-300" onclick="resetLocalHomePrefs()">恢复全局默认</button>
     </div>
   </div>
 
