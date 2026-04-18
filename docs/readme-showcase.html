@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lumina README Showcase</title>
+  <style>
+    :root {
+      --indigo: #4f46e5;
+      --emerald: #059669;
+      --zinc-50: #f8fafc;
+      --zinc-100: #f1f5f9;
+      --zinc-400: #94a3b8;
+      --zinc-900: #0f172a;
+    }
+    * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+    body {
+      background: #f8f9ff;
+      background-image: 
+        radial-gradient(circle at 0% 0%, rgba(79, 70, 229, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.04) 0%, transparent 40%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      color: var(--zinc-900);
+    }
+    .shell { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 140px; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; }
+    .logo-box { display: flex; align-items: center; gap: 1rem; }
+    .logo { width: 48px; height: 48px; background: var(--indigo); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 24px; box-shadow: 0 10px 20px rgba(79, 70, 229, 0.2); }
+    .header-text h1 { margin: 0; font-size: 20px; font-weight: 800; }
+    .header-text p { margin: 4px 0 0; font-size: 11px; color: var(--zinc-400); display: flex; align-items: center; gap: 6px; }
+    .status-pill { background: white; border: 1px solid rgba(0,0,0,0.05); padding: 6px 14px; border-radius: 10px; font-size: 10px; font-weight: 800; color: #64748b; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .status-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
+
+    .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; align-items: start; }
+    .card { background: white; border-radius: 2.5rem; border: 1px solid rgba(0,0,0,0.04); padding: 2.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+    
+    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; }
+    .card-head h3 { margin: 0; font-size: 28px; font-weight: 900; }
+    .seg-ctrl { background: #f1f5f9; padding: 4px; border-radius: 14px; display: flex; gap: 4px; }
+    .seg-btn { border: none; background: transparent; padding: 8px 20px; font-size: 14px; font-weight: 700; color: #94a3b8; border-radius: 10px; cursor: pointer; }
+    .seg-btn.active { background: white; color: var(--zinc-900); box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+    .btn-primary { background: var(--indigo); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 800; font-size: 14px; box-shadow: 0 8px 16px rgba(79, 70, 229, 0.2); }
+
+    .timeline { position: relative; border-left: 2px solid #f1f5f9; margin-left: 14px; padding-left: 40px; }
+    .time-item { position: relative; margin-bottom: 3rem; }
+    .time-node { position: absolute; left: -54px; top: 0; width: 28px; height: 28px; background: white; border: 1px solid #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); }
+    .time-item.collapsed .time-node { width: 14px; height: 14px; left: -47px; top: 6px; background: #e2e8f0; border: 3px solid white; }
+    .time-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .time-head h4 { margin: 0; font-size: 17px; font-weight: 900; color: var(--indigo); display: flex; align-items: center; gap: 8px; }
+    .time-item.collapsed h4 { color: var(--zinc-900); font-size: 15px; }
+    .time-tag { font-size: 10px; font-weight: 800; color: #cbd5e1; background: #f8fafc; padding: 2px 8px; border-radius: 4px; }
+
+    .content-box { color: #64748b; font-size: 14px; line-height: 1.7; }
+    .content-box h5 { color: var(--zinc-900); font-weight: 900; margin: 1.5rem 0 0.5rem; }
+    .content-box ul { padding-left: 1.2rem; margin: 0; list-style-type: disc; }
+    .content-box li { margin-bottom: 4px; }
+    .content-box .label { font-weight: 800; color: #334155; }
+
+    .side-stack { display: flex; flex-direction: column; gap: 1.5rem; }
+    .pulse-tags { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .pulse-tag { font-size: 9px; font-weight: 800; color: #94a3b8; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.1em; }
+    .big-num { font-size: 42px; font-weight: 900; tracking: -0.02em; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1.5rem; }
+    .chip { padding: 6px 14px; border-radius: 20px; font-size: 10px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+    .chip-blue { background: #eff6ff; color: #2563eb; }
+    .chip-indigo { background: #eef2ff; color: #4f46e5; }
+    .chip-cyan { background: #ecfeff; color: #0891b2; }
+    .expand-box { margin-top: 1.5rem; border: 1px solid #f1f5f9; background: rgba(248,250,252,0.5); padding: 12px 16px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; }
+
+    .promo-card { position: relative; padding: 2.5rem; border-radius: 2.5rem; color: white; height: 200px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
+    .promo-card h6 { margin: 0; font-size: 10px; font-weight: 800; letter-spacing: 0.25em; opacity: 0.7; }
+    .promo-card h3 { margin: 8px 0 0; font-size: 32px; font-weight: 900; font-style: italic; }
+    .promo-card p { margin: 12px 0 0; font-size: 12px; font-weight: 600; line-height: 1.6; max-width: 220px; opacity: 0.9; }
+    .promo-btns { display: flex; justify-content: space-between; align-items: flex-end; }
+    .glass-pills { display: flex; gap: -8px; }
+    .glass-pill { width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; margin-right: -10px; }
+    .arrow-btn { width: 50px; height: 50px; background: white; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: var(--indigo); font-size: 24px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+    .bg-indigo { background: var(--indigo); }
+    .bg-emerald { background: var(--emerald); }
+
+    .dock { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.8); backdrop-filter: blur(20px); padding: 8px; border-radius: 30px; display: flex; gap: 4px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); border: 1px solid rgba(255,255,255,0.4); }
+    .dock-item { padding: 12px 32px; border-radius: 22px; font-size: 14px; font-weight: 800; color: #94a3b8; }
+    .dock-item.active { background: var(--indigo); color: white; box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3); }
+
+    @media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="logo-box">
+        <div class="logo">L</div>
+        <div class="header-text">
+          <h1>晚上好，Lu</h1>
+          <p>v0.8.1 <span style="width:4px;height:4px;background:#ddd;border-radius:50%"></span> 在你的电脑上思考</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="status-pill">Active <div class="status-dot"></div></div>
+        <div style="font-size:20px">🌙</div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Main Content -->
+      <section class="card">
+        <div class="card-head">
+          <div style="display:flex;align-items:center;gap:24px">
+            <h3>今日回顾</h3>
+            <div class="seg-ctrl">
+              <button class="seg-btn active">快照</button>
+              <button class="seg-btn">日报</button>
+              <button class="seg-btn">周报</button>
+              <button class="seg-btn">月报</button>
+            </div>
+          </div>
+          <button class="btn-primary">立即生成</button>
+        </div>
+
+        <div class="timeline">
+          <!-- Active Item -->
+          <div class="time-item">
+            <div class="time-node">🌍</div>
+            <div class="time-head">
+              <h4><span style="font-size:10px;opacity:0.5">▼</span> 2026-04-18 18:00</h4>
+              <span class="time-tag">条目 1</span>
+            </div>
+            <div class="content-box">
+              <h5>最近在推进</h5>
+              <ul>
+                <li>已完成文档中第 3 章的代码段更新，并更新了相关注释以匹配当前版本。</li>
+                <li>正在整理第 4 章的测试用例，确保所有覆盖场景符合验收标准。</li>
+                <li>已同步更新 Git 提交信息，将本次变更记录推送到目标分支上。</li>
+              </ul>
+              <h5>当前上下文</h5>
+              <ul>
+                <li><span class="label">进度：</span>代码编译耗时约 45 分钟，最终确认通过。</li>
+                <li><span class="label">阻塞点：</span>无。</li>
+                <li><span class="label">待确认项：</span>检查第 5 章的接口文档是否与上一版本保持一致，以便后续开发继续。</li>
+              </ul>
+              <h5>下一步建议</h5>
+              <ul>
+                <li>先执行第 5 章的单元测试，验证新代码在测试环境下的行为是否符合预期。</li>
+                <li>立即联系后端团队确认第 5 章 API 接口的最终状态，确保接口可用。</li>
+              </ul>
+              <div style="margin-top:20px"><span class="time-tag" style="background:#f1f5f9;color:#94a3b8">GIT</span></div>
+            </div>
+          </div>
+
+          <!-- Collapsed Items -->
+          <div class="time-item collapsed">
+            <div class="time-node"></div>
+            <div class="time-head" style="margin-bottom:0">
+              <h4><span style="font-size:10px;opacity:0.3">▶</span> 2026-04-18 16:00</h4>
+              <span class="time-tag">条目 2</span>
+            </div>
+          </div>
+          <div class="time-item collapsed" style="margin-top:2rem">
+            <div class="time-node" style="background:#10b981"></div>
+            <div class="time-head" style="margin-bottom:0">
+              <h4><span style="font-size:10px;opacity:0.3">▶</span> 2026-04-18 14:00</h4>
+              <span class="time-tag">条目 3</span>
+            </div>
+          </div>
+          <div class="time-item collapsed" style="margin-top:2rem;opacity:0.4">
+            <div class="time-node"></div>
+            <div class="time-head" style="margin-bottom:0">
+              <h4><span style="font-size:10px;opacity:0.3">▶</span> 2026-04-18 12:00</h4>
+              <span class="time-tag">条目 4</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sidebar -->
+      <div class="side-stack">
+        <section class="card" style="padding:2rem">
+          <div class="card-head" style="margin-bottom:1.5rem">
+            <h3 style="font-size:20px">数据源脉动</h3>
+            <div class="pulse-tags">
+              <span class="pulse-tag">默认摘要</span>
+              <span class="pulse-tag">24H</span>
+            </div>
+          </div>
+          <div class="big-num">5/8</div>
+          <p style="font-size:12px;color:#94a3b8;margin:8px 0 0">最近 24 小时有 5 个来源活跃，累计 5,792 字符。</p>
+          
+          <div class="chips">
+            <div class="chip chip-blue"><span>🌐</span> 浏览器</div>
+            <div class="chip chip-indigo"><span>💻</span> Shell</div>
+            <div class="chip chip-cyan"><span>🤖</span> AI</div>
+          </div>
+
+          <div class="expand-box">
+            <div style="font-size:12px;font-weight:800">查看完整来源<br><span style="font-size:10px;font-weight:600;color:#94a3b8">展开后可查看每个来源的活跃度和存储占用。</span></div>
+            <div style="color:#94a3b8">⌵</div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <nav class="dock">
+    <div class="dock-item active">回顾</div>
+    <div class="dock-item">文档</div>
+    <div class="dock-item">图像</div>
+    <div class="dock-item">设置</div>
+  </nav>
+</body>
+</html>

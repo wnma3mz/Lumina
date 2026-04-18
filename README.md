@@ -5,6 +5,10 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-black)](https://github.com/wnma3mz/Lumina)
 [![License](https://img.shields.io/github/license/wnma3mz/Lumina)](LICENSE)
 
+<div align="center">
+  <img src="assets/showcase.jpg" width="850" style="border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.1);">
+</div>
+
 ---
 
 ## 能做什么
