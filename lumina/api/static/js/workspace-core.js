@@ -1,4 +1,18 @@
 var _translateLang = 'zh';
+
+// --- HTMX Events ---
+document.addEventListener('htmx:afterSettle', function(evt) {
+  // If Data Source Pulse was updated, notify the buddy to evolve
+  if (evt.detail.target.id === 'digest-sources') {
+    var sourceMap = {};
+    evt.detail.target.querySelectorAll('.grid > div').forEach(function(el) {
+      var name = el.querySelector('span:last-child')?.textContent.trim();
+      var isActive = !el.classList.contains('grayscale');
+      if (name) sourceMap[name.toLowerCase()] = isActive ? 100 : 0;
+    });
+    if (window.luminaBuddy) window.luminaBuddy.evolve(sourceMap);
+  }
+});
 var _translateJobId = '';
 var _comparePairs = [];
 var _compareSync = false;
@@ -241,8 +255,13 @@ async function pollBatchJob(kind, targetId, jobId) {
       var timer = setTimeout(function() { pollBatchJob(kind, targetId, jobId); }, 2000);
       if (kind === 'document') _documentBatchPollTimer = timer;
       else _labBatchPollTimer = timer;
+    } else if (job.status === 'done') {
+      if (window.luminaBuddy) window.luminaBuddy.setState('success');
+    } else if (job.status === 'error') {
+      if (window.luminaBuddy) window.luminaBuddy.setState('error');
     }
   } catch (e) {
+    if (window.luminaBuddy) window.luminaBuddy.setState('error');
     var el = document.getElementById(targetId);
     if (el) {
       el.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">批处理状态获取失败：' + escapeHtml(e.message) + '</span></div>';
@@ -470,6 +489,8 @@ async function runLabTask() {
   var result = document.getElementById('lab-result');
   var btn = document.getElementById('lab-run-btn');
   if (!result || !btn) return;
+
+  if (window.luminaBuddy) window.luminaBuddy.setState('working');
   if (_labInputMode === 'directory') {
     var inputDir = (document.getElementById('lab-directory-input').value || '').trim();
     var outputDir = (document.getElementById('lab-output-dir').value || '').trim();
@@ -548,12 +569,14 @@ async function runLabTask() {
       if (!mediaRes.ok) throw new Error(((await mediaRes.json().catch(function() { return {}; })).detail) || mediaRes.statusText);
       var mediaData = await mediaRes.json();
       var mediaText = (((mediaData || {}).choices || [])[0] || {}).message;
+      if (window.luminaBuddy) window.luminaBuddy.setState('success');
       await renderRichTextResult('lab-result', (mediaText && mediaText.content) || '', spec.label + ' · Chat', _currentTaskController.signal);
       return;
     }
 
     throw new Error('暂不支持的图片任务');
   } catch (e) {
+    if (window.luminaBuddy) window.luminaBuddy.setState('error');
     if (e.name === 'AbortError') {
       result.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 w-full text-zinc-500 dark:text-zinc-400 font-bold flex items-start gap-2"><span class="text-sm">已取消处理。</span></div>';
     } else {
@@ -567,6 +590,7 @@ async function runLabTask() {
 
 async function startDocumentTask() {
   var fileInput = document.getElementById('document-file');
+  if (window.luminaBuddy) window.luminaBuddy.setState('working');
   var urlInput = document.getElementById('document-url');
   var textInput = document.getElementById('document-text');
   var dirInput = document.getElementById('document-directory');
@@ -594,6 +618,7 @@ async function startDocumentTask() {
   if (_documentInputMode === 'directory') {
     btn.disabled = true;
     btn.textContent = '提交中…';
+    if (window.luminaBuddy) window.luminaBuddy.setState('working');
     resultDiv.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-12 w-full flex flex-col items-center justify-center border border-zinc-100 dark:border-zinc-800"><svg class="w-8 h-8 animate-spin text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><div class="text-sm font-bold text-zinc-500">正在提交批处理任务…</div></div>';
     try {
       clearBatchPoll('document');
@@ -647,6 +672,7 @@ async function startDocumentTask() {
           throw new Error(translateTextErr.detail || res.statusText);
         }
         var translateTextData = await res.json();
+        if (window.luminaBuddy) window.luminaBuddy.setState('success');
         await renderRichTextResult('document-result', translateTextData.text || '', _translateLang === 'zh' ? '文本翻译 · 英 -> 中' : '文本翻译 · 中 -> 英', _currentTaskController.signal);
         return;
       }
@@ -666,6 +692,7 @@ async function startDocumentTask() {
             throw new Error(translateFileErr.detail || res.statusText);
           }
           var translateFileData = await res.json();
+          if (window.luminaBuddy) window.luminaBuddy.setState('success');
           await renderRichTextResult('document-result', translateFileData.text || '', (selectedFile.name || '文本文件') + ' · 文件翻译', _currentTaskController.signal);
           return;
         }
@@ -706,6 +733,7 @@ async function startDocumentTask() {
         throw new Error(summarizeTextErr.detail || res.statusText);
       }
       var summarizeTextData = await res.json();
+      if (window.luminaBuddy) window.luminaBuddy.setState('success');
       await renderRichTextResult('document-result', summarizeTextData.text || '', '文本摘要', _currentTaskController.signal);
       return;
     }
@@ -728,6 +756,7 @@ async function startDocumentTask() {
           throw new Error(summarizeFileErr.detail || res.statusText);
         }
         var summarizeFileData = await res.json();
+        if (window.luminaBuddy) window.luminaBuddy.setState('success');
         await renderRichTextResult('document-result', summarizeFileData.text || '', (selectedFile.name || '文本文件') + ' · 文件总结', _currentTaskController.signal);
         return;
       }
@@ -746,8 +775,10 @@ async function startDocumentTask() {
       var summarizeErr = await res.json().catch(function() { return { detail: res.statusText }; });
       throw new Error(summarizeErr.detail || res.statusText);
     }
+    if (window.luminaBuddy) window.luminaBuddy.setState('success');
     resultDiv.innerHTML = await res.text();
   } catch (e) {
+    if (window.luminaBuddy) window.luminaBuddy.setState('error');
     if (e.name === 'AbortError') {
       resultDiv.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 w-full text-zinc-500 dark:text-zinc-400 font-bold flex items-start gap-2"><span class="text-sm">已取消处理。</span></div>';
     } else {
