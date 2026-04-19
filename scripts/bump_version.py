@@ -63,8 +63,13 @@ def build_replacements(version: str) -> list[Replacement]:
             rf"\g<1>{tag}\g<2>",
         ),
         Replacement(
-            "lumina/api/templates/panels/digest.html",
+            "lumina/api/templates/index.html",
             r"(>)(v[0-9]+\.[0-9]+\.[0-9]+)(<)",
+            rf"\g<1>{tag}\g<3>",
+        ),
+        Replacement(
+            "docs/readme-showcase.html",
+            r"(p>)(v[0-9]+\.[0-9]+\.[0-9]+)( <)",
             rf"\g<1>{tag}\g<3>",
         ),
         Replacement(
