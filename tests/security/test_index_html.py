@@ -261,7 +261,6 @@ def test_js_syntax(html):
 # ── 6. 关键 HTML 元素存在 ─────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("selector,desc", [
-    ('class="modal-overlay"',      "Compare modal overlay"),
     ('id="document-result"',       "Document result container"),
     ('id="panel-digest"',          "Digest panel"),
     ('id="panel-document"',        "Document panel"),

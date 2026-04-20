@@ -94,6 +94,11 @@ class DesktopConfig:
 
 
 @dataclass
+class DocumentConfig:
+    pdf_translation_threads: int = 8
+
+
+@dataclass
 class RequestHistoryConfig:
     enabled: bool = True
     capture_full_body: bool = True
@@ -242,6 +247,14 @@ class Config:
             desktop = {}
         self.desktop = DesktopConfig(
             menubar_enabled=bool(desktop.get("menubar_enabled", True)),
+        )
+
+        # ── Document ──────────────────────────────────────────────────────────
+        doc = data.get("document", {})
+        if not isinstance(doc, dict):
+            doc = {}
+        self.document = DocumentConfig(
+            pdf_translation_threads=max(1, int(doc.get("pdf_translation_threads", 8))),
         )
 
         # ── Request History ───────────────────────────────────────────────────

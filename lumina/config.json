@@ -72,6 +72,10 @@
     "_readme": "桌面端行为配置。menubar_enabled 控制 macOS 菜单栏图标默认是否显示；可通过命令行或菜单栏动作切换。",
     "menubar_enabled": true
   },
+  "document": {
+    "_readme": "文档处理配置。pdf_translation_threads 控制 PDF 翻译并发的线程数，默认 8。增加可提升速度，但消耗更多内存和显存。",
+    "pdf_translation_threads": 8
+  },
   "request_history": {
     "_readme": "LLM 请求历史记录。默认保存完整 prompt/response 正文用于 debug；历史按天滚动、压缩并自动清理",
     "enabled": true,

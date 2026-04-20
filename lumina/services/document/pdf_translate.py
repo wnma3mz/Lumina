@@ -129,7 +129,7 @@ def translate_pdfs(
     output_dir: str,
     lang_in: str = "en",
     lang_out: str = "zh",
-    threads: int = 4,
+    threads: int = 0,
     base_url: str = _DEFAULT_BASE_URL,
     model: str = "",
     api_key: str = DEFAULT_API_KEY,
@@ -137,6 +137,7 @@ def translate_pdfs(
 ) -> List[tuple]:
     """
     调用 pdf2zh 翻译一批 PDF。
+    若 threads 设为 0，则默认使用 config.json 中的 document.pdf_translation_threads 配置。
 
     Returns:
         list of (mono_pdf_path, dual_pdf_path)
@@ -147,6 +148,10 @@ def translate_pdfs(
     except ImportError:
         logger.error("pdf2zh 未正确安装，请重新安装 Lumina。")
         sys.exit(1)
+
+    if threads <= 0:
+        from lumina.config import get_config
+        threads = get_config().document.pdf_translation_threads
 
     # 用带翻译标识的 model name，让 Lumina 服务端识别并路由到翻译 task
     translate_model = model or _translate_model_name(lang_out)

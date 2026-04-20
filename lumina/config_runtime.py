@@ -181,6 +181,9 @@ def serialize_runtime_config(cfg: Any) -> dict[str, Any]:
         "desktop": {
             "menubar_enabled": cfg.desktop.menubar_enabled,
         },
+        "document": {
+            "pdf_translation_threads": cfg.document.pdf_translation_threads,
+        },
         "request_history": {
             "enabled": cfg.request_history.enabled,
             "capture_full_body": cfg.request_history.capture_full_body,
@@ -216,6 +219,12 @@ def update_runtime_config(cfg: Any, data: dict, *, sections: set[str]) -> None:
         if not isinstance(desktop, dict):
             desktop = {}
         cfg.desktop.menubar_enabled = bool(desktop.get("menubar_enabled", True))
+
+    if "document" in sections:
+        doc = data.get("document", {})
+        if not isinstance(doc, dict):
+            doc = {}
+        cfg.document.pdf_translation_threads = max(1, int(doc.get("pdf_translation_threads", 8)))
 
     if "request_history" in sections:
         request_history = data.get("request_history", {})
