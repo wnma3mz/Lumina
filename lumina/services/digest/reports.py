@@ -24,7 +24,7 @@ from lumina.config import (
     REPORTS_WEEKLY_DIR,
 )
 
-logger = logging.getLogger("lumina.digest")
+logger = logging.getLogger("lumina.services.digest")
 
 
 # ── 快照工具 ──────────────────────────────────────────────────────────────────

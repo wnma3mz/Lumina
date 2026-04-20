@@ -18,7 +18,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
-from lumina.sampling import build_mlx_sampler
+from lumina.engine.sampling import build_mlx_sampler
 
 if TYPE_CHECKING:
     from concurrent.futures import ThreadPoolExecutor

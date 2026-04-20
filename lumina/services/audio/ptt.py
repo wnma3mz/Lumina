@@ -22,13 +22,13 @@ WHISPER_RATE = 16000   # Whisper 要求的采样率
 # ── 系统剪贴板 / 粘贴 ──────────────────────────────────────────────────────────
 
 def _pbcopy(text: str):
-    from lumina.platform_utils import clipboard_set
+    from lumina.platform_support.platform_utils import clipboard_set
     clipboard_set(text)
 
 
 def _paste():
     """模拟粘贴快捷键到当前最前面的窗口。需要辅助功能权限。"""
-    from lumina.platform_utils import paste_to_foreground
+    from lumina.platform_support.platform_utils import paste_to_foreground
     paste_to_foreground()
 
 

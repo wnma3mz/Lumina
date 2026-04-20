@@ -8,10 +8,10 @@ import os
 import time
 from pathlib import Path
 
-from lumina.digest.config import get_cfg
-from lumina.digest.cursor_store import load_md_hashes, md5_of_file, save_md_hashes
+from lumina.services.digest.config import get_cfg
+from lumina.services.digest.cursor_store import load_md_hashes, md5_of_file, save_md_hashes
 
-logger = logging.getLogger("lumina.digest")
+logger = logging.getLogger("lumina.services.digest")
 
 _MD_SKIP_PARTS = {".app", "build", "dist", "node_modules", ".git", ".venv", "__pycache__"}
 

@@ -330,7 +330,7 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
     # digest：重新初始化 DigestConfig 单例
     if patch.digest is not None:
         try:
-            from lumina.digest.config import configure as _digest_configure
+            from lumina.services.digest.config import configure as _digest_configure
             _digest_configure(data)
             update_runtime_config(cfg, data, sections={"digest"})
             scheduler = getattr(request.app.state, "digest_scheduler", None)
@@ -343,7 +343,7 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
     # system_prompts：原地 mutate LLMEngine._system_prompts
     if patch.system_prompts is not None:
         try:
-            from lumina.asr.transcriber import set_asr_prompts as _set_asr_prompts
+            from lumina.services.audio.transcriber import set_asr_prompts as _set_asr_prompts
 
             llm = request.app.state.llm
             llm._system_prompts.update(patch.system_prompts)
@@ -366,7 +366,7 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
 
     if patch.request_history is not None:
         try:
-            from lumina import request_history as _request_history
+            from lumina.engine import request_history as _request_history
 
             _request_history.configure({"request_history": data.get("request_history", {})})
             update_runtime_config(cfg, data, sections={"request_history"})
@@ -400,7 +400,7 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
 
 @router.post("/v1/config/request_history/prune")
 async def prune_request_history_api():
-    from lumina import request_history as _request_history
+    from lumina.engine import request_history as _request_history
 
     stats = await asyncio.to_thread(_request_history.prune_now)
     return {"ok": True, "stats": stats}

@@ -17,9 +17,9 @@ logger = logging.getLogger("lumina")
 async def maybe_backfill_reports(llm, now: Optional[dt.datetime] = None) -> None:
     """服务启动或 digest 配置恢复后补齐缺失的日报/周报/月报。"""
     from lumina.cli.utils import is_digest_enabled
-    from lumina.digest import generate_report
-    from lumina.digest.config import get_cfg
-    from lumina.digest.reports import (
+    from lumina.services.digest import generate_report
+    from lumina.services.digest.config import get_cfg
+    from lumina.services.digest.reports import (
         find_missing_daily_report_keys,
         find_missing_monthly_report_keys,
         find_missing_weekly_report_keys,
@@ -108,7 +108,7 @@ class DigestScheduler:
     def _digest_interval_seconds(self) -> int:
         if self._digest_interval_override:
             return int(self._digest_interval_override)
-        from lumina.digest.config import get_cfg
+        from lumina.services.digest.config import get_cfg
 
         return int(get_cfg().refresh_hours * 3600)
 
@@ -164,7 +164,7 @@ class DigestScheduler:
     def _start_startup_digest_thread(self) -> None:
         def _startup():
             from lumina.cli.utils import is_digest_enabled
-            from lumina.digest import maybe_generate_digest
+            from lumina.services.digest import maybe_generate_digest
 
             for _ in range(300):
                 if self._stopped:
@@ -212,7 +212,7 @@ class DigestScheduler:
                 self._digest_timer = None
 
             from lumina.cli.utils import is_digest_enabled
-            from lumina.digest import maybe_generate_digest
+            from lumina.services.digest import maybe_generate_digest
 
             if is_digest_enabled():
                 self._submit_coro(
@@ -234,7 +234,7 @@ class DigestScheduler:
         logger.info("Digest timer started, next trigger in %.0fs (interval=%ds)", delay, interval)
 
     def _schedule_daily_notify(self) -> None:
-        from lumina.digest.config import get_cfg
+        from lumina.services.digest.config import get_cfg
 
         notify_time = get_cfg().notify_time
         if not notify_time:
@@ -252,10 +252,10 @@ class DigestScheduler:
                 self._notify_timer = None
 
             from lumina.cli.utils import is_digest_enabled, notify
-            from lumina.digest import generate_report, maybe_generate_digest
-            from lumina.digest.config import get_cfg
-            from lumina.digest.core import load_digest
-            from lumina.digest.reports import daily_key, monthly_key, weekly_key
+            from lumina.services.digest import generate_report, maybe_generate_digest
+            from lumina.services.digest.config import get_cfg
+            from lumina.services.digest.core import load_digest
+            from lumina.services.digest.reports import daily_key, monthly_key, weekly_key
 
             async def _generate_and_notify():
                 now = dt.datetime.now()

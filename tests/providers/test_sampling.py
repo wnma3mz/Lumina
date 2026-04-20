@@ -4,7 +4,7 @@ unit/test_sampling.py — resolve_sampling() 三层优先级合并测试。
 不依赖任何外部库，纯函数测试。
 """
 from lumina.config import SamplingConfig
-from lumina.sampling import (
+from lumina.engine.sampling import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_MIN_P,
     DEFAULT_PRESENCE_PENALTY,

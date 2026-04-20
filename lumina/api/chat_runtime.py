@@ -4,7 +4,7 @@ from typing import Any, AsyncIterator, Optional
 
 from fastapi import HTTPException, Request
 
-from lumina.request_context import request_context
+from lumina.engine.request_context import request_context
 
 
 def _message_role(message: Any) -> str:

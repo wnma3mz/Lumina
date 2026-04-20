@@ -9,10 +9,9 @@ from mimetypes import guess_type
 from pathlib import Path
 from typing import Iterable, Optional
 
-from lumina.config import get_config
-from lumina.pdf_summarize import _extract_text
-from lumina.pdf_translate import translate_pdfs
-from lumina.request_context import request_context
+from lumina.services.document.pdf_summarize import _extract_text
+from lumina.services.document.pdf_translate import translate_pdfs
+from lumina.engine.request_context import request_context
 
 _DOCUMENT_EXTS = {".pdf", ".txt", ".md", ".markdown"}
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
@@ -51,7 +50,7 @@ def _image_data_url(path: Path) -> str:
 
 
 def _validate_image_size(path: Path) -> None:
-    max_mb = max(1, int(get_config().media.max_image_mb))
+    max_mb = 12
     max_bytes = max_mb * 1024 * 1024
     size = path.stat().st_size
     if size <= 0:

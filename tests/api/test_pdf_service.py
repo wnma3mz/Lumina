@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from lumina.services.pdf import PdfJobManager
+from lumina.services.document.pdf import PdfJobManager
 
 
 # ── PdfJobManager 基础生命周期 ─────────────────────────────────────────────────
@@ -79,8 +79,8 @@ async def test_pdf_job_manager_run_translate_updates_status_on_success(tmp_path)
     fake_mono = str(tmp_path / "mono.pdf")
     fake_dual = str(tmp_path / "dual.pdf")
 
-    with patch("lumina.services.pdf._delayed_rmtree", AsyncMock()):
-        with patch("lumina.pdf_translate.translate_pdfs", return_value=[(fake_mono, fake_dual)]):
+    with patch("lumina.services.document.pdf._delayed_rmtree", AsyncMock()):
+        with patch("lumina.services.document.pdf_translate.translate_pdfs", return_value=[(fake_mono, fake_dual)]):
             job_id = manager.submit_translate(str(pdf_input), "zh", out_dir)
             # 等 task 完成
             tasks = list(manager._bg_tasks)
@@ -99,8 +99,8 @@ async def test_pdf_job_manager_run_translate_updates_status_on_error(tmp_path):
 
     manager._jobs["j_err"] = {"status": "running", "dir": out_dir, "ts": time.time()}
 
-    with patch("lumina.services.pdf._delayed_rmtree", AsyncMock()):
-        with patch("lumina.pdf_translate.translate_pdfs", side_effect=RuntimeError("boom")):
+    with patch("lumina.services.document.pdf._delayed_rmtree", AsyncMock()):
+        with patch("lumina.services.document.pdf_translate.translate_pdfs", side_effect=RuntimeError("boom")):
             await manager._run_translate("j_err", "/nonexistent.pdf", "zh")
 
     assert manager._jobs["j_err"]["status"] == "error"

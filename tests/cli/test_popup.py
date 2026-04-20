@@ -1,4 +1,4 @@
-from lumina import popup
+from lumina.platform_support import popup
 
 
 def test_build_popup_html_uses_pywebview_bridge():

@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Optional
 
-from lumina.sampling import (
+from lumina.engine.sampling import (
     DEFAULT_MIN_P,
     DEFAULT_PRESENCE_PENALTY,
     DEFAULT_REPETITION_PENALTY,

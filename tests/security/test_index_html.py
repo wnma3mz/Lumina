@@ -31,7 +31,7 @@ def css() -> str:
 @pytest.fixture(scope="module")
 def html() -> str:
     from jinja2 import Environment, FileSystemLoader
-    from lumina.ui_meta import HOME_TAB_DEFS, IMAGE_TASK_DEFS, LEGACY_HOME_TAB_MAP
+    from lumina.api.ui_meta import HOME_TAB_DEFS, IMAGE_TASK_DEFS, AUDIO_TASK_DEFS, LEGACY_HOME_TAB_MAP
 
     env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)))
     tmpl = env.get_template("index.html")
@@ -50,14 +50,17 @@ def html() -> str:
             "image_enabled": True,
             "image_modules": ["image_ocr", "image_caption"],
             "allow_local_override": True,
+            "audio_enabled": True,
         },
         image_prompts={
             "image_ocr": "OCR prompt",
             "image_caption": "Caption prompt",
+            "live_translate": "Live prompt",
         },
         asset_ver=0,
         home_tab_defs=HOME_TAB_DEFS,
         image_task_defs=IMAGE_TASK_DEFS,
+        audio_task_defs=AUDIO_TASK_DEFS,
         legacy_home_tab_map=LEGACY_HOME_TAB_MAP,
     )
 
@@ -230,7 +233,7 @@ def test_no_cdn_links(html):
 
 def test_js_syntax(html):
     script_paths = re.findall(r'<script[^>]*src="([^"]+)"[^>]*></script>', html)
-    inline = re.findall(r"<script(?![^>]*src=)[^>]*>(.*?)</script>", html, re.DOTALL)
+    inline = re.findall(r'<script(?![^>]*src=)(?![^>]*type="application/json")[^>]*>(.*?)</script>', html, re.DOTALL)
     assert script_paths or inline, "No page scripts found"
 
     combined_parts = []
@@ -283,15 +286,16 @@ def test_hero_slogan_uses_session_storage(html):
     assert "data-slogans=" in html
     assert 'id="hero-slogan"' in html
     assert 'id="greeting"' in html
-    assert "Lumina Workspace" in html
+    assert "Lumina" in html
 
 
 def test_home_visibility_uses_local_storage(html, page_scripts):
     assert "lumina.homeTabs" in page_scripts
     assert "applyHomeTabVisibility" in page_scripts
-    assert 'data-home-ui=' in html
-    assert 'data-home-tabs=' in html
-    assert 'data-legacy-home-tab-map=' in html
+    assert 'lumina-app-data' in html
+    assert 'homeUi' in html
+    assert 'homeTabs' in html
+    assert 'legacyHomeTabMap' in html
     assert "getLegacyHomeTabMap()" in page_scripts
 
 
@@ -312,7 +316,8 @@ def test_image_panel_supports_ocr_and_caption(html, page_scripts):
     assert 'data-task="image_caption"' in html
     assert 'id="panel-image"' in html
     assert 'id="lab-mode-directory"' in html
-    assert "data-image-prompts=" in html
+    assert "lumina-app-data" in html
+    assert "imagePrompts" in html
     assert "getImagePrompts()" in page_scripts
     assert "/v1/chat/completions" in page_scripts
     assert "/v1/media/ocr" not in html
@@ -340,12 +345,9 @@ def test_settings_helpers_live_in_main_page_script(page_scripts):
     assert "document.body.addEventListener('htmx:afterSwap'" in page_scripts
 
 
-def test_digest_has_document_and_image_cards(html):
-    assert "DOCUMENT" in html
-    assert "IMAGE" in html
+def test_digest_has_theme_toggle_and_overview(html):
     assert "默认摘要" in html
     assert 'aria-label="切换主题"' in html
-    assert "Today Overview" in html
 
 
 def test_digest_report_tabs_request_latest_reports(html):

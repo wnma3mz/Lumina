@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from lumina.asr.transcriber import Transcriber
+from lumina.services.audio.transcriber import Transcriber
 from lumina.engine.llm import LLMEngine
 
 try:
@@ -55,7 +55,7 @@ async def _default_lifespan(app: FastAPI):
     try:
         yield
     finally:
-        from lumina import request_history as _request_history
+        from lumina.engine import request_history as _request_history
 
         _request_history.shutdown()
 
@@ -70,16 +70,15 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
                     传入 None 时使用 _default_lifespan（仅更新启动时间戳）。
                     cli/server.py 传入包含 uvicorn loop 捕获逻辑的 closure。
     """
-    from lumina.services.pdf import PdfJobManager
+    from lumina.services.document.pdf import PdfJobManager
     from lumina.batch import BatchJobManager
-    from lumina.api.routers import pdf as pdf_router
     from lumina.api.routers import batch as batch_router
     from lumina.api.routers import chat as chat_router
     from lumina.api.routers import config as config_router
     from lumina.api.routers import digest as digest_router
+    from lumina.api.routers import document as document_router
+    from lumina.api.routers import vision as vision_router
     from lumina.api.routers import audio as audio_router
-    from lumina.api.routers import media as media_router
-    from lumina.api.routers import text as text_router
     from lumina.api.routers import fragments as fragments_router
     from lumina.config import get_config
 
@@ -102,14 +101,13 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     )
 
     # 注册路由（不再调用 init_router）
-    app.include_router(pdf_router.router)
     app.include_router(batch_router.router)
     app.include_router(chat_router.router)
     app.include_router(config_router.router)
     app.include_router(digest_router.router)
+    app.include_router(document_router.router)
+    app.include_router(vision_router.router)
     app.include_router(audio_router.router)
-    app.include_router(media_router.router)
-    app.include_router(text_router.router)
     app.include_router(fragments_router.router)
 
     # ── 静态文件（CSS / SVG 等）─────────────────────────────────────────────────
@@ -158,7 +156,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
             "image_caption": cfg.system_prompts.get("image_caption", ""),
             "live_translate": cfg.system_prompts.get("live_translate", ""),
         }
-        from lumina.ui_meta import (
+        from lumina.api.ui_meta import (
             AUDIO_TASK_DEFS,
             HOME_TAB_DEFS,
             IMAGE_TASK_DEFS,

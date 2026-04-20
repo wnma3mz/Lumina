@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 from typing import Dict
 
-logger = logging.getLogger("lumina.digest")
+logger = logging.getLogger("lumina.services.digest")
 
 MD_HASHES_PATH = Path.home() / ".lumina" / "md_hashes.json"
 

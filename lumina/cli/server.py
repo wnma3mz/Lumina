@@ -77,7 +77,7 @@ def _run_digest_task(llm, uvicorn_loop: list = None):
         logger.debug("Digest disabled, skip scheduled task")
         return
     import asyncio
-    from lumina.digest import maybe_generate_digest
+    from lumina.services.digest import maybe_generate_digest
     coro = maybe_generate_digest(llm)
     loop = uvicorn_loop[0] if uvicorn_loop else None
     if loop and loop.is_running():
@@ -115,7 +115,7 @@ def _start_digest_timer(llm, interval: int = 3600, uvicorn_loop: list = None):
 
 
 async def _maybe_backfill_reports(llm, now=None) -> None:
-    from lumina.digest.scheduler import maybe_backfill_reports
+    from lumina.services.digest.scheduler import maybe_backfill_reports
 
     await maybe_backfill_reports(llm, now=now)
 
@@ -125,7 +125,7 @@ def _start_daily_notify_timer(llm, uvicorn_loop: list = None):
     import asyncio
     import threading
     import time
-    from lumina.digest.config import get_cfg
+    from lumina.services.digest.config import get_cfg
     from lumina.cli.utils import is_digest_enabled, notify
 
     def _seconds_to_next_notify(notify_time: str) -> float:
@@ -149,9 +149,9 @@ def _start_daily_notify_timer(llm, uvicorn_loop: list = None):
             t.start()
             return
         import datetime as _dt
-        from lumina.digest import maybe_generate_digest, generate_report
-        from lumina.digest.core import load_digest
-        from lumina.digest.reports import daily_key, weekly_key, monthly_key
+        from lumina.services.digest import maybe_generate_digest, generate_report
+        from lumina.services.digest.core import load_digest
+        from lumina.services.digest.reports import daily_key, weekly_key, monthly_key
 
         async def _generate_and_notify():
             now = _dt.datetime.now()
@@ -230,7 +230,7 @@ def _start_ptt(cfg, menubar_app=None):
 
     import json
     import threading
-    from lumina.ptt import PTTDaemon
+    from lumina.services.audio.ptt import PTTDaemon
 
     base_url = f"http://127.0.0.1:{cfg.port}"
     _current_ptt: list = []
@@ -421,7 +421,7 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
             )
 
         def _toggle_digest(self, _):
-            from lumina.digest.config import set_enabled
+            from lumina.services.digest.config import set_enabled
             enabled = not is_digest_enabled()
             set_enabled(enabled)
             try:
@@ -505,7 +505,7 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
             self._ip_item.title = f"复制地址  {ip}:{cfg.port}"
 
         def _copy_ip(self, _):
-            from lumina.platform_utils import clipboard_set
+            from lumina.platform_support.platform_utils import clipboard_set
             ip = self._get_local_ip()
             clipboard_set(f"http://{ip}:{cfg.port}")
             self._ip_item.title = f"已复制 ✓  {ip}:{cfg.port}"
@@ -513,7 +513,7 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
             threading.Timer(2.0, self._refresh_ip_label).start()
 
         def _open_ui(self, _):
-            from lumina.platform_utils import open_url
+            from lumina.platform_support.platform_utils import open_url
 
             open_url(f"http://127.0.0.1:{cfg.port}")
 
@@ -558,8 +558,8 @@ def cmd_server(args):
     from lumina.config import get_config
     from lumina.config_runtime import resolve_config_path as resolve_runtime_config_path
     from lumina.config_runtime import set_active_config_path
-    from lumina.asr.transcriber import Transcriber
-    from lumina.digest.scheduler import DigestScheduler
+    from lumina.services.audio.transcriber import Transcriber
+    from lumina.services.digest.scheduler import DigestScheduler
     from lumina.engine.llm import LLMEngine
     from lumina.api.server import create_app
     from lumina.cli.utils import (
@@ -606,7 +606,7 @@ def cmd_server(args):
     _merged = {**_bundle_prompts, **cfg.system_prompts}
     cfg.system_prompts = _merged
 
-    from lumina import request_history as _request_history
+    from lumina.engine import request_history as _request_history
     _request_history.configure(
         {"request_history": cfg.request_history.__dict__},
         run_startup_cleanup=True,
@@ -624,7 +624,7 @@ def cmd_server(args):
     logger.info("Whisper model: %s", transcriber.model)
 
     # 将配置中的 ASR prompts 注入 transcriber 模块
-    from lumina.asr.transcriber import set_asr_prompts as _set_asr_prompts
+    from lumina.services.audio.transcriber import set_asr_prompts as _set_asr_prompts
     _set_asr_prompts(
         zh=cfg.system_prompts.get("asr_zh", ""),
         en=cfg.system_prompts.get("asr_en", ""),
@@ -636,7 +636,7 @@ def cmd_server(args):
         notify("Lumina 已在运行", f"端口 {cfg.port} 已被占用，请检查现有进程")
         sys.exit(1)
 
-    from lumina import digest as _digest_mod
+    from lumina.services import digest as _digest_mod
     _digest_mod.configure({"digest": cfg.digest} if hasattr(cfg, "digest") else {})
 
     _uvicorn_loop: list = []
@@ -646,7 +646,7 @@ def cmd_server(args):
         """CLI 专用 lifespan：捕获 uvicorn event loop 供 threadsafe 调用。"""
         import asyncio as _asyncio
         import time as _time
-        from lumina.services.pdf import PdfJobManager
+        from lumina.services.document.pdf import PdfJobManager
         _uvicorn_loop.append(_asyncio.get_running_loop())
         app.state.server_start_time = _time.time()
         app.state.pdf_manager = PdfJobManager()

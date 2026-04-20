@@ -28,7 +28,7 @@ async def fetch_pdf_url(url: str) -> Path:
     返回缓存文件路径（永久文件，不应被临时目录清理）。
     使用流式下载避免大文件全量加载进内存。
     """
-    from lumina.pdf_cache import get_cached, put_cache_file
+    from lumina.services.document.pdf_cache import get_cached, put_cache_file
     cached = get_cached(url)
     if cached:
         return cached
@@ -54,7 +54,7 @@ async def fetch_pdf_url(url: str) -> Path:
 
 async def stream_pdf_summary(pdf_path: str, llm) -> AsyncIterator[str]:
     """提取 PDF 文字，流式生成摘要，yield SSE 数据行。"""
-    from lumina.pdf_summarize import _extract_text
+    from lumina.services.document.pdf_summarize import _extract_text
     from lumina.api.sse import stream_llm
     text = await asyncio.to_thread(_extract_text, pdf_path)
     async for chunk in stream_llm(
@@ -121,7 +121,7 @@ class PdfJobManager:
         """后台翻译任务，结果写入 _jobs。完成后立即结束，清理由独立 task 负责。"""
         loop = asyncio.get_running_loop()
         try:
-            from lumina.pdf_translate import translate_pdfs
+            from lumina.services.document.pdf_translate import translate_pdfs
             tmp_dir = self._jobs[job_id]["dir"]
             results = await loop.run_in_executor(
                 None, lambda: translate_pdfs(

@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from lumina.config import DEFAULT_API_BASE_URL_V1, DEFAULT_API_KEY, DEFAULT_MODEL
-from lumina.pdf_translate import translate_pdfs
+from lumina.services.document.pdf_translate import translate_pdfs
 
 logger = logging.getLogger("lumina.watch")
 

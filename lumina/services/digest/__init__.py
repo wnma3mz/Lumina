@@ -1,8 +1,8 @@
 """
 lumina/digest — 本地活动摘要（Daily Digest）
 """
-from lumina.digest.config import configure, get_cfg, DigestConfig
-from lumina.digest.core import (
+from lumina.services.digest.config import configure, get_cfg, DigestConfig
+from lumina.services.digest.core import (
     generate_digest,
     generate_report,
     maybe_generate_digest,

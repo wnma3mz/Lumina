@@ -53,7 +53,7 @@ def _download_url(url: str) -> str:
     import os
     import tempfile
     url = _normalize_pdf_url(url)
-    from lumina.pdf_cache import get_cached, put_cache_file
+    from lumina.services.document.pdf_cache import get_cached, put_cache_file
 
     cached = get_cached(url)
     if cached:

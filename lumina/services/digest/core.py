@@ -35,11 +35,11 @@ from typing import Optional
 from lumina.config import DIGEST_COLLECTOR_STATE_PATH as _COLLECTOR_STATE_PATH
 from lumina.config import DIGEST_CONTEXT_LOG_DIR as _CONTEXT_LOG_DIR
 from lumina.config import DIGEST_PATH as _DIGEST_PATH
-from lumina.digest.collectors import COLLECTORS as _COLLECTORS
-from lumina.digest.config import get_cfg, override_history_hours
-from lumina.request_context import request_context
+from lumina.services.digest.collectors import COLLECTORS as _COLLECTORS
+from lumina.services.digest.config import get_cfg, override_history_hours
+from lumina.engine.request_context import request_context
 
-logger = logging.getLogger("lumina.digest")
+logger = logging.getLogger("lumina.services.digest")
 
 # 当前进程启动时间，用于识别旧状态
 _PROCESS_STARTED_TS = time.time()
@@ -410,7 +410,7 @@ async def generate_digest(llm) -> str:
         logger.info("Digest: saved to %s", _DIGEST_PATH)
         # 同时保存快照，供日报生成使用
         try:
-            from lumina.digest.reports import save_snapshot
+            from lumina.services.digest.reports import save_snapshot
             save_snapshot(entry, now)
         except Exception as e:
             logger.warning("Digest: failed to save snapshot: %s", e)
@@ -426,7 +426,7 @@ async def generate_report(llm, report_type: str, key: str) -> Optional[str]:
     key:         对应格式的日期键（日报: YYYY-MM-DD，周报: YYYY-Www，月报: YYYY-MM）
     """
     from datetime import date
-    from lumina.digest.reports import (
+    from lumina.services.digest.reports import (
         build_daily_input, build_weekly_input, build_monthly_input,
         save_report,
     )
@@ -516,7 +516,7 @@ def get_status() -> dict:
 
 def get_debug_info() -> dict:
     """返回上次采集的缓存数据，不触发任何新的采集，立即返回。"""
-    from lumina.digest.collectors.files import _last_md_files
+    from lumina.services.digest.collectors.files import _last_md_files
     cfg = get_cfg()
     _state.sync_collector_results()
     with _state._lock:

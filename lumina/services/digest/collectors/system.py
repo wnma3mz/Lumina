@@ -11,10 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from lumina.digest.config import get_cfg
+from lumina.services.digest.config import get_cfg
 from lumina.platform_support.paths import shell_history_candidates
 
-logger = logging.getLogger("lumina.digest")
+logger = logging.getLogger("lumina.services.digest")
 
 _GIT_SKIP_DIRS = {".git", ".venv", "node_modules", "build", "dist", "__pycache__", ".app"}
 
@@ -209,7 +209,7 @@ def collect_git_logs(n: int = 20) -> str:
 def collect_clipboard() -> str:
     # 无状态，不使用 cutoff
     try:
-        from lumina.platform_utils import clipboard_get
+        from lumina.platform_support.platform_utils import clipboard_get
         content = clipboard_get().strip()
         if not content:
             return ""

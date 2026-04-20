@@ -2,7 +2,7 @@
 lumina/popup.py — 剪贴板处理结果预览浮窗（AppKit NSPanel 实现）
 
 show_popup() 在子进程中启动原生 NSPanel，主进程立即返回。
-子进程入口：python -m lumina.popup <json_args>
+子进程入口：python -m lumina.platform_support.popup <json_args>
 
 特性：
   - 完全透明背景，圆角胶囊贴 Dock 上方居中
@@ -17,7 +17,7 @@ import sys
 
 from lumina.platform_support.runtime import IS_MACOS
 
-logger = logging.getLogger("lumina.popup")
+logger = logging.getLogger("lumina.platform_support.popup")
 
 _PILL_W = 600
 _PILL_H_SHORT  = 76
@@ -57,7 +57,7 @@ def show_popup(original: str, action: str, lang: str, base_url: str, label: str)
         "label": label,
     })
     subprocess.Popen(
-        [sys.executable, "-m", "lumina.popup", args],
+        [sys.executable, "-m", "lumina.platform_support.popup", args],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -444,7 +444,7 @@ def _run_popup_macos(params: dict):
                 panel.close()
                 NSApp.stop_(None)
             elif name == "copy":
-                from lumina.platform_utils import clipboard_set
+                from lumina.platform_support.platform_utils import clipboard_set
                 try:
                     clipboard_set(str(body))
                 except Exception as e:
@@ -474,7 +474,7 @@ def _run_popup_pywebview(params: dict):
             self.window = None
 
         def copy(self, text: str):
-            from lumina.platform_utils import clipboard_set
+            from lumina.platform_support.platform_utils import clipboard_set
 
             try:
                 clipboard_set(str(text))

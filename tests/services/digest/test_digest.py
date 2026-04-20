@@ -15,7 +15,7 @@ import pytest
 # ── DigestConfig ─────────────────────────────────────────────────────────────
 
 def test_digest_config_defaults():
-    from lumina.digest.config import DigestConfig
+    from lumina.services.digest.config import DigestConfig
     cfg = DigestConfig()
     assert cfg.history_hours == 24.0
     assert cfg.refresh_hours == 1.0
@@ -26,7 +26,7 @@ def test_digest_config_defaults():
 
 
 def test_digest_config_configure():
-    from lumina.digest.config import configure, get_cfg
+    from lumina.services.digest.config import configure, get_cfg
     configure({"digest": {
         "enabled": False,
         "history_hours": 12,
@@ -45,21 +45,21 @@ def test_digest_config_configure():
 
 
 def test_digest_config_enabled_collectors_null():
-    from lumina.digest.config import configure, get_cfg
+    from lumina.services.digest.config import configure, get_cfg
     configure({"digest": {"enabled_collectors": None}})
     assert get_cfg().enabled_collectors is None
 
 
 def test_digest_config_scan_dirs_empty_means_no_scan():
     # scan_dirs=[] 的语义是"不扫描任何目录"，而非回退到默认值
-    from lumina.digest.config import configure, get_cfg
+    from lumina.services.digest.config import configure, get_cfg
     configure({"digest": {"scan_dirs": []}})
     assert get_cfg().scan_dirs == []
 
 
 def test_digest_config_scan_dirs_missing_uses_defaults():
     # 配置中没有 scan_dirs key 时，才回退到默认目录列表
-    from lumina.digest.config import configure, get_cfg, DigestConfig
+    from lumina.services.digest.config import configure, get_cfg, DigestConfig
     configure({"digest": {}})
     assert get_cfg().scan_dirs == DigestConfig().scan_dirs
 
@@ -67,7 +67,7 @@ def test_digest_config_scan_dirs_missing_uses_defaults():
 # ── md5_of_file ───────────────────────────────────────────────────────────────
 
 def test_md5_of_file(tmp_path):
-    from lumina.digest.cursor_store import md5_of_file
+    from lumina.services.digest.cursor_store import md5_of_file
     f = tmp_path / "note.md"
     f.write_text("hello world")
     h1 = md5_of_file(f)
@@ -81,7 +81,7 @@ def test_md5_of_file(tmp_path):
 
 def test_md5_of_file_missing_returns_stable_value(tmp_path):
     """文件不存在时，md5_of_file 返回固定值（空内容的 md5），不抛异常。"""
-    from lumina.digest.cursor_store import md5_of_file
+    from lumina.services.digest.cursor_store import md5_of_file
     result = md5_of_file(tmp_path / "ghost.md")
     # 返回值稳定（不随调用变化），且与有内容的文件不同
     assert result == md5_of_file(tmp_path / "ghost.md")
@@ -93,7 +93,7 @@ def test_md5_of_file_missing_returns_stable_value(tmp_path):
 # ── md_hashes roundtrip ────────────────────────────────────────────────────────
 
 def test_md_hashes_roundtrip(tmp_path):
-    from lumina.digest import cursor_store
+    from lumina.services.digest import cursor_store
     original_path = cursor_store.MD_HASHES_PATH
     cursor_store.MD_HASHES_PATH = tmp_path / "md_hashes.json"
     try:
@@ -106,7 +106,7 @@ def test_md_hashes_roundtrip(tmp_path):
 
 
 def test_md_hashes_missing_file_returns_empty(tmp_path):
-    from lumina.digest import cursor_store
+    from lumina.services.digest import cursor_store
     original_path = cursor_store.MD_HASHES_PATH
     cursor_store.MD_HASHES_PATH = tmp_path / "nonexistent.json"
     try:
@@ -118,14 +118,14 @@ def test_md_hashes_missing_file_returns_empty(tmp_path):
 # ── 平台采集路径适配 ────────────────────────────────────────────────────────────
 
 def test_collect_shell_history_reads_powershell_history(tmp_path):
-    from lumina.digest.collectors import system as system_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import system as system_collectors
+    from lumina.services.digest.config import configure
 
     history = tmp_path / "ConsoleHost_history.txt"
     history.write_text("Get-ChildItem\nSet-Location C:\\work\n", encoding="utf-8")
     configure({"digest": {"history_hours": 24}})
 
-    with patch("lumina.digest.collectors.system.shell_history_candidates", return_value=[history]):
+    with patch("lumina.services.digest.collectors.system.shell_history_candidates", return_value=[history]):
         text = system_collectors.collect_shell_history()
 
     assert "Get-ChildItem" in text
@@ -133,8 +133,8 @@ def test_collect_shell_history_reads_powershell_history(tmp_path):
 
 
 def test_collect_shell_history_keeps_latest_zsh_commands_first(tmp_path):
-    from lumina.digest.collectors import system as system_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import system as system_collectors
+    from lumina.services.digest.config import configure
 
     history = tmp_path / ".zsh_history"
     now = time.time()
@@ -150,7 +150,7 @@ def test_collect_shell_history_keeps_latest_zsh_commands_first(tmp_path):
     )
     configure({"digest": {"history_hours": 1}})
 
-    with patch("lumina.digest.collectors.system.shell_history_candidates", return_value=[history]):
+    with patch("lumina.services.digest.collectors.system.shell_history_candidates", return_value=[history]):
         text = system_collectors.collect_shell_history()
 
     lines = text.splitlines()
@@ -160,8 +160,8 @@ def test_collect_shell_history_keeps_latest_zsh_commands_first(tmp_path):
 
 
 def test_collect_shell_history_merges_zsh_continuation_lines(tmp_path):
-    from lumina.digest.collectors import system as system_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import system as system_collectors
+    from lumina.services.digest.config import configure
 
     history = tmp_path / ".zsh_history"
     now = int(time.time())
@@ -178,7 +178,7 @@ def test_collect_shell_history_merges_zsh_continuation_lines(tmp_path):
     )
     configure({"digest": {"history_hours": 24}})
 
-    with patch("lumina.digest.collectors.system.shell_history_candidates", return_value=[history]):
+    with patch("lumina.services.digest.collectors.system.shell_history_candidates", return_value=[history]):
         text = system_collectors.collect_shell_history()
 
     assert "ffmpeg -i input1 \\ -c copy out1 \\ -map 0 out2" in text
@@ -187,8 +187,8 @@ def test_collect_shell_history_merges_zsh_continuation_lines(tmp_path):
 
 
 def test_collect_shell_history_reads_bash_timestamp_format(tmp_path):
-    from lumina.digest.collectors import system as system_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import system as system_collectors
+    from lumina.services.digest.config import configure
 
     history = tmp_path / ".bash_history"
     now = int(time.time())
@@ -205,7 +205,7 @@ def test_collect_shell_history_reads_bash_timestamp_format(tmp_path):
     )
     configure({"digest": {"history_hours": 1}})
 
-    with patch("lumina.digest.collectors.system.shell_history_candidates", return_value=[history]):
+    with patch("lumina.services.digest.collectors.system.shell_history_candidates", return_value=[history]):
         text = system_collectors.collect_shell_history()
 
     assert "python app.py" in text
@@ -213,8 +213,8 @@ def test_collect_shell_history_reads_bash_timestamp_format(tmp_path):
 
 
 def test_collect_browser_history_reads_chromium_candidates(tmp_path):
-    from lumina.digest.collectors import apps as app_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import apps as app_collectors
+    from lumina.services.digest.config import configure
 
     history_db = tmp_path / "History"
     import sqlite3
@@ -230,17 +230,17 @@ def test_collect_browser_history_reads_chromium_candidates(tmp_path):
         conn.commit()
 
     configure({"digest": {"history_hours": 24}})
-    with patch("lumina.digest.collectors.apps.chromium_history_candidates", return_value=[history_db]), \
-         patch("lumina.digest.collectors.apps.firefox_profile_dirs", return_value=[]), \
-         patch("lumina.digest.collectors.apps.safari_history_db", return_value=None):
+    with patch("lumina.services.digest.collectors.apps.chromium_history_candidates", return_value=[history_db]), \
+         patch("lumina.services.digest.collectors.apps.firefox_profile_dirs", return_value=[]), \
+         patch("lumina.services.digest.collectors.apps.safari_history_db", return_value=None):
         text = app_collectors.collect_browser_history()
 
     assert "Edge page" in text
 
 
 def test_collect_ai_queries_reads_cursor_transcripts(tmp_path, monkeypatch):
-    from lumina.digest.collectors import apps as app_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import apps as app_collectors
+    from lumina.services.digest.config import configure
 
     home = tmp_path / "home"
     transcript_dir = home / ".cursor" / "projects" / "demo" / "agent-transcripts" / "chat"
@@ -267,8 +267,8 @@ def test_collect_ai_queries_reads_cursor_transcripts(tmp_path, monkeypatch):
 
 
 def test_collect_ai_queries_only_limits_single_item_length(tmp_path, monkeypatch):
-    from lumina.digest.collectors import apps as app_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import apps as app_collectors
+    from lumina.services.digest.config import configure
 
     home = tmp_path / "home"
     home.mkdir()
@@ -312,8 +312,8 @@ def test_collect_ai_queries_only_limits_single_item_length(tmp_path, monkeypatch
 
 
 def test_collect_ai_queries_groups_sources_without_count_limits(tmp_path, monkeypatch):
-    from lumina.digest.collectors import apps as app_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import apps as app_collectors
+    from lumina.services.digest.config import configure
 
     home = tmp_path / "home"
     (home / ".claude" / "projects" / "demo").mkdir(parents=True)
@@ -427,8 +427,8 @@ def test_collect_ai_queries_groups_sources_without_count_limits(tmp_path, monkey
 
 
 def test_collect_ai_queries_cursor_uses_transcript_timestamp_when_available(tmp_path, monkeypatch):
-    from lumina.digest.collectors import apps as app_collectors
-    from lumina.digest.config import configure
+    from lumina.services.digest.collectors import apps as app_collectors
+    from lumina.services.digest.config import configure
 
     home = tmp_path / "home"
     transcript_dir = home / ".cursor" / "projects" / "demo" / "agent-transcripts" / "chat"
@@ -477,7 +477,7 @@ def test_collect_ai_queries_cursor_uses_transcript_timestamp_when_available(tmp_
 
 def test_enabled_collectors_filters_active():
     """_collect_all 应只运行 enabled_collectors 里的 collector。"""
-    from lumina.digest.config import configure
+    from lumina.services.digest.config import configure
     configure({"digest": {"enabled_collectors": ["collect_shell_history"]}})
 
     called = []
@@ -490,7 +490,7 @@ def test_enabled_collectors_filters_active():
         called.append("collect_git_logs")
         return ""
 
-    import lumina.digest.core as core
+    import lumina.services.digest.core as core
     original = core._COLLECTORS[:]
     core._COLLECTORS = [collect_shell_history, collect_git_logs]
 
@@ -604,7 +604,7 @@ def test_config_ptt_enabled_defaults_to_false_when_missing(tmp_path):
 
 
 def test_get_status_recovers_generated_at_from_existing_digest(tmp_path):
-    import lumina.digest.core as core
+    import lumina.services.digest.core as core
 
     digest_path = tmp_path / "digest.md"
     digest_path.write_text("# existing digest\n", encoding="utf-8")
@@ -631,8 +631,8 @@ def test_get_status_recovers_generated_at_from_existing_digest(tmp_path):
 async def test_maybe_generate_digest_skips_when_lock_held(tmp_path):
     """asyncio.Lock 持有期间，并发的 maybe_generate_digest 调用应该直接跳过，不重入。"""
     import asyncio
-    import lumina.digest.core as core
-    from lumina.digest.config import configure
+    import lumina.services.digest.core as core
+    from lumina.services.digest.config import configure
 
     configure({"digest": {"enabled": True}})
 
@@ -667,7 +667,7 @@ async def test_maybe_generate_digest_skips_when_lock_held(tmp_path):
 def test_digest_state_thread_safety():
     """多线程并发 set_generating 不应 raise。"""
     import threading
-    from lumina.digest.core import DigestState
+    from lumina.services.digest.core import DigestState
 
     state = DigestState()
     errors = []
@@ -689,7 +689,7 @@ def test_digest_state_thread_safety():
 
 
 def test_digest_state_set_generated_updates_timestamps():
-    from lumina.digest.core import DigestState
+    from lumina.services.digest.core import DigestState
     state = DigestState()
     ts = 1_700_000_000.0
     state.set_generated(ts)
@@ -698,7 +698,7 @@ def test_digest_state_set_generated_updates_timestamps():
 
 
 def test_digest_state_to_status_returns_snapshot():
-    from lumina.digest.core import DigestState
+    from lumina.services.digest.core import DigestState
     state = DigestState()
     state.set_generating(True)
     status = state.to_status()
@@ -707,7 +707,7 @@ def test_digest_state_to_status_returns_snapshot():
 
 
 def test_get_debug_info_recovers_persisted_collector_state(tmp_path):
-    import lumina.digest.core as core
+    import lumina.services.digest.core as core
 
     persisted = {
         "saved_at": "2026-04-16T12:00:00",
@@ -737,7 +737,7 @@ def test_get_debug_info_recovers_persisted_collector_state(tmp_path):
 
 
 def test_dedupe_context_against_recent_keeps_structure_and_dedupes_within_section():
-    import lumina.digest.core as core
+    import lumina.services.digest.core as core
 
     current = (
         "当前时间：2026-04-16 22:37\n\n"
@@ -772,7 +772,7 @@ def test_dedupe_context_against_recent_keeps_structure_and_dedupes_within_sectio
 
 
 def test_generate_digest_saves_raw_then_dedupes_against_previous_three(tmp_path):
-    import lumina.digest.core as core
+    import lumina.services.digest.core as core
 
     context_dir = tmp_path / "digest_context_log"
     context_dir.mkdir(parents=True)
@@ -804,6 +804,7 @@ def test_generate_digest_saves_raw_then_dedupes_against_previous_three(tmp_path)
                  "  Fresh line"
              ))), \
              patch.object(core, "_prepend_entry", lambda entry: None), \
+             patch("lumina.services.digest.reports.save_snapshot"), \
              patch.object(core, "_state") as mock_state:
             mock_state.set_generating = lambda val: None
             mock_state.set_generated = lambda ts: None
@@ -822,7 +823,7 @@ def test_generate_digest_saves_raw_then_dedupes_against_previous_three(tmp_path)
 
 
 def test_collector_sources_only_exposes_activity_state():
-    from lumina.ui_meta import collector_sources
+    from lumina.api.ui_meta import collector_sources
 
     sources = collector_sources(
         {
@@ -845,7 +846,7 @@ def test_collector_sources_only_exposes_activity_state():
 @pytest.mark.anyio
 async def test_collector_runner_timeout_returns_exception():
     """超时 collector 返回 Exception，不阻塞其他 collector。"""
-    from lumina.digest.core import CollectorRunner
+    from lumina.services.digest.core import CollectorRunner
 
     runner = CollectorRunner()
 
@@ -871,7 +872,7 @@ async def test_collector_runner_timeout_returns_exception():
 @pytest.mark.anyio
 async def test_collector_runner_enabled_filter():
     """_collect_all 通过 enabled_collectors 过滤时，CollectorRunner 只运行选中的 collector。"""
-    from lumina.digest.core import CollectorRunner
+    from lumina.services.digest.core import CollectorRunner
 
     runner = CollectorRunner()
     called = []
@@ -892,8 +893,8 @@ async def test_collector_runner_enabled_filter():
 
 @pytest.mark.anyio
 async def test_maybe_generate_digest_skips_when_disabled():
-    import lumina.digest.core as core
-    from lumina.digest.config import configure
+    import lumina.services.digest.core as core
+    from lumina.services.digest.config import configure
 
     class FakeLLM:
         generate = AsyncMock(return_value="digest body")
@@ -909,7 +910,7 @@ async def test_maybe_generate_digest_skips_when_disabled():
 
 def test_collectors_auto_discovered():
     """COLLECTORS 自动发现到所有内置 collect_* 函数。"""
-    from lumina.digest.collectors import COLLECTORS
+    from lumina.services.digest.collectors import COLLECTORS
 
     names = {fn.__name__ for fn in COLLECTORS}
     expected = {
@@ -927,15 +928,15 @@ def test_collectors_auto_discovered():
 
 def test_collector_protocol_satisfied():
     """所有 COLLECTORS 条目满足 Collector Protocol。"""
-    from lumina.digest.collectors import COLLECTORS
-    from lumina.digest.collectors.base import Collector
+    from lumina.services.digest.collectors import COLLECTORS
+    from lumina.services.digest.collectors.base import Collector
 
     for fn in COLLECTORS:
         assert isinstance(fn, Collector), f"{fn.__name__} does not satisfy Collector protocol"
 
 
 def test_find_missing_daily_report_keys_uses_snapshot_gaps(tmp_path, monkeypatch):
-    import lumina.digest.reports as reports
+    import lumina.services.digest.reports as reports
 
     monkeypatch.setattr(reports, "DIGEST_SNAPSHOTS_DIR", tmp_path / "snapshots")
     monkeypatch.setattr(reports, "REPORTS_DAILY_DIR", tmp_path / "reports" / "daily")
@@ -961,7 +962,7 @@ def test_find_missing_daily_report_keys_uses_snapshot_gaps(tmp_path, monkeypatch
 
 
 def test_find_missing_weekly_and_monthly_report_keys_skip_current_period(tmp_path, monkeypatch):
-    import lumina.digest.reports as reports
+    import lumina.services.digest.reports as reports
 
     monkeypatch.setattr(reports, "DIGEST_SNAPSHOTS_DIR", tmp_path / "snapshots")
     monkeypatch.setattr(reports, "REPORTS_DAILY_DIR", tmp_path / "reports" / "daily")
@@ -985,9 +986,9 @@ def test_find_missing_weekly_and_monthly_report_keys_skip_current_period(tmp_pat
 async def test_startup_backfill_reports_fills_historical_gaps(tmp_path, monkeypatch):
     import lumina.cli.server as server
     import lumina.cli.utils as cli_utils
-    import lumina.digest as digest
-    import lumina.digest.reports as reports
-    from lumina.digest.config import configure
+    import lumina.services.digest as digest
+    import lumina.services.digest.reports as reports
+    from lumina.services.digest.config import configure
 
     monkeypatch.setattr(reports, "DIGEST_SNAPSHOTS_DIR", tmp_path / "snapshots")
     monkeypatch.setattr(reports, "REPORTS_DAILY_DIR", tmp_path / "reports" / "daily")
@@ -1023,8 +1024,8 @@ async def test_startup_backfill_reports_fills_historical_gaps(tmp_path, monkeypa
 
 
 def test_digest_scheduler_reload_cancels_and_reschedules(monkeypatch):
-    from lumina.digest.config import configure
-    from lumina.digest.scheduler import DigestScheduler
+    from lumina.services.digest.config import configure
+    from lumina.services.digest.scheduler import DigestScheduler
 
     created_timers = []
     startup_calls = []
@@ -1043,7 +1044,7 @@ def test_digest_scheduler_reload_cancels_and_reschedules(monkeypatch):
         def cancel(self):
             self.cancelled = True
 
-    monkeypatch.setattr("lumina.digest.scheduler.threading.Timer", FakeTimer)
+    monkeypatch.setattr("lumina.services.digest.scheduler.threading.Timer", FakeTimer)
     monkeypatch.setattr(DigestScheduler, "_seconds_to_next_notify", staticmethod(lambda _notify_time: 45))
 
     configure({"digest": {"enabled": True, "notify_time": "20:00", "refresh_hours": 1}})

@@ -4,11 +4,11 @@ import time
 import numpy as np
 from typing import AsyncIterator
 
-from lumina.asr.recorder import AudioRecorder, SAMPLE_RATE
-from lumina.asr.transcriber import Transcriber
+from lumina.services.audio.recorder import AudioRecorder, SAMPLE_RATE
+from lumina.services.audio.transcriber import Transcriber
 from lumina.engine.llm import LLMEngine
 
-logger = logging.getLogger("lumina.asr")
+logger = logging.getLogger("lumina.services.audio")
 
 class LiveTranslator:
     def __init__(self, llm: LLMEngine, transcriber: Transcriber, lang_in="auto", lang_out="zh"):

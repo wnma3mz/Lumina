@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from lumina.digest.config import get_cfg
+from lumina.services.digest.config import get_cfg
 from lumina.platform_support.paths import (
     calendar_db_path,
     chromium_history_candidates,
@@ -20,7 +20,7 @@ from lumina.platform_support.paths import (
     safari_history_db,
 )
 
-logger = logging.getLogger("lumina.digest")
+logger = logging.getLogger("lumina.services.digest")
 
 _CALENDAR_CORE_OFFSET = 978307200  # CoreData epoch = Unix epoch - 978307200
 

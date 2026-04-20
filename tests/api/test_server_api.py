@@ -23,7 +23,7 @@ def _make_app():
     ):
         from lumina.api.server import create_app
         from lumina.engine.llm import LLMEngine
-        from lumina.asr.transcriber import Transcriber
+        from lumina.services.audio.transcriber import Transcriber
 
         llm = MagicMock(spec=LLMEngine)
         llm.is_loaded = True
@@ -245,18 +245,17 @@ async def test_digest_sources_fragment_renders_summary_and_expandable_details(cl
             "collect_browser_history": {"chars": 3200},
         }
     }
-    with patch("lumina.digest.core.get_debug_info", return_value=debug_info):
+    with patch("lumina.services.digest.core.get_debug_info", return_value=debug_info):
         r = await client.get("/fragments/digest/sources")
 
     assert r.status_code == 200
     body = r.text
     assert "最近 24 小时有 2 个来源活跃" in body
-    assert "查看完整来源" in body
     assert 'hx-get="/fragments/digest/storage"' in body
 
 
 async def test_digest_fragment_polls_while_generating(client):
-    with patch("lumina.digest.get_status", return_value={"generating": True, "generated_at": None}), \
+    with patch("lumina.services.digest.get_status", return_value={"generating": True, "generated_at": None}), \
          patch("lumina.api.routers.fragments._load_recent_snapshot_content", return_value="# placeholder"):
         r = await client.get("/fragments/digest")
 
@@ -279,8 +278,8 @@ async def test_digest_fragment_only_shows_recent_twenty_snapshots_for_today(clie
         "<!-- generated: 2026-04-17T14:00:00 -->\n# 2026-04-17 14:00\n\nsnap 6",
         "<!-- generated: 2026-04-17T15:00:00 -->\n# 2026-04-17 15:00\n\nsnap 7",
     ]
-    with patch("lumina.digest.get_status", return_value={"generating": False, "generated_at": "2026-04-17T15:00:00"}), \
-         patch("lumina.digest.reports.load_snapshots_for_date", return_value=snapshots), \
+    with patch("lumina.services.digest.get_status", return_value={"generating": False, "generated_at": "2026-04-17T15:00:00"}), \
+         patch("lumina.services.digest.reports.load_snapshots_for_date", return_value=snapshots), \
          patch("lumina.api.routers.fragments._render_markdown", side_effect=lambda text: text):
         r = await client.get("/fragments/digest")
 

@@ -71,7 +71,7 @@ def test_image_batch_writes_caption_outputs(tmp_path: Path):
         done = await _wait_done(manager, job["job_id"])
 
         assert done["status"] == "done"
-        assert done["succeeded"] == 1
+        assert done["succeeded"] == 1, done["items"][0]["error"]
         output_path = Path(done["items"][0]["output_paths"][0])
         assert output_path.name == "shot.caption.md"
         assert output_path.exists()

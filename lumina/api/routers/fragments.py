@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from lumina.api.rendering import render_markdown_html
-from lumina.ui_meta import collector_sources, digest_icon_for_text, system_prompt_items
+from lumina.api.ui_meta import collector_sources, digest_icon_for_text, system_prompt_items
 
 router = APIRouter(prefix="/fragments", tags=["fragments"])
 
@@ -69,7 +69,7 @@ def _render_markdown(content: str) -> str:
 
 
 def _load_recent_snapshot_content(now: Optional[datetime] = None) -> str:
-    from lumina.digest.reports import load_snapshots_for_date
+    from lumina.services.digest.reports import load_snapshots_for_date
 
     target_day = (now or datetime.now()).date()
     snapshots = [item.strip() for item in load_snapshots_for_date(target_day) if item.strip()]
@@ -186,7 +186,7 @@ def _load_report_fragment_context(report_type: str, key: str) -> dict:
 @router.get("/digest", response_class=HTMLResponse)
 async def fragment_digest(request: Request):
     """返回日报时间轴 HTML 片段，包含 Hero Card 和各 section。"""
-    from lumina.digest import get_status
+    from lumina.services.digest import get_status
 
     status = get_status()
     content = _load_recent_snapshot_content()
@@ -221,7 +221,7 @@ async def fragment_digest(request: Request):
 async def fragment_digest_storage(request: Request):
     """返回动态的存储空间占用卡片 HTML 片段。"""
     from lumina.config import get_config
-    from lumina import request_history
+    from lumina.engine import request_history
     
     recorder = request_history.get_recorder()
     with recorder._lock:
@@ -249,7 +249,7 @@ async def fragment_digest_storage(request: Request):
 @router.get("/digest/sources", response_class=HTMLResponse)
 async def fragment_digest_sources(request: Request):
     """返回数据来源图标行 HTML 片段。"""
-    from lumina.digest.core import get_debug_info
+    from lumina.services.digest.core import get_debug_info
 
     debug = get_debug_info()
     sources = collector_sources(debug.get("collectors", {}))
@@ -324,7 +324,7 @@ async def fragment_pdf_status(job_id: str, request: Request):
 async def fragment_config(request: Request):
     """返回设置表单 HTML 片段（含当前配置值）。"""
     from lumina.config import get_config
-    from lumina.ui_meta import HOME_TAB_DEFS, IMAGE_TASK_DEFS
+    from lumina.api.ui_meta import HOME_TAB_DEFS, IMAGE_TASK_DEFS
 
     cfg = get_config()
     return templates.TemplateResponse(

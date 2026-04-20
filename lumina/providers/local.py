@@ -68,7 +68,7 @@ from .base import BaseProvider, ProviderCapabilities
 from .mlx_loader import MlxModelLoader
 from .mlx_prompt import MlxPromptBuilder
 from .system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
-from lumina.sampling import (
+from lumina.engine.sampling import (
     DEFAULT_MIN_P,
     DEFAULT_PRESENCE_PENALTY,
     DEFAULT_REPETITION_PENALTY,

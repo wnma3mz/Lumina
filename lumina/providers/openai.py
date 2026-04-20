@@ -12,7 +12,7 @@ from typing import Any, AsyncIterator, Optional
 import aiohttp
 
 from .base import BaseProvider, ProviderCapabilities
-from lumina.sampling import (
+from lumina.engine.sampling import (
     DEFAULT_MIN_P,
     DEFAULT_PRESENCE_PENALTY,
     DEFAULT_REPETITION_PENALTY,

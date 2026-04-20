@@ -239,5 +239,5 @@ def print_ready_banner(host: str, port: int):
 
 
 def is_digest_enabled() -> bool:
-    from lumina.digest.config import get_cfg
+    from lumina.services.digest.config import get_cfg
     return bool(get_cfg().enabled)

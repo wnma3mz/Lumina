@@ -90,7 +90,7 @@ def client_and_llm(config_path):
     ):
         from lumina.api.server import create_app
         from lumina.engine.llm import LLMEngine
-        from lumina.asr.transcriber import Transcriber
+        from lumina.services.audio.transcriber import Transcriber
 
         llm = MagicMock(spec=LLMEngine)
         llm.is_loaded = True
@@ -199,7 +199,7 @@ class TestGetConfig:
         ):
             from lumina.api.server import create_app
             from lumina.engine.llm import LLMEngine
-            from lumina.asr.transcriber import Transcriber
+            from lumina.services.audio.transcriber import Transcriber
 
             llm = MagicMock(spec=LLMEngine)
             llm.is_loaded = True
@@ -250,7 +250,7 @@ class TestPatchConfig:
 
     async def test_patch_system_prompt_reloads_asr_prompts(self, client_and_llm):
         app, _ = client_and_llm
-        with patch("lumina.asr.transcriber.set_asr_prompts") as set_asr_prompts:
+        with patch("lumina.services.audio.transcriber.set_asr_prompts") as set_asr_prompts:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
                 r = await c.patch("/v1/config", json={"system_prompts": {"asr_zh": "新的中文提示词"}})
         assert r.status_code == 200

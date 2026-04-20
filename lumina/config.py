@@ -42,7 +42,7 @@ from lumina.platform_support.runtime import (
     resolve_provider_backend,
     resolve_whisper_model,
 )
-from lumina.ui_meta import HOME_TAB_KEYS, IMAGE_TASK_KEYS, LEGACY_HOME_TAB_MAP
+from lumina.api.ui_meta import HOME_TAB_KEYS, IMAGE_TASK_KEYS, LEGACY_HOME_TAB_MAP
 
 _CONFIG_PATH = Path(__file__).parent / "config.json"
 _DEFAULT_MODEL = default_provider_model_path(DEFAULT_PROVIDER_TYPE)

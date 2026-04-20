@@ -9,7 +9,7 @@ import threading
 from typing import AsyncIterator, Optional
 
 from .base import BaseProvider, ProviderCapabilities
-from lumina.sampling import DEFAULT_TEMPERATURE, DEFAULT_TOP_P
+from lumina.engine.sampling import DEFAULT_TEMPERATURE, DEFAULT_TOP_P
 
 
 class LlamaCppProvider(BaseProvider):

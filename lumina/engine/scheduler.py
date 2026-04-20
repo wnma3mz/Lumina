@@ -18,7 +18,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
-from lumina.sampling import (
+from lumina.engine.sampling import (
     DEFAULT_MIN_P,
     DEFAULT_PRESENCE_PENALTY,
     DEFAULT_REPETITION_PENALTY,

@@ -7,7 +7,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from sse_starlette.sse import EventSourceResponse
 
 from lumina.api.protocol import RecordStopRequest, TranscriptionResponse
-from lumina.asr.live import LiveTranslator
+from lumina.services.audio.live import LiveTranslator
 
 router = APIRouter(prefix="/v1/audio", tags=["audio"])
 
@@ -39,7 +39,7 @@ async def live_translate(request: Request, lang_in: str = "auto", lang_out: str 
 @router.get("/check_env")
 async def check_audio_env():
     """检查是否安装了虚拟音频回路驱动（如 BlackHole）。"""
-    from lumina.asr.recorder import AudioRecorder
+    from lumina.services.audio.recorder import AudioRecorder
     device_index = AudioRecorder.find_loopback_device()
     if device_index is None:
         raise HTTPException(

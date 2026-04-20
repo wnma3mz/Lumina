@@ -11,9 +11,9 @@ import pkgutil
 import logging
 from pathlib import Path
 
-from lumina.digest.collectors.base import Collector
+from lumina.services.digest.collectors.base import Collector
 
-logger = logging.getLogger("lumina.digest")
+logger = logging.getLogger("lumina.services.digest")
 _SKIP_MODULES = {"base"}
 
 

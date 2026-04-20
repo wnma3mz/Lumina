@@ -19,7 +19,7 @@ from pathlib import Path
 # 支持从项目根直接运行（不依赖安装）
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from lumina.ptt import PTTDaemon
+from lumina.services.audio.ptt import PTTDaemon
 
 
 def main():

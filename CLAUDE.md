@@ -34,11 +34,11 @@ lumina/
   api/
     server.py          # FastAPI app 创建，路由注册；提供 GET /manifest.json（PWA）
     sse.py             # SSE 流式辅助：stream_llm()
-    routers/           # 路由模块（pdf/chat/config/digest/audio/text/fragments）
+    routers/           # 路由模块（document/vision/audio/digest/chat/config/fragments）
       fragments.py     # HTMX HTML 片段路由（Jinja2 渲染，返回可直接插入 DOM 的片段）
     templates/         # Jinja2 模板（GET / 由此渲染，无静态 HTML）
       index.html       # 主页面（HTMX + 纯 CSS tab 切换，内联 htmx.min.js，PWA meta）
-      panels/          # 各 tab 面板的初始 HTML（digest/document/lab/settings）
+      panels/          # 各 tab 面板的初始 HTML（digest/document/lab/settings/audio）
       config_form.html # 设置表单片段（/fragments/config 返回）
       digest_content.html  # 日报时间轴片段（/fragments/digest 返回）
       digest_sources.html  # 数据来源图标行片段
@@ -55,17 +55,12 @@ lumina/
     mlx_prompt.py      # Layer 1：chat_template 渲染 + tokenize + system prefix 提取
     openai.py          # OpenAI 兼容远程接口
   services/
-    pdf.py             # PDF 业务服务层：PdfJobManager / fetch_pdf_url / stream_pdf_summary
-  engine/llm.py        # 上层封装，提供 stream / chat 接口
-  digest/
-    core.py            # 日报生成逻辑（含冷却检查）
-    collectors/        # 活动数据采集插件目录（shell/git/browser/notes/markdown/ai 等）
-  asr/                 # 语音转文字（mlx-whisper）
-  pdf_translate.py     # lumina pdf 子命令实现
-  pdf_summarize.py     # lumina summarize 子命令实现
-  text_polish.py       # lumina polish 子命令实现
-  ptt.py               # Push-to-Talk 守护进程
-  watcher.py           # 目录监听自动翻译
+    document/          # 文档处理服务（PDF/文本、watcher、pdf_cache）
+    audio/             # 音频处理服务（转写、ptt 录音等）
+    digest/            # 日报生成服务与采集器（核心逻辑及各种数据源快照）
+    vision/            # 视觉处理服务
+  engine/              # 核心引擎层（llm/sampling/请求上下文/请求历史）
+  platform_support/    # 平台特定实现（popup 浮窗、platform_utils）
 scripts/
   build_full.sh        # PyInstaller 打包脚本
   lumina_full.spec     # PyInstaller spec（固定路径，保证缓存命中）
@@ -123,7 +118,7 @@ def __getattr__(name: str):
 
 **Markdown 去重：** `cursor_store.py` 仅保留 `md5_of_file` + `load_md_hashes`/`save_md_hashes`，用于过滤 mtime 改变但内容未变的文件（iCloud 同步、编辑器扫描等）。
 
-### Digest 并发安全（`digest/core.py`）
+### Digest 并发安全（`services/digest/core.py`）
 
 - **锁机制**：`asyncio.Lock`（`_digest_lock`），懒初始化（`_get_digest_lock()`）。`maybe_generate_digest` / `maybe_generate_changelog` 在 acquire 前先检查 `lock.locked()`，已锁则直接跳过（非阻塞等待）。
 - **不要用文件锁**：之前用过 `.lock` 文件 + `exists()`/`touch()`，但文件锁在单进程 asyncio 中无法防止并发重入（两个协程可能在 `exists()` 返回 False 后、`touch()` 执行前同时通过检查）。asyncio.Lock 是真正原子的。

@@ -22,7 +22,7 @@ router = APIRouter(prefix="/v1/digest", tags=["digest"])
 
 @router.get("")
 async def get_digest_api(raw: Request):
-    from lumina.digest import load_digest, get_status
+    from lumina.services.digest import load_digest, get_status
     status = get_status()
     return {
         "content": load_digest(),
@@ -34,7 +34,7 @@ async def get_digest_api(raw: Request):
 
 @router.post("/refresh")
 async def refresh_digest_api(background_tasks: BackgroundTasks, raw: Request):
-    from lumina.digest import maybe_generate_digest
+    from lumina.services.digest import maybe_generate_digest
 
     llm = raw.app.state.llm
 
@@ -53,14 +53,14 @@ async def digest_debug_api():
     属于本机敏感信息。仅供本地诊断使用；若 Lumina 绑定 0.0.0.0 对局域网开放，
     需自行评估此接口的暴露风险（考虑添加鉴权或在生产环境禁用）。
     """
-    from lumina.digest.core import get_debug_info
+    from lumina.services.digest.core import get_debug_info
     return get_debug_info()
 
 
 @router.get("/export")
 async def digest_export_api():
     """下载完整 digest.md 文件。"""
-    from lumina.digest import load_digest
+    from lumina.services.digest import load_digest
     content = load_digest() or ""
     filename = f"lumina-digest-{datetime.now().strftime('%Y%m%d')}.md"
     return Response(
@@ -80,7 +80,7 @@ async def list_reports_api(report_type: str):
     """列出已生成的报告 key（降序）。"""
     if report_type not in _VALID_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid report_type: {report_type}")
-    from lumina.digest.reports import list_report_keys, daily_key, weekly_key, monthly_key
+    from lumina.services.digest.reports import list_report_keys, daily_key, weekly_key, monthly_key
     from datetime import date
     keys = list_report_keys(report_type)
     key_fn = {"daily": daily_key, "weekly": weekly_key, "monthly": monthly_key}[report_type]
@@ -92,7 +92,7 @@ async def get_report_api(report_type: str, key: str):
     """读取指定报告内容（不触发生成）。"""
     if report_type not in _VALID_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid report_type: {report_type}")
-    from lumina.digest.reports import load_report, adjacent_keys
+    from lumina.services.digest.reports import load_report, adjacent_keys
     content = load_report(report_type, key)
     prev_key, next_key = adjacent_keys(report_type, key)
     return {
@@ -109,7 +109,7 @@ async def generate_report_api(report_type: str, key: str, background_tasks: Back
     """触发生成指定报告（后台异步执行）。"""
     if report_type not in _VALID_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid report_type: {report_type}")
-    from lumina.digest.core import generate_report
+    from lumina.services.digest.core import generate_report
     llm = raw.app.state.llm
 
     async def _run():

@@ -1,8 +1,5 @@
 """
-lumina/api/routers/pdf.py — PDF 相关路由
-
-包含：上传翻译、URL 翻译、job 状态、文件下载、流式摘要（upload/url）。
-依赖通过 request.app.state 获取（FastAPI app.state DI 模式）。
+lumina/api/routers/document.py — 文档处理路由（包含文本润色/翻译、PDF 解析提取等）
 """
 import asyncio
 import json
@@ -13,25 +10,89 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
 from lumina.api.rendering import render_markdown_html
-from lumina.api.protocol import PdfUrlRequest
-from lumina.services.pdf import (
+from lumina.api.protocol import (
+    PdfUrlRequest,
+    PolishRequest,
+    RenderMarkdownRequest,
+    RenderedHtmlResponse,
+    SummarizeRequest,
+    TextResponse,
+    TranslateRequest,
+)
+from lumina.services.document.pdf import (
     cleanup_after,
     extract_pdf_pairs,
     fetch_pdf_url,
     stream_pdf_summary,
     write_upload,
 )
+from lumina.api.sse import stream_llm
+from lumina.engine.request_context import request_context
 
-router = APIRouter(prefix="/v1/pdf", tags=["pdf"])
+router = APIRouter(tags=["document"])
 
+# ── 文本处理 ───────────────────────────────────────────────────────────────
 
-@router.post("/upload")
+@router.post("/v1/translate")
+async def translate(request: TranslateRequest, raw: Request):
+    llm = raw.app.state.llm
+    task = "translate_to_zh" if request.target_language == "zh" else "translate_to_en"
+    if request.stream:
+        return StreamingResponse(
+            _stream_text(request.text, task, llm, origin="translate_api"),
+            media_type="text/event-stream",
+        )
+    with request_context(origin="translate_api", stream=False):
+        text = await llm.generate(request.text, task=task)
+    return TextResponse(text=text)
+
+@router.post("/v1/summarize")
+async def summarize(request: SummarizeRequest, raw: Request):
+    llm = raw.app.state.llm
+    if request.stream:
+        return StreamingResponse(
+            _stream_text(request.text, "summarize", llm, origin="summarize_api"),
+            media_type="text/event-stream",
+        )
+    with request_context(origin="summarize_api", stream=False):
+        text = await llm.generate(request.text, task="summarize")
+    return TextResponse(text=text)
+
+@router.post("/v1/polish")
+async def polish(request: PolishRequest, raw: Request):
+    llm = raw.app.state.llm
+    task = "polish_zh" if request.language == "zh" else "polish_en"
+    if request.stream:
+        return StreamingResponse(
+            _stream_text(request.text, task, llm, origin="polish_api"),
+            media_type="text/event-stream",
+        )
+    with request_context(origin="polish_api", stream=False):
+        text = await llm.generate(request.text, task=task)
+    return TextResponse(text=text)
+
+@router.post("/v1/render_markdown")
+async def render_markdown(request: RenderMarkdownRequest):
+    return RenderedHtmlResponse(html=render_markdown_html(request.text))
+
+async def _stream_text(user_text: str, task: str, llm, *, origin: str):
+    async for chunk in stream_llm(
+        llm,
+        user_text,
+        task=task,
+        log_label="stream_text",
+        origin=origin,
+    ):
+        yield chunk
+
+# ── PDF 处理 ───────────────────────────────────────────────────────────────
+
+@router.post("/v1/pdf/upload")
 async def pdf_upload(
     file: UploadFile = File(...),
     lang_out: str = Form("zh"),
     raw: Request = None,
 ):
-    """上传 PDF → 翻译，返回 job_id。"""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "仅支持 PDF 文件")
     manager = raw.app.state.pdf_manager
@@ -41,10 +102,8 @@ async def pdf_upload(
     job_id = manager.submit_translate(pdf_path, lang_out, tmp_dir)
     return {"job_id": job_id}
 
-
-@router.post("/url")
+@router.post("/v1/pdf/url")
 async def pdf_from_url(body: PdfUrlRequest, raw: Request):
-    """从 URL 下载 PDF（命中缓存则跳过下载）→ 翻译，返回 job_id。"""
     url = body.url.strip()
     lang_out = body.lang_out
     if not url:
@@ -58,8 +117,7 @@ async def pdf_from_url(body: PdfUrlRequest, raw: Request):
     job_id = manager.submit_translate(str(pdf_path), lang_out, tmp_dir)
     return {"job_id": job_id}
 
-
-@router.get("/job/{job_id}")
+@router.get("/v1/pdf/job/{job_id}")
 async def pdf_job_status(job_id: str, raw: Request):
     manager = raw.app.state.pdf_manager
     job = manager.get_status(job_id)
@@ -67,8 +125,7 @@ async def pdf_job_status(job_id: str, raw: Request):
         raise HTTPException(404, "Job not found")
     return {"status": job["status"], "error": job.get("error")}
 
-
-@router.get("/download/{job_id}/{variant}")
+@router.get("/v1/pdf/download/{job_id}/{variant}")
 async def pdf_download(job_id: str, variant: str, raw: Request):
     manager = raw.app.state.pdf_manager
     job = manager.get_status(job_id)
@@ -81,10 +138,8 @@ async def pdf_download(job_id: str, variant: str, raw: Request):
         raise HTTPException(404, "File not found")
     return FileResponse(path, media_type="application/pdf", filename=path.name)
 
-
-@router.post("/upload_stream")
+@router.post("/v1/pdf/upload_stream")
 async def pdf_upload_stream(file: UploadFile = File(...), raw: Request = None):
-    """上传 PDF → 流式摘要（SSE）。"""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "仅支持 PDF 文件")
     llm = raw.app.state.llm
@@ -97,10 +152,8 @@ async def pdf_upload_stream(file: UploadFile = File(...), raw: Request = None):
         background=cleanup_after(tmp_dir, delay=5),
     )
 
-
-@router.post("/url_stream")
+@router.post("/v1/pdf/url_stream")
 async def pdf_url_stream(body: PdfUrlRequest, raw: Request):
-    """从 URL 下载 PDF（命中缓存则跳过下载）→ 流式摘要（SSE）。"""
     url = body.url.strip()
     if not url:
         raise HTTPException(400, "url 不能为空")
@@ -114,10 +167,8 @@ async def pdf_url_stream(body: PdfUrlRequest, raw: Request):
         media_type="text/event-stream",
     )
 
-
-@router.post("/summarize_sync")
+@router.post("/v1/pdf/summarize_sync")
 async def pdf_summarize_sync(file: UploadFile = File(...), raw: Request = None):
-    """上传 PDF → 等待生成完毕 → 返回 HTML 片段（供 HTMX hx-target 直接插入）。"""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "仅支持 PDF 文件")
     llm = raw.app.state.llm
@@ -127,7 +178,6 @@ async def pdf_summarize_sync(file: UploadFile = File(...), raw: Request = None):
     tokens: list[str] = []
     try:
         async for sse_line in stream_pdf_summary(pdf_path, llm):
-            # SSE 格式：'data: {"text": "..."}\n\n' 或 'data: [DONE]\n\n'
             line = sse_line.strip()
             if not line.startswith("data:"):
                 continue
@@ -151,10 +201,8 @@ async def pdf_summarize_sync(file: UploadFile = File(...), raw: Request = None):
     html_content = render_markdown_html(full_text)
     return HTMLResponse(f'<div class="result-text digest-item-body">{html_content}</div>')
 
-
-@router.post("/url_summarize_sync")
+@router.post("/v1/pdf/url_summarize_sync")
 async def pdf_url_summarize_sync(body: PdfUrlRequest, raw: Request):
-    """从 URL 下载 PDF → 等待生成完毕 → 返回 HTML 片段。"""
     url = body.url.strip()
     if not url:
         raise HTTPException(400, "url 不能为空")
@@ -183,10 +231,8 @@ async def pdf_url_summarize_sync(body: PdfUrlRequest, raw: Request):
     html_content = render_markdown_html(full_text)
     return HTMLResponse(f'<div class="result-text digest-item-body">{html_content}</div>')
 
-
-@router.get("/pairs/{job_id}")
+@router.get("/v1/pdf/pairs/{job_id}")
 async def pdf_pairs(job_id: str, raw: Request):
-    """解析双语 PDF，返回原文/译文对列表。"""
     manager = raw.app.state.pdf_manager
     job = manager.get_status(job_id)
     if not job:

@@ -8,7 +8,7 @@ import json
 import logging
 from typing import AsyncIterator
 
-from lumina.request_context import request_context
+from lumina.engine.request_context import request_context
 
 logger = logging.getLogger("lumina")
 

@@ -36,7 +36,7 @@ def _ensure_text(path: Path) -> None:
 
 
 def handle_translate(paths: list[Path], *, base_url: str, api_key: str, model: str) -> None:
-    from lumina.pdf_translate import translate_pdfs
+    from lumina.services.document.pdf_translate import translate_pdfs
 
     for path in paths:
         _ensure_pdf(path)
@@ -54,7 +54,7 @@ def handle_translate(paths: list[Path], *, base_url: str, api_key: str, model: s
 
 
 def handle_summarize(paths: list[Path], *, base_url: str, api_key: str) -> None:
-    from lumina.pdf_summarize import summarize_pdf
+    from lumina.services.document.pdf_summarize import summarize_pdf
 
     for path in paths:
         _ensure_pdf(path)
@@ -69,7 +69,7 @@ def handle_summarize(paths: list[Path], *, base_url: str, api_key: str) -> None:
 
 
 def handle_polish(paths: list[Path], *, base_url: str, api_key: str) -> None:
-    from lumina.text_polish import polish_file
+    from lumina.services.document.text_polish import polish_file
 
     for path in paths:
         _ensure_text(path)

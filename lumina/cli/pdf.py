@@ -18,13 +18,13 @@ def _resolve_pdf_path(path: str) -> tuple[str, bool]:
     URL 存入持久缓存，is_tmp=False。
     """
     if path.startswith("http://") or path.startswith("https://"):
-        from lumina.pdf_translate import _download_url
+        from lumina.services.document.pdf_translate import _download_url
         return _download_url(path), False
     return path, False
 
 
 def cmd_pdf(args):
-    from lumina.pdf_translate import translate_pdfs
+    from lumina.services.document.pdf_translate import translate_pdfs
     from lumina.cli.utils import setup_logging
 
     setup_logging(args.log_level)
@@ -46,7 +46,7 @@ def cmd_pdf(args):
 
 def cmd_summarize(args):
     import shutil
-    from lumina.pdf_summarize import summarize_pdf
+    from lumina.services.document.pdf_summarize import summarize_pdf
     from lumina.cli.utils import setup_logging
 
     setup_logging(args.log_level)
@@ -85,7 +85,7 @@ def cmd_summarize(args):
 
 
 def cmd_watch(args):
-    from lumina.watcher import watch
+    from lumina.services.document.watcher import watch
     from lumina.cli.utils import setup_logging
 
     setup_logging(args.log_level)

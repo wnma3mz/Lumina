@@ -11,7 +11,7 @@ logger = logging.getLogger("lumina")
 
 
 def cmd_polish(args):
-    from lumina.text_polish import polish_text, polish_file
+    from lumina.services.document.text_polish import polish_text, polish_file
     from lumina.cli.utils import setup_logging
 
     setup_logging(args.log_level)
@@ -54,7 +54,7 @@ def cmd_popup(args):
     直接在本进程运行 NSPanel run loop，不再 spawn 子进程。
     文本优先从 --file 读取（避免 shell 参数传多行文本的转义问题）。
     """
-    from lumina.popup import _run_popup
+    from lumina.platform_support.popup import _run_popup
 
     if args.file:
         text = Path(args.file).read_text(encoding="utf-8")

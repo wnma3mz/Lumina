@@ -14,7 +14,7 @@ from typing import Optional
 
 from lumina.config import PDF_CACHE_DIR as _CACHE_DIR
 
-logger = logging.getLogger("lumina.pdf_cache")
+logger = logging.getLogger("lumina.services.document.pdf_cache")
 
 
 def _cache_path(url: str) -> Path:

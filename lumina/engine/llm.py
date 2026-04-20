@@ -16,9 +16,9 @@ from datetime import datetime
 from typing import Any, AsyncIterator, Dict, Optional
 
 from lumina.providers.base import BaseProvider
-from lumina.request_context import get_request_context
-from lumina import request_history
-from lumina.sampling import resolve_sampling
+from lumina.engine.request_context import get_request_context
+from lumina.engine import request_history
+from lumina.engine.sampling import resolve_sampling
 
 
 class LLMEngine:
