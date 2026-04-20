@@ -35,6 +35,11 @@ class DigestConfig(BaseModel):
     ai_queries_max_source_chars: int = 4000
     enabled_collectors: Optional[List[str]] = None  # None = 全部启用
     enabled: bool = False  # False = 完全关闭 digest（不自动也不手动生成）
+    active_watch_dirs: List[str] = Field(default_factory=lambda: [
+        str(Path.home() / "Downloads"),
+        str(Path.home() / "Desktop"),
+        str(Path.home() / "Documents"),
+    ])
     prompts: Dict[str, str] = Field(default_factory=dict)
     sampling: Dict[str, Any] = Field(default_factory=dict)
 

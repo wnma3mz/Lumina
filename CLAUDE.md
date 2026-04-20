@@ -264,4 +264,4 @@ v0.8.0 起采用 **Bento Card** 设计风格，替代原有毛玻璃（glassmorp
 
 ## 版本
 
-当前：`v0.8.4`（`pyproject.toml` 和 `scripts/lumina_full.spec` 中的 `CFBundleShortVersionString`）
+当前：`v0.8.5`（`pyproject.toml` 和 `scripts/lumina_full.spec` 中的 `CFBundleShortVersionString`）

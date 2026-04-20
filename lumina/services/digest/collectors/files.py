@@ -146,10 +146,8 @@ def collect_recent_file_activities() -> str:
     cfg = get_cfg()
     cutoff = time.time() - cfg.history_hours * 3600
 
-    # 核心扫描路径：下载目录 + 配置中的扫描目录
-    watch_dirs = [Path.home() / "Downloads"]
-    for d in cfg.scan_dirs:
-        watch_dirs.append(Path(d).expanduser())
+    # 核心扫描路径：配置中的 active_watch_dirs
+    watch_dirs = [Path(d).expanduser() for d in cfg.active_watch_dirs]
 
     # 去重
     unique_dirs = []

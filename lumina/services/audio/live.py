@@ -32,6 +32,11 @@ class LiveTranslator:
                 if audio_slice is None or len(audio_slice) < (SAMPLE_RATE * 0.1): 
                     continue
                 
+                # 静音检测：计算 RMS 振幅
+                rms = np.sqrt(np.mean(audio_slice.astype(np.float64)**2))
+                if rms < 50: # 经验阈值，适合普通环境音
+                    continue
+                
                 # 1. 转写 (使用 float32 数组)
                 # 展平为 1D 数组，防止 (N, 1) 导致 whisper 报错
                 float_audio = audio_slice.flatten().astype(np.float32) / 32768.0

@@ -38,29 +38,9 @@ def build_replacements(version: str) -> list[Replacement]:
             rf"\g<1>{version}\g<3>",
         ),
         Replacement(
-            "scripts/build_lite.sh",
+            "scripts/build.sh",
             r"(CFBundleShortVersionString': ')([^']+)(')",
             rf"\g<1>{version}\g<3>",
-        ),
-        Replacement(
-            "scripts/build_full.sh",
-            r'(gh release create )v[0-9]+\.[0-9]+\.[0-9]+',
-            rf"\g<1>{tag}",
-        ),
-        Replacement(
-            "scripts/build_full.sh",
-            r"(--title 'Lumina )v[0-9]+\.[0-9]+\.[0-9]+(')",
-            rf"\g<1>{tag}\g<2>",
-        ),
-        Replacement(
-            "scripts/build_lite.sh",
-            r'(gh release create )v[0-9]+\.[0-9]+\.[0-9]+',
-            rf"\g<1>{tag}",
-        ),
-        Replacement(
-            "scripts/build_lite.sh",
-            r"(--title 'Lumina Lite )v[0-9]+\.[0-9]+\.[0-9]+(')",
-            rf"\g<1>{tag}\g<2>",
         ),
         Replacement(
             "lumina/api/templates/index.html",
