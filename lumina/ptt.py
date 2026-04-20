@@ -171,6 +171,7 @@ class PTTDaemon:
             stream = self._stream
             self._stream = None
             frames = self._frames[:]
+            self._frames = []
 
         if stream:
             try:
