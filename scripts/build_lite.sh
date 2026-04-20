@@ -79,7 +79,7 @@ app = BUNDLE(
     icon=None,
     bundle_identifier='com.lumina.lite',
     info_plist={
-        'CFBundleShortVersionString': '0.8.3',
+        'CFBundleShortVersionString': '0.8.4',
         'CFBundleName': 'Lumina Lite',
         'LSUIElement': True,
         'NSMicrophoneUsageDescription': 'Lumina 需要麦克风权限用于语音转文本',
@@ -105,4 +105,4 @@ echo "  App : $BUILD_DIR/dist/Lumina Lite.app"
 echo "  zip : $ZIP_PATH"
 echo ""
 echo "上传 Release："
-echo "  gh release create v0.8.3 \"$ZIP_PATH\" --title 'Lumina Lite v0.8.3' --notes '首次发布（不含模型）'"
+echo "  gh release create v0.8.4 \"$ZIP_PATH\" --title 'Lumina Lite v0.8.4' --notes '首次发布（不含模型）'"
