@@ -59,8 +59,147 @@ var _documentTasks = {
     fileLabel: '上传 / 粘贴文件'
   }
 };
-var _labTasks = {};
+var _audioTask = 'audio_live';
+var _audioInputMode = 'live';
+var _audioTasks = {
+  audio_live: {
+    label: '实时同传',
+    shortLabel: '实时同传',
+    description: '捕获系统音频并实时转写翻译。',
+    modes: ['live'],
+    button: '开启同传'
+  }
+};
 
+function setAudioTask(task, btn) {
+  _audioTask = task;
+  var spec = _audioTasks[task];
+  if (!spec) return;
+  
+  document.querySelectorAll('.audio-task-btn').forEach(function(b) {
+    var isActive = b === btn;
+    b.classList.toggle('bg-indigo-500', isActive);
+    b.classList.toggle('text-white', isActive);
+    b.classList.toggle('shadow-lg', isActive);
+    b.classList.toggle('bg-zinc-100', !isActive);
+    b.classList.toggle('dark:bg-zinc-800/50', !isActive);
+    b.classList.toggle('text-zinc-500', !isActive);
+  });
+  
+  document.getElementById('audio-task-description').textContent = spec.description;
+  document.getElementById('audio-run-btn').textContent = spec.button;
+  setAudioInputMode(spec.modes[0]);
+}
+
+function setAudioInputMode(mode) {
+  _audioInputMode = mode;
+  ['live', 'file'].forEach(function(key) {
+    var btn = document.getElementById('audio-mode-' + key);
+    var block = document.getElementById('audio-input-' + key);
+    if (!btn || !block) return;
+    var active = key === mode;
+    btn.classList.toggle('bg-white', active);
+    btn.classList.toggle('dark:bg-zinc-700', active);
+    btn.classList.toggle('shadow-sm', active);
+    btn.classList.toggle('text-zinc-900', active);
+    btn.classList.toggle('dark:text-zinc-100', active);
+    btn.classList.toggle('text-zinc-500', !active);
+    block.classList.toggle('hidden', !active);
+  });
+}
+
+function handleAudioDrop(e, el) {
+  e.preventDefault();
+  el.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
+  var file = e.dataTransfer.files[0];
+  if (file) {
+    var input = document.getElementById('audio-file-input');
+    input.files = e.dataTransfer.files;
+    showAudioFilename(input);
+  }
+}
+
+function showAudioFilename(input) {
+  var nameEl = document.getElementById('audio-filename');
+  var placeholder = document.getElementById('audio-file-placeholder');
+  if (input.files && input.files[0]) {
+    nameEl.textContent = input.files[0].name;
+    placeholder.classList.add('hidden');
+  } else {
+    nameEl.textContent = '';
+    placeholder.classList.remove('hidden');
+  }
+}
+
+async function runAudioTask() {
+  var result = document.getElementById('audio-result');
+  var btn = document.getElementById('audio-run-btn');
+  if (!result || !btn) return;
+
+  if (_audioInputMode === 'file') {
+    var fileInput = document.getElementById('audio-file-input');
+    if (!fileInput.files[0]) {
+      result.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">请先选择音频文件</span></div>';
+      return;
+    }
+    setActionButtonBusyState(btn, '转写中…');
+    result.innerHTML = '<div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-12 w-full flex flex-col items-center justify-center border border-zinc-100 dark:border-zinc-800"><svg class="w-8 h-8 animate-spin text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><div class="text-sm font-bold text-zinc-500">正在转写音频，请稍候…</div></div>';
+    
+    try {
+        var fd = new FormData();
+        fd.append('file', fileInput.files[0]);
+        var res = await fetch('/v1/audio/transcriptions', { method: 'POST', body: fd });
+        if (!res.ok) throw new Error(((await res.json().catch(function() { return {}; })).detail) || res.statusText);
+        var data = await res.json();
+        if (window.luminaBuddy) window.luminaBuddy.setState('success');
+        await renderRichTextResult('audio-result', data.text || '', fileInput.files[0].name + ' · 语音转写');
+    } catch (e) {
+        if (window.luminaBuddy) window.luminaBuddy.setState('error');
+        result.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">错误：' + escapeHtml(e.message) + '</span></div>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '开始转写';
+    }
+    return;
+  }
+  
+  if (_audioTask === 'audio_live') {
+    if (btn.textContent === '停止同传') {
+        if (_currentTaskController) _currentTaskController.abort();
+        return;
+    }
+    
+    result.innerHTML = '<div class="flex flex-col gap-4 w-full" id="live-subtitles-container"></div>';
+    var container = document.getElementById('live-subtitles-container');
+    var source = new EventSource('/v1/audio/live?lang_out=zh');
+    
+    _currentTaskController = { abort: function() { source.close(); btn.textContent = '开启同传'; if (window.luminaBuddy) window.luminaBuddy.setState('idle'); } };
+    
+    source.onmessage = function(event) {
+      var data = JSON.parse(event.data);
+      var item = document.createElement('div');
+      item.className = 'bg-white dark:bg-zinc-800 p-4 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-700 animate-in fade-in slide-in-from-bottom-2 duration-500';
+      item.innerHTML = '<div class="text-[10px] font-bold text-indigo-500 mb-1 uppercase tracking-widest">Transcription</div>' +
+                      '<div class="text-zinc-500 text-xs mb-2 italic">"' + escapeHtml(data.raw) + '"</div>' +
+                      '<div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed">' + escapeHtml(data.translated) + '</div>';
+      container.appendChild(item);
+      scrollResultIntoView(item);
+      if (window.luminaBuddy) window.luminaBuddy.setState('working');
+    };
+    
+    source.onerror = function() {
+      source.close();
+      if (window.luminaBuddy) window.luminaBuddy.setState('error');
+      btn.textContent = '开启同传';
+    };
+
+    btn.textContent = '停止同传';
+    if (window.luminaBuddy) window.luminaBuddy.setState('working');
+    return;
+  }
+}
+
+var _labTasks = {};
 getImageTaskDefs().forEach(function(item) {
   var modes = Array.isArray(item.modes) ? item.modes.slice() : [];
   if (!modes.includes('directory')) modes.push('directory');
@@ -75,7 +214,6 @@ getImageTaskDefs().forEach(function(item) {
     promptText: item.prompt_text
   };
 });
-
 var _labTask = Object.keys(_labTasks)[0] || 'image_ocr';
 
 function normalizeUrl(url) {
@@ -464,15 +602,14 @@ function setLabInputMode(mode) {
   var spec = _labTasks[_labTask] || _labTasks.image_ocr;
   if (!spec.modes.includes(mode)) mode = spec.modes[0];
   _labInputMode = mode;
-  ['text', 'url', 'file', 'directory'].forEach(function(key) {
+  ['text', 'url', 'file', 'directory', 'live'].forEach(function(key) {
     var btn = document.getElementById('lab-mode-' + key);
     var block = document.getElementById('lab-input-' + key);
     var enabled = spec.modes.includes(key);
     var active = enabled && key === mode;
     if (btn) {
       btn.disabled = !enabled;
-      btn.classList.toggle('opacity-40', !enabled);
-      btn.classList.toggle('cursor-not-allowed', !enabled);
+      btn.classList.toggle('hidden', !enabled);
       btn.classList.toggle('bg-white', active);
       btn.classList.toggle('dark:bg-zinc-700', active);
       btn.classList.toggle('shadow-sm', active);
@@ -535,6 +672,40 @@ async function runLabTask() {
   _currentTaskController = new AbortController();
 
   try {
+    if (_labTask === 'audio_live') {
+      result.innerHTML = '<div class="flex flex-col gap-4 w-full" id="live-subtitles-container"></div>';
+      var container = document.getElementById('live-subtitles-container');
+      var source = new EventSource('/v1/audio/live?lang_out=zh');
+      
+      _currentTaskController = { abort: function() { source.close(); } };
+      
+      source.onmessage = function(event) {
+        var data = JSON.parse(event.data);
+        var item = document.createElement('div');
+        item.className = 'bg-white dark:bg-zinc-800 p-4 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-700 animate-in fade-in slide-in-from-bottom-2 duration-500';
+        item.innerHTML = '<div class="text-[10px] font-bold text-indigo-500 mb-1 uppercase tracking-widest">Transcription</div>' +
+                        '<div class="text-zinc-500 text-xs mb-2 italic">"' + escapeHtml(data.raw) + '"</div>' +
+                        '<div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed">' + escapeHtml(data.translated) + '</div>';
+        container.appendChild(item);
+        scrollResultIntoView(item);
+        if (window.luminaBuddy) window.luminaBuddy.setState('working');
+      };
+      
+      source.onerror = function() {
+        source.close();
+        if (window.luminaBuddy) window.luminaBuddy.setState('error');
+      };
+
+      btn.textContent = '停止同传';
+      btn.onclick = function() {
+        source.close();
+        btn.textContent = spec.button;
+        btn.onclick = runLabTask;
+        if (window.luminaBuddy) window.luminaBuddy.setState('idle');
+      };
+      return;
+    }
+
     if (_labTask === 'image_ocr' || _labTask === 'image_caption') {
       var prompts = getImagePrompts();
       var systemPrompt = prompts[_labTask] || '';

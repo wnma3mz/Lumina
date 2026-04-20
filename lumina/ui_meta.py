@@ -9,13 +9,14 @@ HOME_TAB_DEFS: list[dict[str, str]] = [
     {"key": "digest", "label": "回顾"},
     {"key": "document", "label": "文档"},
     {"key": "image", "label": "图像"},
+    {"key": "audio", "label": "音频"},
     {"key": "settings", "label": "设置"},
 ]
 HOME_TAB_KEYS = tuple(item["key"] for item in HOME_TAB_DEFS)
 LEGACY_HOME_TAB_MAP = {
     "translate": "document",
     "summarize": "document",
-    "lab": "image",
+    "lab": "audio",
 }
 
 IMAGE_TASK_DEFS: list[dict[str, Any]] = [
@@ -46,6 +47,19 @@ IMAGE_TASK_DEFS: list[dict[str, Any]] = [
 ]
 IMAGE_TASK_KEYS = tuple(item["key"] for item in IMAGE_TASK_DEFS)
 
+AUDIO_TASK_DEFS: list[dict[str, Any]] = [
+    {
+        "key": "audio_live",
+        "label": "实时同传 (Beta)",
+        "short_label": "实时同传",
+        "description": "捕获系统音频（如视频、会议）并实时转写翻译。需安装 BlackHole (macOS) 等回路设备。",
+        "modes": ["live"],
+        "button": "开启同传",
+        "config_label": "实时同传",
+    },
+]
+AUDIO_TASK_KEYS = tuple(item["key"] for item in AUDIO_TASK_DEFS)
+
 SYSTEM_PROMPT_DEFS: list[dict[str, str]] = [
     {"key": "translate_to_zh", "label": "翻译为中文"},
     {"key": "translate_to_en", "label": "翻译为英文"},
@@ -59,6 +73,7 @@ SYSTEM_PROMPT_DEFS: list[dict[str, str]] = [
     {"key": "monthly_report", "label": "月报"},
     {"key": "image_ocr", "label": "图片 OCR"},
     {"key": "image_caption", "label": "图片 Caption"},
+    {"key": "live_translate", "label": "实时同传（润色指令）"},
     {"key": "asr_zh", "label": "语音识别提示词（中文）"},
     {"key": "asr_en", "label": "语音识别提示词（英文）"},
 ]

@@ -73,6 +73,39 @@ class Transcriber:
         self.model = model or _DEFAULT_WHISPER_MODEL
         self._lock = asyncio.Lock()
 
+    def transcribe_audio_sync(self, audio: np.ndarray, language: Optional[str] = None) -> str:
+        """同步转写 Numpy 数组。"""
+        initial_prompt = _make_initial_prompt(language)
+        if _BACKEND == "mlx":
+            result = _mlx_whisper.transcribe(
+                audio,
+                path_or_hf_repo=self.model,
+                language=language,
+                fp16=False,
+                condition_on_previous_text=False,
+                initial_prompt=initial_prompt,
+            )
+            return result.get("text", "").strip()
+
+        fw_model = _get_faster_whisper_model(self.model)
+        segments, _ = fw_model.transcribe(
+            audio,
+            language=language,
+            initial_prompt=initial_prompt,
+            condition_on_previous_text=False,
+        )
+        return "".join(s.text for s in segments).strip()
+
+    async def transcribe_audio(self, audio: np.ndarray, language: Optional[str] = None) -> str:
+        """异步转写 Numpy 数组。"""
+        if audio is None or len(audio) == 0:
+            return ""
+        loop = asyncio.get_running_loop()
+        async with self._lock:
+            return await loop.run_in_executor(
+                None, self.transcribe_audio_sync, audio, language
+            )
+
     def transcribe_sync(self, wav_bytes: bytes, language: Optional[str] = None) -> str:
         """同步转写，在 executor 内调用。"""
         audio = _wav_bytes_to_float32(wav_bytes)

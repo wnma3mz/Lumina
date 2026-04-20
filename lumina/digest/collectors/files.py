@@ -17,6 +17,37 @@ _MD_SKIP_PARTS = {".app", "build", "dist", "node_modules", ".git", ".venv", "__p
 
 # 上次 collect_markdown_notes 扫到的文件列表，供 debug 面板展示
 _last_md_files: list[dict] = []
+_last_file_activities: list[dict] = []
+
+
+def _extract_file_snippet(path: Path, max_chars: int = 500) -> str:
+    """提取文件片段（PDF 或文本）。"""
+    if path.suffix.lower() == ".pdf":
+        try:
+            import fitz  # pymupdf
+            doc = fitz.open(str(path))
+            text = ""
+            for page in doc:
+                text += page.get_text()
+                if len(text) >= max_chars:
+                    break
+            doc.close()
+            return text[:max_chars].strip()
+        except Exception:
+            return ""
+
+    # 文本/代码类文件
+    try:
+        # 简单判断是否是文本类
+        with path.open("rb") as f:
+            chunk = f.read(1024)
+            if b"\x00" in chunk: # 简单二进制检查
+                return ""
+
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            return f.read(max_chars).strip()
+    except Exception:
+        return ""
 
 
 def _walk_md_files(root: Path, max_depth: int = 4):
@@ -108,3 +139,70 @@ def collect_markdown_notes() -> str:
     except Exception as e:
         logger.debug("markdown notes: %s", e)
         return ""
+
+
+def collect_recent_file_activities() -> str:
+    """扫描下载、桌面等目录中最近新增的文件。"""
+    cfg = get_cfg()
+    cutoff = time.time() - cfg.history_hours * 3600
+
+    # 核心扫描路径：下载目录 + 配置中的扫描目录
+    watch_dirs = [Path.home() / "Downloads"]
+    for d in cfg.scan_dirs:
+        watch_dirs.append(Path(d).expanduser())
+
+    # 去重
+    unique_dirs = []
+    seen = set()
+    for d in watch_dirs:
+        if d.exists() and d.is_dir() and str(d) not in seen:
+            unique_dirs.append(d)
+            seen.add(str(d))
+
+    candidates: list[tuple[float, Path]] = []
+    for root in unique_dirs:
+        try:
+            for item in root.iterdir():
+                if not item.is_file() or item.name.startswith("."):
+                    continue
+                try:
+                    stat = item.stat()
+                    # 关注 ctime (创建时间) 或 mtime (修改时间)
+                    file_time = max(stat.st_ctime, stat.st_mtime)
+                    if file_time > cutoff:
+                        # 排除掉项目自身生成的输出文件
+                        if item.stem.endswith("-mono") or item.stem.endswith("-dual") or item.stem.endswith("-summary"):
+                            continue
+                        candidates.append((file_time, item))
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+    if not candidates:
+        return ""
+
+    candidates.sort(key=lambda x: -x[0])
+
+    global _last_file_activities
+    _last_file_activities = [{"path": str(p), "time": t} for t, p in candidates]
+
+    entries = []
+    # 仅对前 10 个新文件提取片段
+    for t, p in candidates[:10]:
+        snippet = _extract_file_snippet(p)
+        if snippet:
+            # 缩减 snippet 长度以适应摘要
+            display_snippet = snippet.replace("\n", " ")[:200]
+            entries.append(f"**{p.name}** ({p.parent.name}):\n  内容片段: {display_snippet}...")
+        else:
+            try:
+                size_mb = p.stat().st_size / (1024 * 1024)
+                entries.append(f"**{p.name}** ({p.parent.name}):\n  [新文件] 大小: {size_mb:.2f} MB")
+            except Exception:
+                continue
+
+    if not entries:
+        return ""
+
+    return "## 今日新增文件活动\n" + "\n\n".join(entries)

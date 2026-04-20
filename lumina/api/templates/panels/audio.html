@@ -1,0 +1,65 @@
+<div id="panel-audio" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+  <div class="bento-card flex flex-col gap-6">
+    <div>
+      <div class="inline-flex items-center gap-2 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 px-3 py-1 text-[11px] font-bold tracking-widest uppercase">Audio Studio</div>
+      <h3 class="text-2xl font-bold mt-4">音频工作台</h3>
+      <p class="text-zinc-500 text-sm mt-2 leading-relaxed" id="audio-task-description">捕获系统音频并实时转写翻译，或者处理已录制的语音文件。</p>
+    </div>
+
+    <div>
+      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">实验任务</label>
+      <div class="grid grid-cols-1 gap-3" id="audio-task-group">
+        {% for item in audio_task_defs %}
+        <button type="button" data-task="{{ item.key }}" class="audio-task-btn px-4 py-3 rounded-2xl text-sm font-bold bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" onclick="setAudioTask('{{ item.key }}', this)">{{ item.short_label }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">输入来源</label>
+      <div class="flex gap-3 p-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-xl" id="audio-input-mode-group">
+        <button type="button" id="audio-mode-live" class="flex-1 py-2 text-sm font-bold rounded-lg transition-all bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100" onclick="setAudioInputMode('live')">实时</button>
+        <button type="button" id="audio-mode-file" class="flex-1 py-2 text-sm font-bold rounded-lg transition-all text-zinc-500" onclick="setAudioInputMode('file')">文件</button>
+      </div>
+    </div>
+
+    <div id="audio-input-live" class="flex flex-col gap-4">
+      <div class="p-6 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-800/50">
+        <div class="text-3xl mb-3 text-center">🎧</div>
+        <div class="text-sm font-bold text-indigo-600 dark:text-indigo-400 text-center mb-2">准备开启实时同传</div>
+        <div class="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed text-center">
+          Lumina 将捕获系统音频。请确保已正确配置虚拟音频回路（如 BlackHole）。
+        </div>
+      </div>
+    </div>
+
+    <div id="audio-input-file" class="hidden">
+      <div class="border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-2xl p-8 text-center cursor-pointer transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/10 hover:border-indigo-400 group relative"
+           ondragover="event.preventDefault();this.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20')"
+           ondragleave="this.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20')"
+           ondrop="handleAudioDrop(event, this)">
+        <input type="file" id="audio-file-input" class="absolute inset-0 opacity-0 cursor-pointer z-10" accept="audio/*" onchange="showAudioFilename(this)">
+        <div id="audio-file-placeholder">
+          <div class="text-4xl mb-3 group-hover:scale-110 transition-transform">🎵</div>
+          <div class="text-sm text-zinc-500">点击选择或拖入音频文件</div>
+        </div>
+        <div class="mt-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200 break-all" id="audio-filename"></div>
+      </div>
+    </div>
+
+    <button class="w-full py-4 mt-auto bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-black tracking-wide hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-xl" id="audio-run-btn" onclick="runAudioTask()">开启同传</button>
+  </div>
+
+  <div class="bento-card flex flex-col gap-4 md:col-span-2">
+    <div class="flex items-center justify-between gap-3">
+      <h3 class="text-xl font-bold mb-2">实时字幕</h3>
+      <div class="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Live Captions</div>
+    </div>
+    <div id="audio-result" class="flex-1 flex flex-col min-h-[500px]">
+      <div class="flex-1 flex flex-col items-center justify-center text-zinc-400 text-sm h-full w-full gap-3">
+        <div class="w-14 h-14 rounded-2xl bg-zinc-100 dark:bg-zinc-800/50 flex items-center justify-center text-2xl">🎙️</div>
+        <div>点击左侧按钮开启实时音频处理...</div>
+      </div>
+    </div>
+  </div>
+</div>

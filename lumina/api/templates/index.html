@@ -114,7 +114,18 @@
 </head>
 <body class="min-h-screen text-zinc-900 dark:text-zinc-100 p-5 md:px-10 md:pt-8 md:pb-12 transition-colors duration-500">
 
-<div id="app" class="max-w-6xl mx-auto" data-home-ui='{{ home_ui | default({}) | tojson | e }}' data-image-prompts='{{ image_prompts | default({}) | tojson | e }}' data-home-tabs='{{ home_tab_defs | default([]) | tojson | e }}' data-image-task-defs='{{ image_task_defs | default([]) | tojson | e }}' data-legacy-home-tab-map='{{ legacy_home_tab_map | default({}) | tojson | e }}'>
+<script id="lumina-app-data" type="application/json">
+{
+  "homeUi": {{ home_ui | tojson }},
+  "imagePrompts": {{ image_prompts | tojson }},
+  "homeTabs": {{ home_tab_defs | tojson }},
+  "imageTaskDefs": {{ image_task_defs | tojson }},
+  "audioTaskDefs": {{ audio_task_defs | tojson }},
+  "legacyHomeTabMap": {{ legacy_home_tab_map | tojson }}
+}
+</script>
+
+<div id="app" class="max-w-6xl mx-auto">
 
   {% for item in home_tab_defs %}
   <input type="radio" name="tab" id="tab-{{ item.key }}" {% if loop.first %}checked{% endif %} hidden>
@@ -161,6 +172,7 @@
     {% include "panels/digest.html" %}
     {% include "panels/document.html" %}
     {% include "panels/lab.html" %}
+    {% include "panels/audio.html" %}
     {% include "panels/settings.html" %}
   </main>
 

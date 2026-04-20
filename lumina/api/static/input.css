@@ -47,6 +47,7 @@
 #panel-digest,
 #panel-document,
 #panel-image,
+#panel-audio,
 #panel-settings {
   display: none;
 }
@@ -55,12 +56,14 @@
 #tab-digest:checked ~ main #panel-digest { display: grid; }
 #tab-document:checked ~ main #panel-document { display: grid; }
 #tab-image:checked ~ main #panel-image { display: grid; }
+#tab-audio:checked ~ main #panel-audio { display: grid; }
 #tab-settings:checked ~ main #panel-settings { display: block; }
 
 /* 导航栏高亮 */
 #tab-digest:checked ~ nav label[data-tab="digest"],
 #tab-document:checked ~ nav label[data-tab="document"],
 #tab-image:checked ~ nav label[data-tab="image"],
+#tab-audio:checked ~ nav label[data-tab="audio"],
 #tab-settings:checked ~ nav label[data-tab="settings"] {
   @apply nav-active;
 }
@@ -68,6 +71,7 @@
 #tab-digest:not(:checked) ~ nav label[data-tab="digest"],
 #tab-document:not(:checked) ~ nav label[data-tab="document"],
 #tab-image:not(:checked) ~ nav label[data-tab="image"],
+#tab-audio:not(:checked) ~ nav label[data-tab="audio"],
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"] {
   @apply text-zinc-400 hover:text-zinc-900 dark:hover:text-white;
 }

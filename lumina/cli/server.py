@@ -674,8 +674,10 @@ def cmd_server(args):
         threading.Thread(target=_ensure_quick_action_installed, daemon=True).start()
 
     menubar_enabled = _resolve_menubar_enabled(cfg, args)
+    logger.info("Menubar check: platform=%s, enabled=%s", sys.platform, menubar_enabled)
 
     if sys.platform == "darwin" and menubar_enabled:
+        logger.info("Starting Lumina with menubar App...")
         _run_with_menubar(fastapi_app, cfg, llm, config_path=config_path)
     else:
         _start_ptt(cfg, menubar_app=None)

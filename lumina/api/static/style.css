@@ -2812,6 +2812,7 @@ body {
 #panel-digest,
 #panel-document,
 #panel-image,
+#panel-audio,
 #panel-settings {
   display: none;
 }
@@ -2833,6 +2834,11 @@ body {
   min-height: 0;
 }
 
+#tab-audio:checked ~ main #panel-audio {
+  display: grid;
+  min-height: 0;
+}
+
 #tab-settings:checked ~ main #panel-settings {
   display: block;
 }
@@ -2842,6 +2848,7 @@ body {
 #tab-digest:checked ~ nav label[data-tab="digest"],
 #tab-document:checked ~ nav label[data-tab="document"],
 #tab-image:checked ~ nav label[data-tab="image"],
+#tab-audio:checked ~ nav label[data-tab="audio"],
 #tab-settings:checked ~ nav label[data-tab="settings"] {
   --tw-bg-opacity: 1;
   background-color: rgb(99 102 241 / var(--tw-bg-opacity, 1));
@@ -2855,6 +2862,7 @@ body {
 #tab-digest:not(:checked) ~ nav label[data-tab="digest"],
 #tab-document:not(:checked) ~ nav label[data-tab="document"],
 #tab-image:not(:checked) ~ nav label[data-tab="image"],
+#tab-audio:not(:checked) ~ nav label[data-tab="audio"],
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"] {
   --tw-text-opacity: 1;
   color: rgb(161 161 170 / var(--tw-text-opacity, 1));

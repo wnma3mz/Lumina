@@ -150,13 +150,21 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
             "digest_enabled": cfg.ui.home.digest_enabled,
             "document_enabled": cfg.ui.home.document_enabled,
             "image_enabled": cfg.ui.home.image_enabled,
+            "audio_enabled": getattr(cfg.ui.home, "audio_enabled", True),
             "image_modules": cfg.ui.home.image_modules,
             "allow_local_override": cfg.ui.home.allow_local_override,
         }
         image_prompts = {
             "image_ocr": cfg.system_prompts.get("image_ocr", ""),
             "image_caption": cfg.system_prompts.get("image_caption", ""),
+            "live_translate": cfg.system_prompts.get("live_translate", ""),
         }
+        from lumina.ui_meta import (
+            AUDIO_TASK_DEFS,
+            HOME_TAB_DEFS,
+            IMAGE_TASK_DEFS,
+            LEGACY_HOME_TAB_MAP,
+        )
 
         return _tmpl.TemplateResponse(
             "index.html",
@@ -169,6 +177,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
                 "image_prompts": image_prompts,
                 "home_tab_defs": HOME_TAB_DEFS,
                 "image_task_defs": IMAGE_TASK_DEFS,
+                "audio_task_defs": AUDIO_TASK_DEFS,
                 "legacy_home_tab_map": LEGACY_HOME_TAB_MAP,
             },
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},

@@ -1,13 +1,13 @@
 <div id="panel-image" class="grid grid-cols-1 md:grid-cols-3 gap-8">
   <div class="bento-card flex flex-col gap-6">
     <div>
-      <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300 px-3 py-1 text-[11px] font-bold tracking-widest uppercase">Image Tools</div>
-      <h3 class="text-2xl font-bold mt-4">图像工具</h3>
+      <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300 px-3 py-1 text-[11px] font-bold tracking-widest uppercase">Vision Tools</div>
+      <h3 class="text-2xl font-bold mt-4">图像工作台</h3>
       <p class="text-zinc-500 text-sm mt-2 leading-relaxed" id="lab-task-description">{{ (image_task_defs[0].description if image_task_defs else '支持图片文件和图片链接，可做 OCR 提取，也可以生成简洁 Caption。') }}</p>
     </div>
 
     <div>
-      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">图片任务</label>
+      <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">图像任务</label>
       <div class="grid grid-cols-2 gap-3" id="lab-task-group">
         {% for item in image_task_defs %}
         <button type="button" data-task="{{ item.key }}" class="lab-task-btn px-4 py-3 rounded-2xl text-sm font-bold {% if loop.first %}bg-indigo-500 text-white shadow-lg shadow-indigo-500/20{% else %}bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500{% endif %}" onclick="setLabTask('{{ item.key }}', this)">{{ item.short_label }}</button>

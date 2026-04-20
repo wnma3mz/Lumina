@@ -24,11 +24,29 @@ CHUNK = 1024  # 每次读取帧数
 
 
 class AudioRecorder:
-    def __init__(self, sample_rate: int = SAMPLE_RATE):
+    def __init__(self, sample_rate: int = SAMPLE_RATE, device_index: int | None = None):
         self.sample_rate = sample_rate
+        self.device_index = device_index
         self._recording = False
         self._frames: list[np.ndarray] = []
         self._lock = threading.Lock()
+        self._stream = None
+
+    @staticmethod
+    def list_devices():
+        """列出所有音频输入设备。"""
+        return sd.query_devices()
+
+    @staticmethod
+    def find_loopback_device():
+        """自动寻找系统音频回路设备（如 BlackHole, Virtual Audio, WASAPI Loopback）。"""
+        devices = sd.query_devices()
+        for i, d in enumerate(devices):
+            name = d['name'].lower()
+            if any(k in name for k in ['blackhole', 'loopback', 'virtual', 'stereo mix', 'wasapi']):
+                if d['max_input_channels'] > 0:
+                    return i
+        return None
 
     def _audio_callback(self, indata: np.ndarray, frames: int, time, status):
         if self._recording:
@@ -43,9 +61,19 @@ class AudioRecorder:
             channels=CHANNELS,
             dtype=DTYPE,
             blocksize=CHUNK,
+            device=self.device_index,
             callback=self._audio_callback,
         )
         self._stream.start()
+
+    def get_buffered_audio(self) -> np.ndarray | None:
+        """获取当前已录制的音频切片，并清空缓冲区（用于实时流式处理）。"""
+        with self._lock:
+            if not self._frames:
+                return None
+            audio = np.concatenate(self._frames, axis=0)
+            self._frames = []
+            return audio
 
     def stop(self) -> bytes:
         """停止录音，返回 WAV bytes。"""

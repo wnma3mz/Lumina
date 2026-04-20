@@ -184,8 +184,9 @@ uv run --with ruff ruff check --fix <改动的文件...>
 
 ### 技术栈约定
 
-- **Tailwind 编译产物直接提交**：`style.css` 是用 Tailwind CLI 编译的产物（3600+ 行），直接 commit 到 `lumina/api/static/style.css`。模板里可以使用 Tailwind utility class（`flex`、`text-zinc-900`、`bg-indigo-500` 等）和自定义组件类（`bento-card`）。
-- **无运行时构建步骤**：`node_modules/`、`package.json`、`tailwind.config.js` 在 `.gitignore` 中，不提交。`input.css`（Tailwind 源文件）已提交到 `lumina/api/static/input.css`，不需要在本机执行 npm/tailwind 命令即可运行项目。需要修改 Tailwind 配置时在本地执行 `npx tailwindcss -i input.css -o style.css`，然后提交生成的 `style.css`。
+- **禁止直接手动修改 `style.css`**：`style.css` 是 Tailwind CLI 自动编译的产物。任何手动修改都会在下次构建时被覆盖。
+- **样式源头是 `input.css`**：所有的样式修改、新增原子类或自定义组件，必须在 `lumina/api/static/input.css` 中进行。
+- **无运行时构建步骤**：`node_modules/`、`package.json`、`tailwind.config.js` 在 `.gitignore` 中，不提交。`input.css`（Tailwind 源文件）已提交到 `lumina/api/static/input.css`，不需要在本机执行 npm/tailwind 命令即可运行项目。需要更新 `style.css` 时，在本地执行 `npx tailwindcss -i lumina/api/static/input.css -o lumina/api/static/style.css`，然后提交生成的 `style.css`。
 - **HTMX 服务端渲染**：局部刷新通过后端 Jinja2 模板返回 HTML 片段实现（`/fragments/*` 路由），片段内的样式依赖全局 `style.css`，不需要额外引入 CSS。
 - **PWA 支持**：`GET /manifest.json` 由 `server.py` 内联返回；`index.html` 包含 `<link rel="manifest">`、`apple-mobile-web-app-capable`、`theme-color` 等 meta，支持添加到主屏幕。
 
@@ -213,6 +214,8 @@ v0.8.0 起采用 **Bento Card** 设计风格，替代原有毛玻璃（glassmorp
 |---|---|---|
 | 内容 | 默认 | 正常文档流 |
 | 保存栏 | 100 | `#save-bar`（底部固定栏） |
+| 宠物挂件 | 150 | `lumina-buddy`（ASCII 宠物） |
+| 宠物气泡 | 200 | `buddy-speech`（对话框） |
 | Sheet | 200 | `pdf-route-sheet`（底部滑出面板） |
 | 模态框 | 300 | `compare-modal`（对比浮层） |
 | 拖拽遮罩 | 400 | `#drag-overlay` |
