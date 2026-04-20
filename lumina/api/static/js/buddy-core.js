@@ -136,7 +136,7 @@ class LuminaBuddy {
       widget.style.zIndex = '100';
       widget.title = `Lv.${this.level} ${this.personality} (${this.speciesKey})`;
       widget.innerHTML = `
-        <div id="buddy-speech" class="hidden absolute -top-10 left-1/2 -translate-x-1/2 bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 rounded-xl shadow-2xl whitespace-nowrap z-[200] after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-4 after:border-transparent after:border-t-zinc-900 dark:after:border-t-zinc-100">
+        <div id="buddy-speech" class="hidden absolute bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 rounded-xl shadow-2xl whitespace-nowrap z-[200] buddy-speech-right">
           <span class="text-white dark:text-zinc-900 text-[10px] font-black leading-none block">你好呀！</span>
         </div>
         <pre id="buddy-canvas" class="font-mono text-[10px] font-black leading-none text-indigo-700 dark:text-indigo-300 select-none hover:scale-110 transition-all origin-center touch-manipulation" style="max-height: 52px;"></pre>

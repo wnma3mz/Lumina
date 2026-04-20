@@ -92,6 +92,10 @@ function getServerHomeTabs() {
   }
   if (homeUi.audio_enabled === false) {
     tabs = tabs.filter(function(tab) { return tab !== 'audio'; });
+  } else if (homeUi.audio_enabled === true && !tabs.includes('audio')) {
+    var idx = tabs.indexOf('settings');
+    if (idx >= 0) tabs.splice(idx, 0, 'audio');
+    else tabs.push('audio');
   }
   if (homeUi.digest_enabled === false) {
     tabs = tabs.filter(function(tab) { return tab !== 'digest'; });
@@ -124,6 +128,13 @@ function getLocalHomeTabs() {
       });
       localStorage.setItem('lumina.homeTabs', JSON.stringify(parsed));
       localStorage.setItem(_homeTabsVersionKey, '3');
+    }
+    
+    // Check missing enabled tabs dynamically:
+    if (homeUi.audio_enabled === true && !parsed.includes('audio')) {
+      var audioIdx = parsed.indexOf('settings');
+      if (audioIdx >= 0) parsed.splice(audioIdx, 0, 'audio');
+      else parsed.push('audio');
     }
     
     return normalizeHomeTabs(parsed);

@@ -3692,3 +3692,28 @@ body.save-bar-visible #home-nav {
 .\[\&\:\:-webkit-details-marker\]\:hidden::-webkit-details-marker {
   display: none;
 }
+
+/* Custom Buddy Speech Positioning */
+.buddy-speech-right {
+  top: 50% !important;
+  left: calc(100% + 16px) !important;
+  transform: translateY(-50%) !important;
+  bottom: auto !important;
+  right: auto !important;
+  margin: 0 !important;
+}
+.buddy-speech-right::after {
+  content: '' !important;
+  position: absolute !important;
+  right: 100% !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  border-width: 4px !important;
+  border-color: transparent !important;
+  border-right-color: #18181b !important;
+  bottom: auto !important;
+  left: auto !important;
+}
+.dark .buddy-speech-right::after {
+  border-right-color: #f4f4f5 !important;
+}
