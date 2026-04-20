@@ -82,7 +82,6 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     from lumina.api.routers import text as text_router
     from lumina.api.routers import fragments as fragments_router
     from lumina.config import get_config
-    from lumina.ui_meta import HOME_TAB_DEFS, IMAGE_TASK_DEFS, LEGACY_HOME_TAB_MAP
 
     _lifespan = lifespan if lifespan is not None else _default_lifespan
     app = FastAPI(title="Lumina", version=_LUMINA_VERSION, lifespan=_lifespan)

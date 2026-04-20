@@ -7,7 +7,6 @@ lumina/digest/collectors — 各数据源采集函数包
 """
 import importlib
 import importlib.util
-import os
 import pkgutil
 import logging
 from pathlib import Path

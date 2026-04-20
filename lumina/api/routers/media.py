@@ -8,7 +8,6 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from lumina.api.chat_runtime import build_image_chat_messages, run_chat_messages, to_provider_messages
 from lumina.api.protocol import ImageUrlRequest, MediaTextResponse
-from lumina.config import get_config
 
 router = APIRouter(prefix="/v1/media", tags=["media"])
 
