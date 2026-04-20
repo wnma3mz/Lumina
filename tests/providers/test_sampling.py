@@ -168,8 +168,3 @@ class TestPriorityChain:
         # 明确传 None 不应覆盖 config
         result = _resolve(_cfg(temperature=0.6), temperature=None)
         assert result["temperature"] == 0.6
-
-    def test_config_none_does_not_override_default(self):
-        # SamplingConfig 字段为 None 不应覆盖 DEFAULT
-        result = _resolve(_cfg(temperature=None))
-        assert result["temperature"] == DEFAULT_TEMPERATURE

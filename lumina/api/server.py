@@ -144,11 +144,11 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
         slogan_candidates = cfg.branding.get("slogans", [])
         home_ui = {
             "enabled_tabs": cfg.ui.home.enabled_tabs,
-            "digest_enabled": cfg.ui.home.digest_enabled,
-            "document_enabled": cfg.ui.home.document_enabled,
-            "image_enabled": cfg.ui.home.image_enabled,
-            "audio_enabled": cfg.ui.home.audio_enabled,
-            "image_modules": cfg.ui.home.image_modules,
+            "digest_enabled": cfg.digest.enabled,
+            "document_enabled": cfg.document.enabled,
+            "image_enabled": cfg.vision.enabled,
+            "audio_enabled": cfg.audio.enabled,
+            "image_modules": cfg.vision.enabled_modules,
             "allow_local_override": cfg.ui.home.allow_local_override,
         }
         image_prompts = {

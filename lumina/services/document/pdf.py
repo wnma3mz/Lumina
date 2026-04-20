@@ -56,6 +56,15 @@ async def stream_pdf_summary(pdf_path: str, llm) -> AsyncIterator[str]:
     """提取 PDF 文字，流式生成摘要，yield SSE 数据行。"""
     from lumina.services.document.pdf_summarize import _extract_text
     from lumina.api.sse import stream_llm
+    from lumina.config import get_config
+    import dataclasses
+    
+    cfg = get_config()
+    kwargs = {}
+    if getattr(cfg.document, "sampling", None):
+        s_dict = dataclasses.asdict(cfg.document.sampling) if dataclasses.is_dataclass(cfg.document.sampling) else dict(cfg.document.sampling)
+        kwargs.update({k: v for k, v in s_dict.items() if v is not None})
+        
     text = await asyncio.to_thread(_extract_text, pdf_path)
     async for chunk in stream_llm(
         llm,
@@ -63,6 +72,7 @@ async def stream_pdf_summary(pdf_path: str, llm) -> AsyncIterator[str]:
         task="summarize",
         log_label="stream_summary",
         origin="pdf_summary",
+        **kwargs
     ):
         yield chunk
 

@@ -133,154 +133,46 @@ def public_system_prompts(prompts: Optional[dict[str, Any]]) -> dict[str, str]:
 
 
 def serialize_runtime_config(cfg: Any) -> dict[str, Any]:
-    return {
-        "provider": {
-            "type": cfg.provider.type,
-            "backend": cfg.provider.backend,
-            "model_path": cfg.provider.model_path,
-            "sampling": {
-                "temperature": cfg.provider.sampling.temperature,
-                "top_p": cfg.provider.sampling.top_p,
-                "top_k": cfg.provider.sampling.top_k,
-                "min_p": cfg.provider.sampling.min_p,
-                "presence_penalty": cfg.provider.sampling.presence_penalty,
-                "repetition_penalty": cfg.provider.sampling.repetition_penalty,
-                "max_tokens": cfg.provider.sampling.max_tokens,
-            },
-            "openai": {
-                "base_url": cfg.provider.openai.base_url,
-                "api_key": cfg.provider.openai.api_key,
-                "model": cfg.provider.openai.model,
-            },
-            "llama_cpp": {
-                "model_path": cfg.provider.llama_cpp.model_path,
-                "n_gpu_layers": cfg.provider.llama_cpp.n_gpu_layers,
-                "n_ctx": cfg.provider.llama_cpp.n_ctx,
-            },
-        },
-        "whisper_model": cfg.whisper_model,
-        "host": cfg.host,
-        "port": cfg.port,
-        "log_level": cfg.log_level,
-        "digest": {
-            "enabled": cfg.digest.get("enabled", False) if isinstance(cfg.digest, dict) else False,
-            "scan_dirs": cfg.digest.get("scan_dirs", []) if isinstance(cfg.digest, dict) else [],
-            "history_hours": cfg.digest.get("history_hours", 24) if isinstance(cfg.digest, dict) else 24,
-            "refresh_hours": cfg.digest.get("refresh_hours", 1) if isinstance(cfg.digest, dict) else 1,
-            "notify_time": cfg.digest.get("notify_time", "20:00") if isinstance(cfg.digest, dict) else "20:00",
-            "enabled_collectors": cfg.digest.get("enabled_collectors") if isinstance(cfg.digest, dict) else None,
-            "weekly_report_day": cfg.digest.get("weekly_report_day", 0) if isinstance(cfg.digest, dict) else 0,
-            "monthly_report_day": cfg.digest.get("monthly_report_day", 1) if isinstance(cfg.digest, dict) else 1,
-            "ai_queries_max_source_chars": cfg.digest.get("ai_queries_max_source_chars", 4000) if isinstance(cfg.digest, dict) else 4000,
-        },
-        "ptt": {
-            "enabled": cfg.ptt.enabled,
-            "hotkey": cfg.ptt.hotkey,
-            "language": cfg.ptt.language,
-        },
-        "desktop": {
-            "menubar_enabled": cfg.desktop.menubar_enabled,
-        },
-        "document": {
-            "pdf_translation_threads": cfg.document.pdf_translation_threads,
-        },
-        "request_history": {
-            "enabled": cfg.request_history.enabled,
-            "capture_full_body": cfg.request_history.capture_full_body,
-            "retention_days": cfg.request_history.retention_days,
-            "max_total_mb": cfg.request_history.max_total_mb,
-            "compress_after_days": cfg.request_history.compress_after_days,
-            "cleanup_on_startup": cfg.request_history.cleanup_on_startup,
-        },
-        "branding": {
-            "username": cfg.branding.get("username", "") if isinstance(cfg.branding, dict) else "",
-            "slogans": cfg.branding.get("slogans", []) if isinstance(cfg.branding, dict) else [],
-        },
-        "ui": {
-            "home": {
-                "enabled_tabs": cfg.ui.home.enabled_tabs,
-                "digest_enabled": cfg.ui.home.digest_enabled,
-                "document_enabled": cfg.ui.home.document_enabled,
-                "image_enabled": cfg.ui.home.image_enabled,
-                "image_modules": cfg.ui.home.image_modules,
-                "allow_local_override": cfg.ui.home.allow_local_override,
-            }
-        },
-        "system_prompts": public_system_prompts(cfg.system_prompts),
-    }
+    if hasattr(cfg, "model_dump"):
+        res = cfg.model_dump(include={"provider", "system", "digest", "document", "vision", "audio", "ui"})
+    else:
+        res = {}
+        for sec in ["provider", "system", "digest", "document", "vision", "audio", "ui"]:
+            obj = getattr(cfg, sec, None)
+            if hasattr(obj, "model_dump"):
+                res[sec] = obj.model_dump()
+                
+    for sec in res:
+        if isinstance(res[sec], dict) and "prompts" in res[sec]:
+            res[sec]["prompts"] = public_system_prompts(res[sec]["prompts"])
+            
+    return res
 
 
 def update_runtime_config(cfg: Any, data: dict, *, sections: set[str]) -> None:
-    if "digest" in sections:
-        cfg.digest = data.get("digest", {}) if isinstance(data.get("digest"), dict) else {}
+    current = cfg.model_dump()
+    for sec in sections:
+        actual_sec = "provider" if sec == "provider_sampling" else sec
+        if actual_sec not in current:
+            continue
+            
+        sec_data = data.get(actual_sec)
+        if not isinstance(sec_data, dict):
+            continue
+            
+        if sec == "provider_sampling":
+            if "sampling" in sec_data:
+                current["provider"]["sampling"] = deep_merge(current["provider"]["sampling"], sec_data["sampling"])
+        else:
+            current[actual_sec] = deep_merge(current[actual_sec], sec_data)
+            if "prompts" in sec_data:
+                cfg.system_prompts.update(sec_data["prompts"])
 
-    if "desktop" in sections:
-        desktop = data.get("desktop", {})
-        if not isinstance(desktop, dict):
-            desktop = {}
-        cfg.desktop.menubar_enabled = bool(desktop.get("menubar_enabled", True))
-
-    if "document" in sections:
-        doc = data.get("document", {})
-        if not isinstance(doc, dict):
-            doc = {}
-        cfg.document.pdf_translation_threads = max(1, int(doc.get("pdf_translation_threads", 8)))
-
-    if "request_history" in sections:
-        request_history = data.get("request_history", {})
-        if not isinstance(request_history, dict):
-            request_history = {}
-        cfg.request_history.enabled = bool(request_history.get("enabled", True))
-        cfg.request_history.capture_full_body = bool(request_history.get("capture_full_body", True))
-        cfg.request_history.retention_days = max(0, int(request_history.get("retention_days", 14)))
-        cfg.request_history.max_total_mb = max(1, int(request_history.get("max_total_mb", 512)))
-        cfg.request_history.compress_after_days = max(0, int(request_history.get("compress_after_days", 1)))
-        cfg.request_history.cleanup_on_startup = bool(request_history.get("cleanup_on_startup", True))
-
-    if "branding" in sections:
-        branding = data.get("branding", {})
-        if not isinstance(branding, dict):
-            branding = {}
-        slogans = branding.get("slogans", [])
-        if not isinstance(slogans, list):
-            slogans = []
-        cfg.branding = {
-            "username": str(branding.get("username", "") or "").strip(),
-            "slogans": [str(item).strip() for item in slogans if str(item).strip()],
-        }
-
-    if "ui" in sections:
-        from lumina.config import UIConfig, UIHomeConfig
-
-        ui = data.get("ui", {})
-        if not isinstance(ui, dict):
-            ui = {}
-        home = ui.get("home", {})
-        if not isinstance(home, dict):
-            home = {}
-        cfg.ui = UIConfig(
-            home=UIHomeConfig(
-                enabled_tabs=list(home.get("enabled_tabs", cfg.ui.home.enabled_tabs)),
-                digest_enabled=bool(home.get("digest_enabled", cfg.ui.home.digest_enabled)),
-                document_enabled=bool(home.get("document_enabled", cfg.ui.home.document_enabled)),
-                image_enabled=bool(home.get("image_enabled", cfg.ui.home.image_enabled)),
-                image_modules=list(home.get("image_modules", cfg.ui.home.image_modules)),
-                allow_local_override=bool(home.get("allow_local_override", cfg.ui.home.allow_local_override)),
-            )
-        )
-
-    if "provider_sampling" in sections:
-        from lumina.config import SamplingConfig
-
-        sampling = data.get("provider", {}).get("sampling", {})
-        if not isinstance(sampling, dict):
-            sampling = {}
-        cfg.provider.sampling = SamplingConfig(
-            temperature=float(sampling["temperature"]) if "temperature" in sampling else None,
-            top_p=float(sampling["top_p"]) if "top_p" in sampling else None,
-            top_k=int(sampling["top_k"]) if "top_k" in sampling else None,
-            min_p=float(sampling["min_p"]) if "min_p" in sampling else None,
-            presence_penalty=float(sampling["presence_penalty"]) if "presence_penalty" in sampling else None,
-            repetition_penalty=float(sampling["repetition_penalty"]) if "repetition_penalty" in sampling else None,
-            max_tokens=int(sampling["max_tokens"]) if "max_tokens" in sampling else None,
-        )
+    # Re-validate with deep merged dict
+    from lumina.config import Config
+    new_cfg = Config.model_validate(current)
+    
+    # Mutate in-place
+    for k in current.keys():
+        if hasattr(cfg, k):
+            setattr(cfg, k, getattr(new_cfg, k))

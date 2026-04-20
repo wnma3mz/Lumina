@@ -25,12 +25,43 @@
       "model_path": null,
       "n_gpu_layers": -1,
       "n_ctx": 4096
+    },
+    "system_prompts": {
+      "chat": "You are a helpful assistant."
     }
   },
-  "whisper_model": "",
-  "host": "127.0.0.1",
-  "port": 31821,
-  "log_level": "INFO",
+  "system": {
+    "server": {
+      "host": "127.0.0.1",
+      "port": 31821,
+      "log_level": "INFO",
+      "_readme": "服务绑定与日志配置"
+    },
+    "desktop": {
+      "_readme": "桌面端行为配置。menubar_enabled 控制 macOS 菜单栏图标默认是否显示；可通过命令行或菜单栏动作切换。",
+      "menubar_enabled": true
+    },
+    "request_history": {
+      "_readme": "LLM 请求历史记录。默认保存完整 prompt/response 正文用于 debug；历史按天滚动、压缩并自动清理",
+      "enabled": true,
+      "capture_full_body": true,
+      "retention_days": 14,
+      "max_total_mb": 512,
+      "compress_after_days": 1,
+      "cleanup_on_startup": true
+    },
+    "branding": {
+      "_readme": "前端品牌文案配置。username 可选，用于首页欢迎语里显示自定义用户名；留空时自动获取当前系统用户名。slogans 用于首页副标题候选，前端会在每次新访问时随机选一句，并在当前会话内保持不变。",
+      "username": "",
+      "slogans": [
+        "让 AI 留在本地",
+        "在你的电脑上思考",
+        "你的本地 AI 工作台",
+        "把智能留给自己",
+        "本地运行，安心使用"
+      ]
+    }
+  },
   "digest": {
     "_readme": "日报功能配置。enabled=true 开启后台定时采集与生成（与前端界面显示无关）；scan_dirs 填 [] 表示不扫描任何目录，缺省时使用内置默认列表；enabled_collectors 为 null 时全部启用，填列表可按需只启用部分来源；notify_time 为每日推送时间（HH:MM），留空禁用推送；weekly_report_day: 0=周一…6=周日；monthly_report_day: 每月第几日（1-28）；AI 会话仅受时间窗口和单条最大长度限制。",
     "enabled": true,
@@ -60,76 +91,71 @@
     "weekly_report_day": 0,
     "monthly_report_day": 1,
     "ai_queries_max_source_chars": 4000,
-    "enabled_collectors": null
-  },
-  "ptt": {
-    "_readme": "enabled=false 可关闭录音热键守护；hotkey: f5、caps_lock、ctrl+alt+r 等；language: zh / en / null（null = Whisper 自动检测）",
-    "enabled": false,
-    "hotkey": "cmd",
-    "language": "zh"
-  },
-  "desktop": {
-    "_readme": "桌面端行为配置。menubar_enabled 控制 macOS 菜单栏图标默认是否显示；可通过命令行或菜单栏动作切换。",
-    "menubar_enabled": true
+    "enabled_collectors": null,
+    "sampling": {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "top_k": 20,
+      "min_p": 0.0,
+      "presence_penalty": 1.5,
+      "repetition_penalty": 1.0,
+      "max_tokens": 512
+    },
+    "prompts": {
+      "digest": "你是用户的本地工作上下文助手。你的任务是根据用户最近的活动记录，帮助用户快速找回工作状态。\n\n**执行原则：**\n1. **核心聚焦**：优先提炼 1-3 个核心项目或主题，忽略琐碎活动。\n2. **价值优先**：重点提取对继续工作有帮助的信息（如未完成事项、阻塞点、特定文件或参数）。终端命令、Git 提交、AI 对话是最高权重线索。\n3. **真实客观**：严禁臆测和空泛总结。**若最近无明显活动记录，各标题下统一仅显示“无活动”三字。**\n4. **简洁输出**：不写鼓励语，不重复原始记录。\n\n**输出格式 (Markdown)：**\n\n## 最近在推进\n[2-4 句说明核心项目与任务。若无记录，写“无活动”。]\n\n## 当前上下文\n* [要点 1：当前进度/具体线索]\n* [要点 2：阻塞点/待确认项]\n[若无记录，写“无活动”。]\n\n## 下一步建议\n* [建议 1：最自然的后续动作]\n* [建议 2：需要衔接的具体任务]\n[若无记录，写“无活动”。]\n\n**约束：** 整体长度控制在 220-350 字（有活动时）",
+      "daily_report": "你是用户的本地工作日报助手。\n\n你的任务是根据用户今天多次活动快照，生成一份结构清晰的工作日报。\n\n请遵循以下原则：\n- 提炼今天的主要工作成果，不是流水账。\n- 把相似主题的活动合并，突出项目进展、完成事项、遇到的问题。\n- TODO 项必须具体可执行，直接粘贴就能用，不要写模糊的方向。\n- 不要重复原始记录，不要写鼓励语，不要臆测。\n\n请用 Markdown 输出，格式固定为：\n\n## 今日完成\n用 3-5 条要点描述今天完成的主要事项，每条简洁具体。\n\n## 主要进展\n用 2-3 句话说明今天在哪个项目/主题上取得了推进，推进到哪个阶段。\n\n## 遇到的问题\n用 2-3 条列出今天的阻塞点或待解决问题，没有则写\"无明显阻塞\"。\n\n## TODO\n列出明天最应该处理的具体任务，每条格式为：\n- [ ] 具体动作（项目/文件/功能）\n要求：3-6 条，每条一句话，可直接粘贴到任务管理工具使用。\n\n整体简洁、具体，总长度控制在 300-450 字。",
+      "weekly_report": "你是用户的本地工作周报助手。\n\n你的任务是根据用户这一周每天的日报，生成一份结构清晰的工作周报。\n\n请遵循以下原则：\n- 按项目或主题归纳，不要按天重复列举。\n- 突出本周最重要的进展、决策或里程碑。\n- 诚实反映本周的问题与卡点，不要粉饰。\n- TODO 项要明确可执行，便于直接用于计划安排。\n\n请用 Markdown 输出，格式固定为：\n\n## 本周核心成果\n用 3-5 条要点列出本周最重要的完成事项或里程碑。\n\n## 项目进展\n按项目/主题分段，每段 2-3 句说明本周做了什么、到了哪个阶段。\n\n## 问题与风险\n用 2-4 条列出本周遇到的问题、阻塞或潜在风险，没有则写\"无明显问题\"。\n\n## TODO\n列出下周最重要的具体任务，每条格式为：\n- [ ] 具体动作（项目/功能/目标）\n要求：5-8 条，按优先级排列，每条可直接粘贴到任务管理工具使用。\n\n整体清晰、具体，总长度控制在 400-550 字。",
+      "monthly_report": "你是用户的本地工作月报助手。\n\n你的任务是根据用户这个月每周的周报，生成一份结构清晰的工作月报。\n\n请遵循以下原则：\n- 从月度视角提炼，关注战略性进展和整体趋势。\n- 合并相同主题的周报内容，不要逐周重复。\n- 诚实评估本月目标完成情况。\n- TODO 项要有战略意义，便于月度复盘和下月计划安排。\n\n请用 Markdown 输出，格式固定为：\n\n## 本月亮点\n用 3-5 条列出本月最重要的成果或里程碑。\n\n## 项目总结\n按项目分段，每段 3-4 句说明本月的整体进展、现状和下一阶段目标。\n\n## 问题复盘\n用 2-4 条列出本月的主要问题与教训，没有则写\"无明显问题\"。\n\n## TODO\n列出下月最重要的具体任务，每条格式为：\n- [ ] 具体动作（项目/里程碑/目标）\n要求：5-8 条，按优先级排列，明确可衡量，可直接粘贴到月度计划使用。\n\n整体战略性、简洁有力，总长度控制在 450-650 字。"
+    }
   },
   "document": {
     "_readme": "文档处理配置。pdf_translation_threads 控制 PDF 翻译并发的线程数，默认 8。增加可提升速度，但消耗更多内存和显存。",
-    "pdf_translation_threads": 8
-  },
-  "request_history": {
-    "_readme": "LLM 请求历史记录。默认保存完整 prompt/response 正文用于 debug；历史按天滚动、压缩并自动清理",
     "enabled": true,
-    "capture_full_body": true,
-    "retention_days": 14,
-    "max_total_mb": 512,
-    "compress_after_days": 1,
-    "cleanup_on_startup": true
-  },
-  "branding": {
-    "_readme": "前端品牌文案配置。username 可选，用于首页欢迎语里显示自定义用户名；留空时自动获取当前系统用户名。slogans 用于首页副标题候选，前端会在每次新访问时随机选一句，并在当前会话内保持不变。",
-    "username": "",
-    "slogans": [
-      "让 AI 留在本地",
-      "在你的电脑上思考",
-      "你的本地 AI 工作台",
-      "把智能留给自己",
-      "本地运行，安心使用"
-    ]
-  },
-  "ui": {
-    "_readme": "前端界面配置。home.enabled_tabs 控制首页默认显示哪些一级入口；digest_enabled/document_enabled/image_enabled 分别控制回顾/文档/图像功能的前端入口显示（与 digest.enabled 后台采集独立）；浏览器端仍可按本地偏好覆盖。document 为统一的文档工作台入口。image_modules 控制图片功能开放的模块。",
-    "home": {
-      "enabled_tabs": [
-        "digest",
-        "document",
-        "image",
-        "settings"
-      ],
-      "digest_enabled": true,
-      "document_enabled": true,
-      "image_enabled": true,
-      "image_modules": [
-        "image_ocr",
-        "image_caption"
-      ],
-      "allow_local_override": true
+    "pdf_translation_threads": 8,
+    "sampling": {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "top_k": 20,
+      "min_p": 0.0,
+      "presence_penalty": 1.5,
+      "repetition_penalty": 1.0,
+      "max_tokens": 512
+    },
+    "prompts": {
+      "translate_to_zh": "You are a professional translator. Translate the user's text into Simplified Chinese. Output only the translated text, no explanations.",
+      "translate_to_en": "You are a professional translator. Translate the user's text into English. Output only the translated text, no explanations.",
+      "summarize": "你是一位专业的文档摘要助手。用简洁的中文总结用户提供的内容，不超过几句话。只输出摘要，不作任何解释。",
+      "polish_zh": "你是一位中文写作顾问。请对用户的中文文本进行润色，改善语言表达、逻辑连贯性和措辞，但保持原意和风格。只输出润色后的文字，不解释改动。",
+      "polish_en": "You are a professional English writing coach. Polish the user's English text to improve clarity, tone, and grammar while preserving the original meaning. Output only the polished text."
     }
   },
-  "system_prompts": {
-    "_readme": "各任务的 system prompt，修改后重启生效。digest/daily_report/weekly_report/monthly_report 控制日报相关生成；image_ocr/image_caption 控制图像任务；asr_zh/asr_en 为语音转写的 initial_prompt。",
-    "translate_to_zh": "You are a professional translator. Translate the user's text into Simplified Chinese. Output only the translated text, no explanations.",
-    "translate_to_en": "You are a professional translator. Translate the user's text into English. Output only the translated text, no explanations.",
-    "summarize": "你是一位专业的文档摘要助手。用简洁的中文总结用户提供的内容，不超过几句话。只输出摘要，不作任何解释。",
-    "polish_zh": "你是一位中文写作顾问。请对用户的中文文本进行润色，改善语言表达、逻辑连贯性和措辞，但保持原意和风格。只输出润色后的文字，不解释改动。",
-    "polish_en": "You are a professional English writing coach. Polish the user's English text to improve clarity, tone, and grammar while preserving the original meaning. Output only the polished text.",
-    "image_ocr": "你是一位专业的图片文字提取助手。\n\n任务目标：\n- 准确提取图片中所有可读文字。\n- 优先保证文字正确，其次尽量保留原有顺序、段落、换行和列表结构。\n- 只输出识别结果，不解释、不总结、不翻译、不补充。\n\n输出要求：\n- 如果图片里有明确文字，就直接输出提取后的纯文本。\n- 如果只有零散短词，也照常输出，不要自行整理成说明。\n- 如果图片几乎没有可识别文字，请只回答：未识别到有效文字",
-    "image_caption": "你是一位专业的图像描述助手。\n\n任务目标：\n- 用简洁、具体、自然的中文描述图片里实际能看到的内容。\n- 优先覆盖主体、动作、场景、物体关系、明显的文字信息和整体氛围。\n- 不要做 OCR 式逐字抄写，除非图片中的文字本身对理解画面很重要。\n\n输出要求：\n- 默认输出 1 段简洁描述；必要时可补 1-2 句关键信息。\n- 不要编造看不见的细节，不要推断身份、地点、时间等不确定信息。\n- 不要输出“这是一张……”这类空泛开头，直接进入描述。",
-    "chat": "You are a helpful assistant.",
-    "digest": "你是用户的本地工作上下文助手。你的任务是根据用户最近的活动记录，帮助用户快速找回工作状态。\n\n**执行原则：**\n1. **核心聚焦**：优先提炼 1-3 个核心项目或主题，忽略琐碎活动。\n2. **价值优先**：重点提取对继续工作有帮助的信息（如未完成事项、阻塞点、特定文件或参数）。终端命令、Git 提交、AI 对话是最高权重线索。\n3. **真实客观**：严禁臆测和空泛总结。**若最近无明显活动记录，各标题下统一仅显示“无活动”三字。**\n4. **简洁输出**：不写鼓励语，不重复原始记录。\n\n**输出格式 (Markdown)：**\n\n## 最近在推进\n[2-4 句说明核心项目与任务。若无记录，写“无活动”。]\n\n## 当前上下文\n* [要点 1：当前进度/具体线索]\n* [要点 2：阻塞点/待确认项]\n[若无记录，写“无活动”。]\n\n## 下一步建议\n* [建议 1：最自然的后续动作]\n* [建议 2：需要衔接的具体任务]\n[若无记录，写“无活动”。]\n\n**约束：** 整体长度控制在 220-350 字（有活动时）",
-    "daily_report": "你是用户的本地工作日报助手。\n\n你的任务是根据用户今天多次活动快照，生成一份结构清晰的工作日报。\n\n请遵循以下原则：\n- 提炼今天的主要工作成果，不是流水账。\n- 把相似主题的活动合并，突出项目进展、完成事项、遇到的问题。\n- TODO 项必须具体可执行，直接粘贴就能用，不要写模糊的方向。\n- 不要重复原始记录，不要写鼓励语，不要臆测。\n\n请用 Markdown 输出，格式固定为：\n\n## 今日完成\n用 3-5 条要点描述今天完成的主要事项，每条简洁具体。\n\n## 主要进展\n用 2-3 句话说明今天在哪个项目/主题上取得了推进，推进到哪个阶段。\n\n## 遇到的问题\n用 2-3 条列出今天的阻塞点或待解决问题，没有则写\"无明显阻塞\"。\n\n## TODO\n列出明天最应该处理的具体任务，每条格式为：\n- [ ] 具体动作（项目/文件/功能）\n要求：3-6 条，每条一句话，可直接粘贴到任务管理工具使用。\n\n整体简洁、具体，总长度控制在 300-450 字。",
-    "weekly_report": "你是用户的本地工作周报助手。\n\n你的任务是根据用户这一周每天的日报，生成一份结构清晰的工作周报。\n\n请遵循以下原则：\n- 按项目或主题归纳，不要按天重复列举。\n- 突出本周最重要的进展、决策或里程碑。\n- 诚实反映本周的问题与卡点，不要粉饰。\n- TODO 项要明确可执行，便于直接用于计划安排。\n\n请用 Markdown 输出，格式固定为：\n\n## 本周核心成果\n用 3-5 条要点列出本周最重要的完成事项或里程碑。\n\n## 项目进展\n按项目/主题分段，每段 2-3 句说明本周做了什么、到了哪个阶段。\n\n## 问题与风险\n用 2-4 条列出本周遇到的问题、阻塞或潜在风险，没有则写\"无明显问题\"。\n\n## TODO\n列出下周最重要的具体任务，每条格式为：\n- [ ] 具体动作（项目/功能/目标）\n要求：5-8 条，按优先级排列，每条可直接粘贴到任务管理工具使用。\n\n整体清晰、具体，总长度控制在 400-550 字。",
-    "monthly_report": "你是用户的本地工作月报助手。\n\n你的任务是根据用户这个月每周的周报，生成一份结构清晰的工作月报。\n\n请遵循以下原则：\n- 从月度视角提炼，关注战略性进展和整体趋势。\n- 合并相同主题的周报内容，不要逐周重复。\n- 诚实评估本月目标完成情况。\n- TODO 项要有战略意义，便于月度复盘和下月计划安排。\n\n请用 Markdown 输出，格式固定为：\n\n## 本月亮点\n用 3-5 条列出本月最重要的成果或里程碑。\n\n## 项目总结\n按项目分段，每段 3-4 句说明本月的整体进展、现状和下一阶段目标。\n\n## 问题复盘\n用 2-4 条列出本月的主要问题与教训，没有则写\"无明显问题\"。\n\n## TODO\n列出下月最重要的具体任务，每条格式为：\n- [ ] 具体动作（项目/里程碑/目标）\n要求：5-8 条，按优先级排列，明确可衡量，可直接粘贴到月度计划使用。\n\n整体战略性、简洁有力，总长度控制在 450-650 字。",
-    "asr_zh": "以下是普通话的语音识别结果，包含标准的中文标点符号。",
-    "asr_en": "The following is a transcription in English."
+  "vision": {
+    "enabled": true,
+    "max_image_mb": 12,
+    "enabled_modules": [
+      "image_ocr",
+      "image_caption"
+    ],
+    "prompts": {
+      "image_ocr": "你是一位专业的图片文字提取助手。\n\n任务目标：\n- 准确提取图片中所有可读文字。\n- 优先保证文字正确，其次尽量保留原有顺序、段落、换行和列表结构。\n- 只输出识别结果，不解释、不总结、不翻译、不补充。\n\n输出要求：\n- 如果图片里有明确文字，就直接输出提取后的纯文本。\n- 如果只有零散短词，也照常输出，不要自行整理成说明。\n- 如果图片几乎没有可识别文字，请只回答：未识别到有效文字",
+      "image_caption": "你是一位专业的图像描述助手。\n\n任务目标：\n- 用简洁、具体、自然的中文描述图片里实际能看到的内容。\n- 优先覆盖主体、动作、场景、物体关系、明显的文字信息和整体氛围。\n- 不要做 OCR 式逐字抄写，除非图片中的文字本身对理解画面很重要。\n\n输出要求：\n- 默认输出 1 段简洁描述；必要时可补 1-2 句关键信息。\n- 不要编造看不见的细节，不要推断身份、地点、时间等不确定信息。\n- 不要输出“这是一张……”这类空泛开头，直接进入描述。"
+    },
+    "_readme": "视觉与图像处理配置。max_image_mb 限制上传图片大小。"
+  },
+  "audio": {
+    "enabled": false,
+    "whisper_model": "",
+    "ptt": {
+      "_readme": "enabled=false 可关闭录音热键守护；hotkey: f5、caps_lock、ctrl+alt+r 等；language: zh / en / null（null = Whisper 自动检测）",
+      "enabled": false,
+      "hotkey": "cmd",
+      "language": "zh"
+    },
+    "prompts": {
+      "asr_zh": "以下是普通话的语音识别结果，包含标准的中文标点符号。",
+      "asr_en": "The following is a transcription in English.",
+      "live_translate": ""
+    },
+    "_readme": "音频与语音转写配置。"
   }
 }

@@ -54,7 +54,14 @@ async def summarize(request: SummarizeRequest, raw: Request):
             media_type="text/event-stream",
         )
     with request_context(origin="summarize_api", stream=False):
-        text = await llm.generate(request.text, task="summarize")
+        from lumina.config import get_config
+        import dataclasses
+        kwargs = {}
+        sampling = getattr(get_config().document, "sampling", None)
+        if sampling:
+            s_dict = dataclasses.asdict(sampling) if dataclasses.is_dataclass(sampling) else dict(sampling)
+            kwargs.update({k: v for k, v in s_dict.items() if v is not None})
+        text = await llm.generate(request.text, task="summarize", **kwargs)
     return TextResponse(text=text)
 
 @router.post("/v1/polish")
@@ -67,7 +74,14 @@ async def polish(request: PolishRequest, raw: Request):
             media_type="text/event-stream",
         )
     with request_context(origin="polish_api", stream=False):
-        text = await llm.generate(request.text, task=task)
+        from lumina.config import get_config
+        import dataclasses
+        kwargs = {}
+        sampling = getattr(get_config().document, "sampling", None)
+        if sampling:
+            s_dict = dataclasses.asdict(sampling) if dataclasses.is_dataclass(sampling) else dict(sampling)
+            kwargs.update({k: v for k, v in s_dict.items() if v is not None})
+        text = await llm.generate(request.text, task=task, **kwargs)
     return TextResponse(text=text)
 
 @router.post("/v1/render_markdown")
@@ -75,12 +89,22 @@ async def render_markdown(request: RenderMarkdownRequest):
     return RenderedHtmlResponse(html=render_markdown_html(request.text))
 
 async def _stream_text(user_text: str, task: str, llm, *, origin: str):
+    from lumina.config import get_config
+    import dataclasses
+    
+    cfg = get_config()
+    kwargs = {}
+    if getattr(cfg.document, "sampling", None):
+        s_dict = dataclasses.asdict(cfg.document.sampling) if dataclasses.is_dataclass(cfg.document.sampling) else dict(cfg.document.sampling)
+        kwargs.update({k: v for k, v in s_dict.items() if v is not None})
+        
     async for chunk in stream_llm(
         llm,
         user_text,
         task=task,
         log_label="stream_text",
         origin=origin,
+        **kwargs
     ):
         yield chunk
 

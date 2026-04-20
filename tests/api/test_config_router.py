@@ -141,20 +141,20 @@ class TestGetConfig:
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/v1/config")
-        assert "system_prompts" in r.json()
-        assert r.json()["system_prompts"]["chat"] == "You are helpful."
+        assert "prompts" in r.json()["provider"]
+        assert r.json()["provider"]["prompts"]["chat"] == "You are helpful."
 
     async def test_hides_private_system_prompt_keys(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/v1/config")
-        assert "_readme" not in r.json()["system_prompts"]
+        assert "_readme" not in r.json()["provider"]["prompts"]
 
     async def test_returns_ptt_config(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/v1/config")
-        ptt = r.json()["ptt"]
+        ptt = r.json()["audio"]["ptt"]
         assert ptt["enabled"] is False
         assert ptt["hotkey"] == "f5"
 
@@ -162,27 +162,27 @@ class TestGetConfig:
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/v1/config")
-        home = r.json()["ui"]["home"]
+        home = r.json()["system"]["ui"]["home"]
         assert "document" in home["enabled_tabs"]
         assert "image" in home["enabled_tabs"]
-        assert home["image_modules"] == ["image_ocr"]
+        assert r.json()["vision"]["enabled_modules"] == ["image_ocr"]
 
     async def test_returns_desktop_config(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/v1/config")
-        assert r.json()["desktop"]["menubar_enabled"] is True
+        assert r.json()["system"]["desktop"]["menubar_enabled"] is True
 
     async def test_returns_branding_config(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/v1/config")
-        assert r.json()["branding"]["username"] == ""
-        assert r.json()["branding"]["slogans"] == ["让 AI 留在本地"]
+        assert r.json()["system"]["branding"]["username"] == ""
+        assert r.json()["system"]["branding"]["slogans"] == ["让 AI 留在本地"]
 
     async def test_legacy_ui_tabs_are_normalized(self, config_path):
         payload = _base_config()
-        payload["ui"]["home"]["enabled_tabs"] = ["digest", "document", "image", "settings"]
+        payload.setdefault("system", {})["ui"] = {"home": {"enabled_tabs": ["digest", "document", "image", "settings"]}}
         config_path.write_text(json.dumps(payload), encoding="utf-8")
 
         markdown_stub = types.SimpleNamespace(markdown=lambda text, extensions=None: text)
@@ -218,7 +218,7 @@ class TestGetConfig:
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/v1/config")
-        assert r.json()["ui"]["home"]["enabled_tabs"] == ["digest", "document", "image", "settings"]
+        assert r.json()["system"]["ui"]["home"]["enabled_tabs"] == ["digest", "document", "image", "settings"]
 
 
 # ── PATCH /v1/config ─────────────────────────────────────────────────────────
@@ -228,14 +228,14 @@ class TestPatchConfig:
     async def test_patch_system_prompt_returns_ok(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.patch("/v1/config", json={"system_prompts": {"chat": "Be concise."}})
+            r = await c.patch("/v1/config", json={"provider": {"prompts": {"chat": "Be concise."}}})
         assert r.status_code == 200
         assert r.json()["ok"] is True
 
     async def test_patch_system_prompt_not_restart_required(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.patch("/v1/config", json={"system_prompts": {"chat": "Be concise."}})
+            r = await c.patch("/v1/config", json={"provider": {"prompts": {"chat": "Be concise."}}})
         assert r.json()["restart_required"] is False
 
     async def test_patch_system_prompt_hot_reloads_llm_and_config(self, client_and_llm):
@@ -243,7 +243,7 @@ class TestPatchConfig:
 
         app, llm = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.patch("/v1/config", json={"system_prompts": {"chat": "Be concise."}})
+            r = await c.patch("/v1/config", json={"provider": {"prompts": {"chat": "Be concise."}}})
         assert r.status_code == 200
         assert llm._system_prompts["chat"] == "Be concise."
         assert get_config().system_prompts["chat"] == "Be concise."
@@ -252,7 +252,7 @@ class TestPatchConfig:
         app, _ = client_and_llm
         with patch("lumina.services.audio.transcriber.set_asr_prompts") as set_asr_prompts:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.patch("/v1/config", json={"system_prompts": {"asr_zh": "新的中文提示词"}})
+                r = await c.patch("/v1/config", json={"audio": {"prompts": {"asr_zh": "新的中文提示词"}}})
         assert r.status_code == 200
         set_asr_prompts.assert_called_once_with(zh="新的中文提示词", en="")
 
@@ -313,11 +313,11 @@ class TestPatchConfig:
     async def test_patch_desktop_requires_restart(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.patch("/v1/config", json={"desktop": {"menubar_enabled": False}})
+            r = await c.patch("/v1/config", json={"system": {"desktop": {"menubar_enabled": False}}})
             get_res = await c.get("/v1/config")
         assert r.status_code == 200
         assert r.json()["restart_required"] is True
-        assert get_res.json()["desktop"]["menubar_enabled"] is False
+        assert get_res.json()["system"]["desktop"]["menubar_enabled"] is False
 
     async def test_patch_ui_home_not_restart_required(self, client_and_llm):
         app, _ = client_and_llm
@@ -329,9 +329,9 @@ class TestPatchConfig:
     async def test_patch_ui_home_written_to_file(self, config_path, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            await c.patch("/v1/config", json={"ui": {"home": {"image_modules": ["image_caption"]}}})
+            await c.patch("/v1/config", json={"vision": {"enabled_modules": ["image_caption"]}})
         written = json.loads(config_path.read_text())
-        assert written["ui"]["home"]["image_modules"] == ["image_caption"]
+        assert written["vision"]["enabled_modules"] == ["image_caption"]
 
     async def test_patch_ui_home_legacy_tabs_written_as_document(self, config_path, client_and_llm):
         app, _ = client_and_llm
@@ -343,23 +343,23 @@ class TestPatchConfig:
     async def test_patch_branding_username_not_restart_required(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.patch("/v1/config", json={"branding": {"username": "  Lu  "}})
+            r = await c.patch("/v1/config", json={"system": {"branding": {"username": "  Lu  "}}})
             get_res = await c.get("/v1/config")
         assert r.status_code == 200
         assert r.json()["restart_required"] is False
-        assert get_res.json()["branding"]["username"] == "Lu"
+        assert get_res.json()["system"]["branding"]["username"] == "Lu"
 
     async def test_patch_branding_username_written_to_file(self, config_path, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            await c.patch("/v1/config", json={"branding": {"username": "Lumina"}})
+            await c.patch("/v1/config", json={"system": {"branding": {"username": "Lumina"}}})
         written = json.loads(config_path.read_text())
-        assert written["branding"]["username"] == "Lumina"
+        assert written["system"]["branding"]["username"] == "Lumina"
 
     async def test_patch_port_requires_restart(self, client_and_llm):
         app, _ = client_and_llm
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.patch("/v1/config", json={"port": 9999})
+            r = await c.patch("/v1/config", json={"system": {"server": {"port": 9999}}})
         assert r.json()["restart_required"] is True
 
     async def test_patch_empty_body_ok(self, client_and_llm):

@@ -193,6 +193,26 @@ def remove_pid():
     _PID_FILE.unlink(missing_ok=True)
 
 
+def wait_for_pid(pid: int, timeout_sec: float = 5.0) -> bool:
+    """
+    等待指定的进程退出。
+    :param pid: 进程ID
+    :param timeout_sec: 超时时间（秒）
+    :return: True 如果进程已退出，False 如果超时
+    """
+    import os
+    import time
+    
+    start_time = time.monotonic()
+    while time.monotonic() - start_time < timeout_sec:
+        try:
+            os.kill(pid, 0)
+            time.sleep(0.1)
+        except ProcessLookupError:
+            return True
+    return False
+
+
 # ── 系统工具 ──────────────────────────────────────────────────────────────────
 
 def notify(title: str, message: str):

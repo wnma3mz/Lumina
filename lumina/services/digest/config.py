@@ -2,15 +2,16 @@
 lumina/digest/config.py — DigestConfig 及全局配置单例
 """
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict
 
 
-@dataclass
-class DigestConfig:
+class DigestConfig(BaseModel):
     """从 config.json["digest"] 读取，或使用默认值。"""
-    scan_dirs: List[str] = field(default_factory=lambda: [
+    model_config = ConfigDict(extra="ignore")
+
+    scan_dirs: List[str] = Field(default_factory=lambda: [
         d for d in [
             str(Path.home() / "Documents"),
             str(Path.home() / "Desktop"),
@@ -34,6 +35,8 @@ class DigestConfig:
     ai_queries_max_source_chars: int = 4000
     enabled_collectors: Optional[List[str]] = None  # None = 全部启用
     enabled: bool = False  # False = 完全关闭 digest（不自动也不手动生成）
+    prompts: Dict[str, str] = Field(default_factory=dict)
+    sampling: Dict[str, Any] = Field(default_factory=dict)
 
 
 _cfg: DigestConfig = DigestConfig()
@@ -58,8 +61,16 @@ def configure(data: dict) -> None:
     """从 config.json 的 digest 节点初始化配置。"""
     global _cfg
     d = data.get("digest", {})
+    if isinstance(d, DigestConfig):
+        _cfg = d
+        return
+    elif hasattr(d, "model_dump"):
+        d = d.model_dump()
+    elif hasattr(d, "__dict__"):
+        d = d.__dict__
+    
+    # 用 key 存在性而非真值判断：scan_dirs=[] 是"不扫描任何目录"，不能回退到默认值
     _cfg = DigestConfig(
-        # 用 key 存在性而非真值判断：scan_dirs=[] 是"不扫描任何目录"，不能回退到默认值
         scan_dirs=d["scan_dirs"] if "scan_dirs" in d else DigestConfig().scan_dirs,
         history_hours=float(d.get("history_hours", 24.0)),
         refresh_hours=float(d.get("refresh_hours", 1.0)),
@@ -69,6 +80,8 @@ def configure(data: dict) -> None:
         ai_queries_max_source_chars=max(1, int(d.get("ai_queries_max_source_chars", 4000))),
         enabled_collectors=d.get("enabled_collectors", None),
         enabled=bool(d.get("enabled", False)),
+        prompts=d.get("prompts", {}),
+        sampling=d.get("sampling", {}),
     )
 
 

@@ -1,3 +1,53 @@
+{% macro sampling_block(prefix, hint, sampling_cfg) %}
+<div class="mt-4 pt-6 border-t border-zinc-100 dark:border-zinc-800">
+  <div class="text-sm font-bold mb-4">采样参数 <span class="text-[10px] font-normal text-zinc-400 ml-2">{{ hint }}</span></div>
+  <div class="grid grid-cols-2 gap-4">
+    <div class="flex flex-col gap-2">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Temperature</label>
+      <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="0" max="2" step="0.05"
+             name="{{ prefix }}.sampling.temperature" value="{{ sampling_cfg.temperature }}">
+    </div>
+    <div class="flex flex-col gap-2">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Top-P</label>
+      <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="0" max="1" step="0.05"
+             name="{{ prefix }}.sampling.top_p" value="{{ sampling_cfg.top_p }}">
+    </div>
+    <div class="flex flex-col gap-2">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Top-K</label>
+      <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="0" max="200" step="1"
+             name="{{ prefix }}.sampling.top_k" value="{{ sampling_cfg.top_k }}">
+    </div>
+    <div class="flex flex-col gap-2">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Min-P</label>
+      <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="0" max="1" step="0.01"
+             name="{{ prefix }}.sampling.min_p" value="{{ sampling_cfg.min_p }}">
+    </div>
+    <div class="flex flex-col gap-2">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Presence Penalty</label>
+      <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="-2" max="2" step="0.1"
+             name="{{ prefix }}.sampling.presence_penalty" value="{{ sampling_cfg.presence_penalty }}">
+    </div>
+    <div class="flex flex-col gap-2">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Repetition Penalty</label>
+      <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="0.5" max="2" step="0.05"
+             name="{{ prefix }}.sampling.repetition_penalty" value="{{ sampling_cfg.repetition_penalty }}">
+    </div>
+    <div class="flex flex-col gap-2 col-span-2">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Max Tokens</label>
+      <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="64" max="8192" step="64"
+             name="{{ prefix }}.sampling.max_tokens" value="{{ sampling_cfg.max_tokens }}">
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
 <div id="settings-inner" class="w-full grid grid-cols-1 md:grid-cols-3 gap-8">
 
 <!-- 左侧边栏导航 -->
@@ -9,10 +59,11 @@
       <p class="text-zinc-500 text-sm mt-2 leading-relaxed">管理和配置 Lumina 的各项参数。</p>
     </div>
     <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 transition-all seg-btn active" onclick="switchSettingsSubTab('model', this)">🤖 模型</button>
-    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('digest', this)">🌅 日报</button>
-    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('interact', this)">⌨️ 交互</button>
-    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('ui', this)">🧭 界面</button>
-    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('server', this)">🖧 服务器</button>
+    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('digest', this)">🌅 回顾</button>
+    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('document', this)">📄 文档</button>
+    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('vision', this)">🖼️ 图像</button>
+    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('audio', this)">🎙️ 音频</button>
+    <button type="button" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all seg-btn" onclick="switchSettingsSubTab('server', this)">🖧 系统</button>
   </div>
 </div>
 
@@ -21,7 +72,6 @@
 
 <!-- ── 模型 tab ── -->
 <div id="stab-model" class="settings-subtab flex flex-col gap-6">
-
   <!-- LLM 提供商 -->
   <div class="bento-card flex flex-col gap-6">
     <div>
@@ -75,88 +125,35 @@
     </div>
 
     <!-- 采样参数 -->
-    <div class="mt-4 pt-6 border-t border-zinc-100 dark:border-zinc-800">
-      <div class="text-sm font-bold mb-4">采样参数 <span class="text-[10px] font-normal text-zinc-400 ml-2">API 请求中显式指定的参数优先级更高</span></div>
-      <div class="grid grid-cols-2 gap-4">
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Temperature</label>
-          <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="0" max="2" step="0.05"
-                 name="provider.sampling.temperature" value="{{ cfg.provider.sampling.temperature }}">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Top-P</label>
-          <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="0" max="1" step="0.05"
-                 name="provider.sampling.top_p" value="{{ cfg.provider.sampling.top_p }}">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Top-K</label>
-          <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="0" max="200" step="1"
-                 name="provider.sampling.top_k" value="{{ cfg.provider.sampling.top_k }}">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Min-P</label>
-          <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="0" max="1" step="0.01"
-                 name="provider.sampling.min_p" value="{{ cfg.provider.sampling.min_p }}">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Presence Penalty</label>
-          <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="-2" max="2" step="0.1"
-                 name="provider.sampling.presence_penalty" value="{{ cfg.provider.sampling.presence_penalty }}">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Repetition Penalty</label>
-          <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="0.5" max="2" step="0.05"
-                 name="provider.sampling.repetition_penalty" value="{{ cfg.provider.sampling.repetition_penalty }}">
-        </div>
-        <div class="flex flex-col gap-2 col-span-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Max Tokens</label>
-          <input class="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="64" max="8192" step="64"
-                 name="provider.sampling.max_tokens" value="{{ cfg.provider.sampling.max_tokens }}">
-        </div>
-      </div>
-    </div>
+    {{ sampling_block('provider', 'API 请求中显式指定的参数优先级更高', cfg.provider.sampling) }}
   </div>
-
-  <!-- 语音模型 -->
+  
   <div class="bento-card flex flex-col gap-6">
     <div>
-      <h3 class="text-lg font-bold">语音转文字</h3>
-      <p class="text-xs text-zinc-500 mt-1">配置 ASR Whisper 模型</p>
+      <h3 class="text-lg font-bold">全局 System Prompt</h3>
+      <p class="text-xs text-zinc-500 mt-1">全局对话任务的初始人设和规则</p>
     </div>
     <div class="flex flex-col gap-2">
-      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Whisper 模型</label>
-      <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-             type="text" name="whisper_model"
-             value="{{ cfg.whisper_model }}"
-             placeholder="mlx-community/whisper-tiny-mlx-4bit">
-      <div class="text-xs text-amber-500 font-medium">⚠️ 修改后需重启服务生效</div>
+      <textarea class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm resize-y min-h-[100px] font-mono text-zinc-600 dark:text-zinc-300 leading-relaxed" 
+                name="provider.prompts.chat">{{ cfg.provider.prompts.get('chat', '') }}</textarea>
     </div>
   </div>
-
 </div>
 
-<!-- ── 日报 tab ── -->
+<!-- ── 回顾 tab ── -->
 <div id="stab-digest" class="settings-subtab hidden flex-col gap-6">
-
   <!-- 日报配置 -->
   <div class="bento-card flex flex-col gap-6">
     <div>
-      <h3 class="text-lg font-bold">活动采集自动化</h3>
-      <p class="text-xs text-zinc-500 mt-1">配置活动采集、摘要和报告生成规则</p>
+      <h3 class="text-lg font-bold">活动采集与回顾</h3>
+      <p class="text-xs text-zinc-500 mt-1">控制此领域功能是否在前端和后台启用</p>
     </div>
 
     <div class="flex flex-col gap-4">
       <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
-        <span class="text-sm font-semibold">启用活动采集</span>
+        <span class="text-sm font-semibold">启用回顾功能</span>
         <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="digest.enabled" class="sr-only peer" {% if cfg.digest.get('enabled') %}checked{% endif %}>
+          <input type="checkbox" name="digest.enabled" class="sr-only peer" {% if cfg.digest.enabled %}checked{% endif %} onchange="toggleFeature('digest', this.checked)">
           <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
         </label>
       </div>
@@ -166,13 +163,13 @@
           <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">历史时间窗口（小时）</label>
           <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
                  type="number" min="1" max="168" step="1"
-                 name="digest.history_hours" value="{{ cfg.digest.get('history_hours', 24) }}">
+                 name="digest.history_hours" value="{{ cfg.digest.history_hours }}">
         </div>
         <div class="flex flex-col gap-2">
           <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">自动刷新间隔（小时）</label>
           <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
                  type="number" min="0.25" max="24" step="0.25"
-                 name="digest.refresh_hours" value="{{ cfg.digest.get('refresh_hours', 1) }}">
+                 name="digest.refresh_hours" value="{{ cfg.digest.refresh_hours }}">
         </div>
       </div>
 
@@ -180,7 +177,7 @@
         <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">每日通知时间</label>
         <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
                type="time" name="digest.notify_time"
-               value="{{ cfg.digest.get('notify_time', '') }}">
+               value="{{ cfg.digest.notify_time }}">
         <div class="text-xs text-zinc-400">留空禁用每日通知</div>
       </div>
 
@@ -190,7 +187,7 @@
           <select class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm appearance-none cursor-pointer" 
                   name="digest.weekly_report_day">
             {% for i, day in [(0,'周一'), (1,'周二'), (2,'周三'), (3,'周四'), (4,'周五'), (5,'周六'), (6,'周日')] %}
-            <option value="{{ i }}" {% if cfg.digest.get('weekly_report_day', 0) == i %}selected{% endif %}>{{ day }}</option>
+            <option value="{{ i }}" {% if cfg.digest.weekly_report_day == i %}selected{% endif %}>{{ day }}</option>
             {% endfor %}
           </select>
         </div>
@@ -198,7 +195,7 @@
           <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">月报生成日 (1-28)</label>
           <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
                  type="number" min="1" max="28" step="1"
-                 name="digest.monthly_report_day" value="{{ cfg.digest.get('monthly_report_day', 1) }}">
+                 name="digest.monthly_report_day" value="{{ cfg.digest.monthly_report_day }}">
         </div>
       </div>
 
@@ -212,7 +209,7 @@
             <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">单条最大长度</label>
             <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm"
                    type="number" min="1" max="20000" step="100"
-                   name="digest.ai_queries_max_source_chars" value="{{ cfg.digest.get('ai_queries_max_source_chars', 4000) }}">
+                   name="digest.ai_queries_max_source_chars" value="{{ cfg.digest.ai_queries_max_source_chars }}">
           </div>
         </div>
       </div>
@@ -220,82 +217,140 @@
       <div class="flex flex-col gap-2 mt-2">
         <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">扫描目录（每行一个）</label>
         <textarea class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm resize-y min-h-[100px] font-mono leading-relaxed" 
-                  name="digest.scan_dirs_text">{{ (cfg.digest.get('scan_dirs') or []) | join('\n') }}</textarea>
+                  name="digest.scan_dirs_text">{{ (cfg.digest.scan_dirs or []) | join('\n') }}</textarea>
         <div class="text-xs text-zinc-400">留空则不扫描任何目录</div>
       </div>
     </div>
   </div>
-
-  <!-- LLM 请求历史 -->
+  
   <div class="bento-card flex flex-col gap-6">
     <div>
-      <h3 class="text-lg font-bold">LLM 请求历史</h3>
-      <p class="text-xs text-zinc-500 mt-1">管理和清理本地缓存的对话记录</p>
+      <h3 class="text-lg font-bold">回顾 System Prompts</h3>
+    </div>
+    <div class="flex flex-col gap-6">
+      {% for key, label in [('digest', '活动摘要'), ('daily_report', '日报'), ('weekly_report', '周报'), ('monthly_report', '月报')] %}
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-bold">{{ label }}</label>
+        <textarea class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm resize-y min-h-[100px] font-mono text-zinc-600 dark:text-zinc-300 leading-relaxed" 
+                  name="digest.prompts.{{ key }}">{{ cfg.digest.prompts.get(key, '') }}</textarea>
+      </div>
+      {% endfor %}
     </div>
 
-    <div class="flex flex-col gap-4">
-      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
-        <span class="text-sm font-semibold">启用请求历史</span>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="request_history.enabled" class="sr-only peer" {% if cfg.request_history.enabled %}checked{% endif %}>
-          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
-        </label>
-      </div>
+    <!-- 采样参数 -->
+    {{ sampling_block('digest', '回顾与报告专用的参数', cfg.digest.sampling) }}
+  </div>
+</div>
 
-      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
-        <span class="text-sm font-semibold">保存完整正文</span>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="request_history.capture_full_body" class="sr-only peer" {% if cfg.request_history.capture_full_body %}checked{% endif %}>
-          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
-        </label>
-      </div>
+<!-- ── 文档 tab ── -->
+<div id="stab-document" class="settings-subtab hidden flex-col gap-6">
+  <div class="bento-card flex flex-col gap-6">
+    <div>
+      <h3 class="text-lg font-bold">文档处理</h3>
+      <p class="text-xs text-zinc-500 mt-1">控制此领域功能是否在前端和后台启用</p>
+    </div>
+    <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
+      <span class="text-sm font-semibold">启用文档功能</span>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" name="document.enabled" class="sr-only peer" {% if cfg.document.enabled %}checked{% endif %} onchange="toggleFeature('document', this.checked)">
+        <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
+      </label>
+    </div>
+    <div class="flex flex-col gap-2 mt-4">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">PDF 翻译并发线程数</label>
+      <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="1" max="32" step="1"
+             name="document.pdf_translation_threads" value="{{ cfg.document.pdf_translation_threads }}">
+      <div class="text-xs text-zinc-400">增加可提升翻译速度，但会消耗更多内存与显存。默认 8。</div>
+    </div>
 
-      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
-        <span class="text-sm font-semibold">启动时自动清理</span>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="request_history.cleanup_on_startup" class="sr-only peer" {% if cfg.request_history.cleanup_on_startup %}checked{% endif %}>
-          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
-        </label>
-      </div>
+    <!-- 采样参数 -->
+    {{ sampling_block('document', '文档翻译/润色/摘要专用的参数', cfg.document.sampling) }}
+  </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">保留天数</label>
-          <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="0" max="365" step="1"
-                 name="request_history.retention_days" value="{{ cfg.request_history.retention_days }}">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">最大总空间(MB)</label>
-          <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="1" max="10240" step="1"
-                 name="request_history.max_total_mb" value="{{ cfg.request_history.max_total_mb }}">
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">压缩天数阈值</label>
-          <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
-                 type="number" min="0" max="30" step="1"
-                 name="request_history.compress_after_days" value="{{ cfg.request_history.compress_after_days }}">
-        </div>
+  <div class="bento-card flex flex-col gap-6">
+    <div>
+      <h3 class="text-lg font-bold">文档 System Prompts</h3>
+    </div>
+    <div class="flex flex-col gap-6">
+      {% for key, label in [('translate_to_zh', '翻译为中文'), ('translate_to_en', '翻译为英文'), ('summarize', '摘要'), ('polish_zh', '中文润色'), ('polish_en', '英文润色')] %}
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-bold">{{ label }}</label>
+        <textarea class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm resize-y min-h-[100px] font-mono text-zinc-600 dark:text-zinc-300 leading-relaxed" 
+                  name="document.prompts.{{ key }}">{{ cfg.document.prompts.get(key, '') }}</textarea>
       </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between mt-4 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl">
-        <div class="flex flex-col">
-          <span class="text-sm font-bold">存储位置</span>
-          <code class="text-xs text-zinc-500 mt-1 font-mono">~/.lumina/request_history/</code>
-        </div>
-        <button type="button" class="mt-4 sm:mt-0 px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-sm rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
-                onclick="pruneRequestHistory(this)">立即清理历史</button>
-      </div>
+<!-- ── 图像 tab ── -->
+<div id="stab-vision" class="settings-subtab hidden flex-col gap-6">
+  <div class="bento-card flex flex-col gap-6">
+    <div>
+      <h3 class="text-lg font-bold">图像与视觉处理</h3>
+      <p class="text-xs text-zinc-500 mt-1">控制此领域功能是否在前端和后台启用</p>
+    </div>
+    <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
+      <span class="text-sm font-semibold">启用图像功能</span>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" name="vision.enabled" class="sr-only peer" {% if cfg.vision.enabled %}checked{% endif %} onchange="toggleFeature('image', this.checked)">
+        <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
+      </label>
+    </div>
+    <div class="flex flex-col gap-2 mt-4">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">最大图片限制 (MB)</label>
+      <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="number" min="1" max="100" step="1"
+             name="vision.max_image_mb" value="{{ cfg.vision.max_image_mb }}">
     </div>
   </div>
 
+  <div class="bento-card flex flex-col gap-6">
+    <div>
+      <h3 class="text-lg font-bold">图像 System Prompts</h3>
+    </div>
+    <div class="flex flex-col gap-6">
+      {% for key, label in [('image_ocr', '图片 OCR'), ('image_caption', '图片 Caption')] %}
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-bold">{{ label }}</label>
+        <textarea class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm resize-y min-h-[100px] font-mono text-zinc-600 dark:text-zinc-300 leading-relaxed" 
+                  name="vision.prompts.{{ key }}">{{ cfg.vision.prompts.get(key, '') }}</textarea>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
 </div>
 
-<!-- ── 交互 tab ── -->
-<div id="stab-interact" class="settings-subtab hidden flex-col gap-6">
+<!-- ── 音频 tab ── -->
+<div id="stab-audio" class="settings-subtab hidden flex-col gap-6">
+  <div class="bento-card flex flex-col gap-6">
+    <div>
+      <h3 class="text-lg font-bold">音频与语音处理</h3>
+      <p class="text-xs text-zinc-500 mt-1">控制此领域功能是否在前端和后台启用</p>
+    </div>
+    
+    <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
+      <div class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">启用音频工作室 (Beta)</span>
+        <span class="text-xs text-zinc-400">支持实时同传和音频转写，需麦克风权限与虚拟回路驱动</span>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" name="audio.enabled" class="sr-only peer" {% if cfg.audio.enabled %}checked{% endif %} onchange="toggleFeature('audio', this.checked)">
+        <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-amber-500"></div>
+      </label>
+    </div>
 
-  <!-- PTT 录音 -->
+    <div class="flex flex-col gap-2 mt-4">
+      <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Whisper 模型</label>
+      <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+             type="text" name="audio.whisper_model"
+             value="{{ cfg.audio.whisper_model }}"
+             placeholder="mlx-community/whisper-tiny-mlx-4bit">
+      <div class="text-xs text-amber-500 font-medium">⚠️ 修改后需重启服务生效</div>
+    </div>
+  </div>
+
   <div class="bento-card flex flex-col gap-6">
     <div>
       <h3 class="text-lg font-bold">录音热键（PTT）</h3>
@@ -306,7 +361,7 @@
       <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
         <span class="text-sm font-semibold">启用 PTT</span>
         <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="ptt.enabled" class="sr-only peer" {% if cfg.ptt.enabled %}checked{% endif %}>
+          <input type="checkbox" name="audio.ptt.enabled" class="sr-only peer" {% if cfg.audio.ptt.enabled %}checked{% endif %}>
           <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
         </label>
       </div>
@@ -315,116 +370,56 @@
         <div class="flex flex-col gap-2">
           <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">热键</label>
           <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm font-mono" 
-                 type="text" name="ptt.hotkey"
-                 value="{{ cfg.ptt.hotkey }}"
+                 type="text" name="audio.ptt.hotkey"
+                 value="{{ cfg.audio.ptt.hotkey }}"
                  placeholder="cmd / f5 / caps_lock">
         </div>
         <div class="flex flex-col gap-2">
           <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">识别语言</label>
           <select class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm appearance-none cursor-pointer" 
-                  name="ptt.language">
-            <option value="zh" {% if cfg.ptt.language == 'zh' %}selected{% endif %}>中文</option>
-            <option value="en" {% if cfg.ptt.language == 'en' %}selected{% endif %}>English</option>
-            <option value="" {% if not cfg.ptt.language %}selected{% endif %}>自动检测</option>
+                  name="audio.ptt.language">
+            <option value="zh" {% if cfg.audio.ptt.language == 'zh' %}selected{% endif %}>中文</option>
+            <option value="en" {% if cfg.audio.ptt.language == 'en' %}selected{% endif %}>English</option>
+            <option value="" {% if not cfg.audio.ptt.language %}selected{% endif %}>自动检测</option>
           </select>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- 系统提示词 -->
   <div class="bento-card flex flex-col gap-6">
     <div>
-      <h3 class="text-lg font-bold">系统提示词 (System Prompts)</h3>
-      <p class="text-xs text-zinc-500 mt-1">自定义各种 AI 任务的初始人设和规则</p>
+      <h3 class="text-lg font-bold">音频 System Prompts</h3>
     </div>
-
     <div class="flex flex-col gap-6">
-      {% for item in system_prompt_items %}
+      {% for key, label in [('asr_zh', '语音识别（中文）'), ('asr_en', '语音识别（英文）'), ('live_translate', '实时同传润色')] %}
       <div class="flex flex-col gap-2">
-        <label class="text-sm font-bold">{{ item.label }}</label>
+        <label class="text-sm font-bold">{{ label }}</label>
         <textarea class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm resize-y min-h-[100px] font-mono text-zinc-600 dark:text-zinc-300 leading-relaxed" 
-                  name="system_prompts.{{ item.key }}">{{ item.value }}</textarea>
+                  name="audio.prompts.{{ key }}">{{ cfg.audio.prompts.get(key, '') }}</textarea>
       </div>
       {% endfor %}
     </div>
   </div>
-
 </div>
 
-<!-- ── 界面 tab ── -->
-<div id="stab-ui" class="settings-subtab hidden flex-col gap-6">
+<!-- ── 系统/服务器 tab ── -->
+<div id="stab-server" class="settings-subtab hidden flex-col gap-6">
 
   <div class="bento-card flex flex-col gap-6">
     <div>
-      <h3 class="text-lg font-bold">欢迎信息</h3>
+      <h3 class="text-lg font-bold">欢迎信息与界面</h3>
       <p class="text-xs text-zinc-500 mt-1">可选设置首页欢迎语里的用户名。填写后优先使用这里的值，留空则自动获取当前系统用户名。</p>
     </div>
 
     <div class="flex flex-col gap-2">
       <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">自定义用户名</label>
       <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm"
-             type="text" name="branding.username"
-             value="{{ cfg.branding.get('username', '') }}"
+             type="text" name="system.branding.username"
+             value="{{ cfg.system.branding.username }}"
              placeholder="留空则自动获取">
     </div>
   </div>
-
-  <div class="bento-card flex flex-col gap-6">
-    <div>
-      <h3 class="text-lg font-bold">首页默认入口</h3>
-      <p class="text-xs text-zinc-500 mt-1">这是全局默认值，所有访问这个服务的人都会先看到这套首页布局。文档能力已经收敛到统一的「文档」入口。</p>
-    </div>
-
-    <div class="flex flex-col gap-4">
-      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
-        <span class="text-sm font-semibold">启用回顾功能</span>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="ui.home.digest_enabled" class="sr-only peer" {% if cfg.ui.home.digest_enabled %}checked{% endif %} onchange="toggleFeature('digest', this.checked)">
-          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
-        </label>
-      </div>
-      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
-        <span class="text-sm font-semibold">启用文档功能</span>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="ui.home.document_enabled" class="sr-only peer" {% if cfg.ui.home.document_enabled %}checked{% endif %} onchange="toggleFeature('document', this.checked)">
-          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
-        </label>
-      </div>
-      <div class="flex items-center justify-between py-2">
-        <span class="text-sm font-semibold">启用图片功能</span>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="ui.home.image_enabled" class="sr-only peer" {% if cfg.ui.home.image_enabled %}checked{% endif %} onchange="toggleFeature('image', this.checked)">
-          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
-        </label>
-      </div>
-    </div>
-  </div>
-
-  <div class="bento-card flex flex-col gap-6">
-    <div>
-      <h3 class="text-lg font-bold text-amber-600 dark:text-amber-500">实验性功能 (Experimental)</h3>
-      <p class="text-xs text-zinc-500 mt-1">这些功能可能还不稳定或需要额外的硬件/环境配置，请谨慎开启。</p>
-    </div>
-
-    <div class="flex flex-col gap-4">
-      <div class="flex items-center justify-between py-2">
-        <div class="flex flex-col gap-1">
-          <span class="text-sm font-semibold">音频工作室 (Beta)</span>
-          <span class="text-xs text-zinc-400">支持实时同传和音频转写，需麦克风权限与虚拟回路驱动</span>
-        </div>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="ui.home.audio_enabled" class="sr-only peer" {% if cfg.ui.home.audio_enabled %}checked{% endif %} onchange="toggleFeature('audio', this.checked)">
-          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-amber-500"></div>
-        </label>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ── 服务器 tab ── -->
-<div id="stab-server" class="settings-subtab hidden flex-col gap-6">
 
   <div class="bento-card flex flex-col gap-6">
     <div>
@@ -439,7 +434,7 @@
           <span class="text-xs text-zinc-400">仅在 macOS 生效，修改后需重启服务</span>
         </div>
         <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" name="desktop.menubar_enabled" class="sr-only peer" {% if cfg.desktop.menubar_enabled %}checked{% endif %}>
+          <input type="checkbox" name="system.desktop.menubar_enabled" class="sr-only peer" {% if cfg.system.desktop.menubar_enabled %}checked{% endif %}>
           <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
         </label>
       </div>
@@ -447,25 +442,89 @@
       <div class="flex flex-col gap-2">
         <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">监听地址</label>
         <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm font-mono" 
-               type="text" name="host"
-               value="{{ cfg.host }}" placeholder="127.0.0.1">
+               type="text" name="system.server.host"
+               value="{{ cfg.system.server.host }}" placeholder="127.0.0.1">
         <div class="text-xs text-amber-500 font-medium">⚠️ 0.0.0.0 允许局域网访问，修改后需重启</div>
       </div>
       <div class="flex flex-col gap-2">
         <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">端口</label>
         <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm font-mono" 
                type="number" min="1024" max="65535"
-               name="port" value="{{ cfg.port }}">
+               name="system.server.port" value="{{ cfg.system.server.port }}">
         <div class="text-xs text-amber-500 font-medium">⚠️ 修改后需重启服务生效</div>
       </div>
       <div class="flex flex-col gap-2 mt-2">
         <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">日志级别</label>
         <select class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm appearance-none cursor-pointer font-mono" 
-                name="log_level">
+                name="system.server.log_level">
           {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR'] %}
-          <option {% if cfg.log_level == level %}selected{% endif %}>{{ level }}</option>
+          <option {% if cfg.system.server.log_level == level %}selected{% endif %}>{{ level }}</option>
           {% endfor %}
         </select>
+      </div>
+    </div>
+  </div>
+  
+  <!-- LLM 请求历史 -->
+  <div class="bento-card flex flex-col gap-6">
+    <div>
+      <h3 class="text-lg font-bold">LLM 请求历史</h3>
+      <p class="text-xs text-zinc-500 mt-1">管理和清理本地缓存的对话记录</p>
+    </div>
+
+    <div class="flex flex-col gap-4">
+      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
+        <span class="text-sm font-semibold">启用请求历史</span>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="system.request_history.enabled" class="sr-only peer" {% if cfg.system.request_history.enabled %}checked{% endif %}>
+          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
+        <span class="text-sm font-semibold">保存完整正文</span>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="system.request_history.capture_full_body" class="sr-only peer" {% if cfg.system.request_history.capture_full_body %}checked{% endif %}>
+          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50">
+        <span class="text-sm font-semibold">启动时自动清理</span>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="system.request_history.cleanup_on_startup" class="sr-only peer" {% if cfg.system.request_history.cleanup_on_startup %}checked{% endif %}>
+          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-emerald-500"></div>
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
+        <div class="flex flex-col gap-2">
+          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">保留天数</label>
+          <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+                 type="number" min="0" max="365" step="1"
+                 name="system.request_history.retention_days" value="{{ cfg.system.request_history.retention_days }}">
+        </div>
+        <div class="flex flex-col gap-2">
+          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">最大总空间(MB)</label>
+          <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+                 type="number" min="1" max="10240" step="1"
+                 name="system.request_history.max_total_mb" value="{{ cfg.system.request_history.max_total_mb }}">
+        </div>
+        <div class="flex flex-col gap-2">
+          <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">压缩天数阈值</label>
+          <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+                 type="number" min="0" max="30" step="1"
+                 name="system.request_history.compress_after_days" value="{{ cfg.system.request_history.compress_after_days }}">
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between mt-4 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl">
+        <div class="flex flex-col">
+          <span class="text-sm font-bold">存储位置</span>
+          <code class="text-xs text-zinc-500 mt-1 font-mono">~/.lumina/request_history/</code>
+        </div>
+        <button type="button" class="mt-4 sm:mt-0 px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-sm rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
+                onclick="pruneRequestHistory(this)">立即清理历史</button>
       </div>
     </div>
   </div>

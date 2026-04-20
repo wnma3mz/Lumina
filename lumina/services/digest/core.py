@@ -397,9 +397,16 @@ async def generate_digest(llm) -> str:
         _save_context_log(context, "full")
         logger.info("Digest: generating summary...")
         with request_context(origin="digest", stream=False):
+            from lumina.config import get_config
+            import dataclasses
+            kwargs = {"max_tokens": 600}
+            sampling = getattr(get_config().digest, "sampling", {})
+            if sampling:
+                s_dict = dataclasses.asdict(sampling) if dataclasses.is_dataclass(sampling) else dict(sampling)
+                kwargs.update({k: v for k, v in s_dict.items() if v is not None})
             summary = await llm.generate(
                 context, task="digest",
-                max_tokens=600,
+                **kwargs
             )
         now = datetime.now()
         entry = (f"<!-- generated: {now.isoformat()} -->\n"
@@ -454,9 +461,16 @@ async def generate_report(llm, report_type: str, key: str) -> Optional[str]:
 
     logger.info("Report(%s/%s): generating...", report_type, key)
     with request_context(origin="digest", stream=False):
+        from lumina.config import get_config
+        import dataclasses
+        kwargs = {"max_tokens": max_tokens_map[report_type]}
+        sampling = getattr(get_config().digest, "sampling", {})
+        if sampling:
+            s_dict = dataclasses.asdict(sampling) if dataclasses.is_dataclass(sampling) else dict(sampling)
+            kwargs.update({k: v for k, v in s_dict.items() if v is not None})
         content = await llm.generate(
             input_text, task=task_names[report_type],
-            max_tokens=max_tokens_map[report_type],
+            **kwargs
         )
 
     header = f"<!-- generated: {datetime.now().astimezone().isoformat()} -->\n"

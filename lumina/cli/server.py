@@ -656,7 +656,7 @@ def cmd_server(args):
             _request_history.shutdown()
 
     _env_interval = int(os.environ.get("LUMINA_DIGEST_INTERVAL", 0))
-    _cfg_interval = int(cfg.digest.get("refresh_hours", 1.0) * 3600)
+    _cfg_interval = int(getattr(cfg.digest, "refresh_hours", 1.0) * 3600)
     digest_interval = getattr(args, "digest_interval", None) or _env_interval or _cfg_interval
     fastapi_app = create_app(llm, transcriber, lifespan=_cmd_lifespan)
     digest_scheduler = DigestScheduler(
@@ -691,7 +691,7 @@ def cmd_server(args):
 
 def cmd_stop(args):
     import signal
-    from lumina.cli.utils import read_pid, remove_pid
+    from lumina.cli.utils import read_pid, remove_pid, wait_for_pid
 
     pid = read_pid()
     if pid is None:
@@ -699,6 +699,7 @@ def cmd_stop(args):
         return
     try:
         os.kill(pid, signal.SIGTERM)
+        wait_for_pid(pid)
         remove_pid()
         print(f"已停止 Lumina（PID {pid}）。")
     except ProcessLookupError:
@@ -716,12 +717,14 @@ def cmd_restart(args):
         remove_pid,
         resolve_config_path,
         persist_menubar_enabled,
+        wait_for_pid,
     )
 
     pid = read_pid()
     if pid is not None:
         try:
             os.kill(pid, signal.SIGTERM)
+            wait_for_pid(pid)
             print(f"已停止 Lumina（PID {pid}）。")
         except ProcessLookupError:
             pass
@@ -744,6 +747,7 @@ def cmd_menubar(args):
         remove_pid,
         resolve_config_path,
         persist_menubar_enabled,
+        wait_for_pid,
     )
 
     enabled = args.state == "on"
@@ -757,6 +761,7 @@ def cmd_menubar(args):
 
     try:
         os.kill(pid, signal.SIGTERM)
+        wait_for_pid(pid)
         print(f"已停止 Lumina（PID {pid}）。")
     except ProcessLookupError:
         pass

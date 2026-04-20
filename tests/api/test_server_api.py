@@ -333,7 +333,7 @@ async def test_config_fragment_includes_menubar_toggle(client):
     r = await client.get("/fragments/config")
 
     assert r.status_code == 200
-    assert 'name="desktop.menubar_enabled"' in r.text
+    assert 'name="system.desktop.menubar_enabled"' in r.text
     assert "显示 macOS 菜单栏图标" in r.text
 
 
