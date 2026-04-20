@@ -50,7 +50,7 @@ def _save_collector_state(results: dict) -> None:
     try:
         _COLLECTOR_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "saved_at": datetime.now().isoformat(),
+            "saved_at": datetime.now().astimezone().isoformat(),
             "process_started_ts": _PROCESS_STARTED_TS,
             "collectors": results,
         }
@@ -175,13 +175,13 @@ class CollectorRunner:
         loop = asyncio.get_running_loop()
 
         async def _run_one(fn):
-            t0 = time.time()
+            t0 = time.monotonic()
             try:
                 result = await asyncio.wait_for(
                     loop.run_in_executor(self._executor, fn),
                     timeout=self.TIMEOUT,
                 )
-                logger.debug("Digest: collector %s done in %.2fs", fn.__name__, time.time() - t0)
+                logger.debug("Digest: collector %s done in %.2fs", fn.__name__, time.monotonic() - t0)
                 return result
             except asyncio.TimeoutError:
                 logger.warning(
@@ -459,7 +459,7 @@ async def generate_report(llm, report_type: str, key: str) -> Optional[str]:
             max_tokens=max_tokens_map[report_type],
         )
 
-    header = f"<!-- generated: {datetime.now().isoformat()} -->\n"
+    header = f"<!-- generated: {datetime.now().astimezone().isoformat()} -->\n"
     full_content = header + content.strip() + "\n"
     save_report(report_type, key, full_content)
     logger.info("Report(%s/%s): saved", report_type, key)

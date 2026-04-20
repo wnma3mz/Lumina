@@ -79,6 +79,22 @@ class PdfJobManager:
     def __init__(self) -> None:
         self._jobs: dict[str, dict] = {}
         self._bg_tasks: set = set()
+        self._cleanup_orphans()
+
+    def _cleanup_orphans(self) -> None:
+        """清理超过 24 小时的孤儿临时目录（处理服务异常退出残留）。"""
+        tmp_base = tempfile.gettempdir()
+        now = time.time()
+        try:
+            for p in Path(tmp_base).glob("lumina_*"):
+                if p.is_dir():
+                    try:
+                        if now - p.stat().st_mtime > 86400:
+                            shutil.rmtree(p, ignore_errors=True)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     def submit_translate(self, pdf_path: str, lang_out: str, tmp_dir: str) -> str:
         """注册翻译 job，启动后台 task，返回 job_id。"""
@@ -176,15 +192,14 @@ def extract_pdf_pairs(dual_pdf_path: str, max_pairs: int = 200) -> list[dict]:
         import fitz
     except ImportError:
         raise RuntimeError("pymupdf 未安装")
-    doc = fitz.open(dual_pdf_path)
+    
     pairs = []
-    for page_num, page in enumerate(doc):
-        blocks = page.get_text("blocks")
-        text_blocks = [b[4].strip() for b in blocks if b[6] == 0 and b[4].strip()]
-        for i in range(0, len(text_blocks) - 1, 2):
-            pairs.append({"page": page_num + 1, "original": text_blocks[i], "translated": text_blocks[i + 1]})
-            if len(pairs) >= max_pairs:
-                doc.close()
-                return pairs
-    doc.close()
+    with fitz.open(dual_pdf_path) as doc:
+        for page_num, page in enumerate(doc):
+            blocks = page.get_text("blocks")
+            text_blocks = [b[4].strip() for b in blocks if b[6] == 0 and b[4].strip()]
+            for i in range(0, len(text_blocks) - 1, 2):
+                pairs.append({"page": page_num + 1, "original": text_blocks[i], "translated": text_blocks[i + 1]})
+                if len(pairs) >= max_pairs:
+                    return pairs
     return pairs

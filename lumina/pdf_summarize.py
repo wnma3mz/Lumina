@@ -22,16 +22,15 @@ def _extract_text(pdf_path: str, max_chars: int = _MAX_CHARS) -> str:
         logger.error("pymupdf 未安装，请运行: uv add pymupdf")
         sys.exit(1)
 
-    doc = fitz.open(pdf_path)
-    parts = []
-    total = 0
-    for page in doc:
-        text = page.get_text()
-        parts.append(text)
-        total += len(text)
-        if total >= max_chars:
-            break
-    doc.close()
+    with fitz.open(pdf_path) as doc:
+        parts = []
+        total = 0
+        for page in doc:
+            text = page.get_text()
+            parts.append(text)
+            total += len(text)
+            if total >= max_chars:
+                break
     return "".join(parts)[:max_chars]
 
 

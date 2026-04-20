@@ -378,7 +378,7 @@ def _run_popup_macos(params: dict):
     from AppKit import (
         NSApplication, NSApp, NSPanel, NSScreen,
         NSColor, NSRect, NSPoint, NSSize,
-        NSFloatingWindowLevel,
+        NSFloatingWindowLevel, NSEvent,
     )
     from WebKit import WKWebView, WKWebViewConfiguration, WKUserContentController
     from Foundation import NSObject
@@ -388,6 +388,13 @@ def _run_popup_macos(params: dict):
 
     # ── 屏幕尺寸 ──
     screen = NSScreen.mainScreen()
+    mouse_loc = NSEvent.mouseLocation()
+    for s in NSScreen.screens():
+        f = s.frame()
+        if f.origin.x <= mouse_loc.x <= f.origin.x + f.size.width and f.origin.y <= mouse_loc.y <= f.origin.y + f.size.height:
+            screen = s
+            break
+
     sf = screen.frame()
     vf = screen.visibleFrame()
     sw = sf.size.width
@@ -395,7 +402,7 @@ def _run_popup_macos(params: dict):
 
     pill_h = _pill_height(len(params.get("original", "")))
     pill_w = _PILL_W
-    x = (sw - pill_w) / 2
+    x = sf.origin.x + (sw - pill_w) / 2
     y = dock_h + _DOCK_MARGIN
 
     rect = NSRect(NSPoint(x, y), NSSize(pill_w, pill_h))
