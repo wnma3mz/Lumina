@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Lumina macOS 打包脚本
+# Lumina 打包脚本
+# 目前仅支持 macOS 平台打包。
 # 默认打包 Full 版（不含模型，首次运行下载）。加上 --lite 参数打包 Lite 版（不含模型，需外部接口）。
 # 产出：build/dist/Lumina.app (或 Lumina Lite.app) + build/dist/Lumina.zip (或 Lumina-Lite.zip)
 set -euo pipefail
+
+OS="$(uname -s)"
+if [[ "$OS" != "Darwin" ]]; then
+    echo "错误：打包脚本目前仅支持在 macOS 下运行。"
+    exit 1
+fi
 
 EDITION="full"
 if [[ "${1:-}" == "--lite" ]]; then

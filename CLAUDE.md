@@ -62,10 +62,9 @@ lumina/
   engine/              # 核心引擎层（llm/sampling/请求上下文/请求历史）
   platform_support/    # 平台特定实现（popup 浮窗、platform_utils）
 scripts/
-  build_macos.sh       # macOS 平台打包脚本（含 Full / Lite 模式）
-  install_macos.sh     # macOS 快速安装与自启配置脚本
-  install_linux.sh     # Linux 环境安装与桌面快捷方式配置脚本
-  install_windows.ps1  # Windows 环境安装与右键菜单配置脚本
+  build.sh             # macOS 平台打包脚本（含 Full / Lite 模式）
+  install.sh           # macOS / Linux 快速安装与环境配置脚本
+  install.ps1          # Windows 环境安装与右键菜单配置脚本
   lumina_full.spec     # PyInstaller spec（固定路径，保证缓存命中）
   install_quick_action.sh  # 安装 Finder 右键 workflow
 ```
@@ -75,7 +74,7 @@ scripts/
 ```bash
 uv run lumina server          # 开发模式启动服务
 uv run lumina server --ptt    # 同时启动 PTT 热键守护（长按 F5 录音）
-bash scripts/build_macos.sh   # 打包为 Lumina.app
+bash scripts/build.sh         # 打包为 Lumina.app
 ```
 
 命令行模式与 .app bundle 模式行为**应一致**，包括每小时定时生成日报。
@@ -252,7 +251,7 @@ v0.8.0 起采用 **Bento Card** 设计风格，替代原有毛玻璃（glassmorp
   ```bash
   find lumina -name "*.pyc" -delete && find lumina -name "__pycache__" -type d -exec rm -rf {} +
   ```
-  或在 `build_macos.sh` 开头加上这两行（已加）。
+  或在 `build.sh` 开头加上这两行（已加）。
 
 - **静态文件单一来源**：启动时 `sync_static()`（`cli/utils.py`）将 bundle/源码内的 `static/` 同步到 `~/.lumina/static/`；FastAPI 的 `_static_dir()` 优先 serve `~/.lumina/static/`，fallback 到 bundle 路径。CLI 和 `.app` 两种启动方式都使用同一份最新文件，无需手动 cp。`.app` 里有三份 `index.html` 的历史问题已通过此机制消除。
 
