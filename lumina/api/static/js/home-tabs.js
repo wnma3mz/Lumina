@@ -143,6 +143,15 @@ function getLocalHomeTabs() {
   }
 }
 
+function getEnabledLabTasks() {
+  var labTasks = _labTasks;
+  var homeUi = getHomeUiConfig();
+  var modules = Array.isArray(homeUi.image_modules) ? homeUi.image_modules.filter(function(key) {
+    return !!labTasks[key];
+  }) : [];
+  return modules.length ? modules : Object.keys(labTasks);
+}
+
 function getEffectiveHomeTabs() {
   var local = getLocalHomeTabs();
   var server = getServerHomeTabs();
