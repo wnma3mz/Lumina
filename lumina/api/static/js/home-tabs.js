@@ -181,7 +181,7 @@ function saveLocalHomeTabs(tabs) {
   if (homeUi.allow_local_override === false) return;
   try {
     localStorage.setItem('lumina.homeTabs', JSON.stringify(normalizeHomeTabs(tabs)));
-    localStorage.setItem(_homeTabsVersionKey, '2');
+    localStorage.setItem(_homeTabsVersionKey, '3');
   } catch (_) {}
 }
 

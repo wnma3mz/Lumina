@@ -672,40 +672,6 @@ async function runLabTask() {
   _currentTaskController = new AbortController();
 
   try {
-    if (_labTask === 'audio_live') {
-      result.innerHTML = '<div class="flex flex-col gap-4 w-full" id="live-subtitles-container"></div>';
-      var container = document.getElementById('live-subtitles-container');
-      var source = new EventSource('/v1/audio/live?lang_out=zh');
-      
-      _currentTaskController = { abort: function() { source.close(); } };
-      
-      source.onmessage = function(event) {
-        var data = JSON.parse(event.data);
-        var item = document.createElement('div');
-        item.className = 'bg-white dark:bg-zinc-800 p-4 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-700 animate-in fade-in slide-in-from-bottom-2 duration-500';
-        item.innerHTML = '<div class="text-[10px] font-bold text-indigo-500 mb-1 uppercase tracking-widest">Transcription</div>' +
-                        '<div class="text-zinc-500 text-xs mb-2 italic">"' + escapeHtml(data.raw) + '"</div>' +
-                        '<div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed">' + escapeHtml(data.translated) + '</div>';
-        container.appendChild(item);
-        scrollResultIntoView(item);
-        if (window.luminaBuddy) window.luminaBuddy.setState('working');
-      };
-      
-      source.onerror = function() {
-        source.close();
-        if (window.luminaBuddy) window.luminaBuddy.setState('error');
-      };
-
-      btn.textContent = '停止同传';
-      btn.onclick = function() {
-        source.close();
-        btn.textContent = spec.button;
-        btn.onclick = runLabTask;
-        if (window.luminaBuddy) window.luminaBuddy.setState('idle');
-      };
-      return;
-    }
-
     if (_labTask === 'image_ocr' || _labTask === 'image_caption') {
       var prompts = getImagePrompts();
       var systemPrompt = prompts[_labTask] || '';

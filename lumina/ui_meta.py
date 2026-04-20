@@ -16,7 +16,7 @@ HOME_TAB_KEYS = tuple(item["key"] for item in HOME_TAB_DEFS)
 LEGACY_HOME_TAB_MAP = {
     "translate": "document",
     "summarize": "document",
-    "lab": "audio",
+    "lab": "image",
 }
 
 IMAGE_TASK_DEFS: list[dict[str, Any]] = [

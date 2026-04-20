@@ -107,7 +107,15 @@
       });
     }
     document.querySelectorAll('input[name="tab"]').forEach(function(el) {
-      el.addEventListener('change', updateFloatingUiState);
+      el.addEventListener('change', function(e) {
+        updateFloatingUiState();
+        var tabKey = el.id.replace('tab-', '');
+        if (tabKey === 'digest') {
+          history.replaceState(null, '', location.pathname);
+        } else {
+          history.replaceState(null, '', '#' + tabKey);
+        }
+      });
     });
   });
 </script>
