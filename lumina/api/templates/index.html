@@ -204,29 +204,6 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="compare-modal" onclick="if(event.target===this)closeCompareModal()">
-    <div class="modal-sheet" id="compare-sheet">
-      <div class="modal-handle"></div>
-      <div class="modal-header">
-        <h3>对比预览</h3>
-        <div class="flex gap-1.5">
-          <button class="modal-close" id="compare-fullscreen-btn" onclick="toggleCompareFullscreen()" title="全屏">⊡</button>
-          <button class="modal-close" onclick="closeCompareModal()">✕</button>
-        </div>
-      </div>
-      <div class="flex flex-1 overflow-hidden" id="compare-modal-content">
-        <div class="flex-1 overflow-y-auto p-4 md:p-6 border-r border-zinc-200 dark:border-zinc-800 no-scrollbar relative group" id="cmp-left" onscroll="syncScroll('left')">
-          <div class="sticky top-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm z-10 px-3 py-1 mb-4 inline-block rounded-lg text-[10px] font-bold tracking-widest uppercase text-zinc-500 dark:text-zinc-400 shadow-sm border border-black/5 dark:border-white/5">原文</div>
-          <div id="cmp-left-content" class="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 space-y-4"></div>
-        </div>
-        <div class="flex-1 overflow-y-auto p-4 md:p-6 no-scrollbar relative group" id="cmp-right" onscroll="syncScroll('right')">
-          <div class="sticky top-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm z-10 px-3 py-1 mb-4 inline-block rounded-lg text-[10px] font-bold tracking-widest uppercase text-indigo-500 dark:text-indigo-400 shadow-sm border border-indigo-500/10 dark:border-indigo-400/20">译文</div>
-          <div id="cmp-right-content" class="text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 space-y-4"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <div class="safe-bottom"></div>
 </div>
 

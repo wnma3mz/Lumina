@@ -21,7 +21,6 @@ from lumina.api.protocol import (
 )
 from lumina.services.document.pdf import (
     cleanup_after,
-    extract_pdf_pairs,
     fetch_pdf_url,
     stream_pdf_summary,
     write_upload,
@@ -108,13 +107,10 @@ async def pdf_from_url(body: PdfUrlRequest, raw: Request):
     lang_out = body.lang_out
     if not url:
         raise HTTPException(400, "url 不能为空")
-    try:
-        pdf_path = await fetch_pdf_url(url)
-    except Exception as e:
-        raise HTTPException(400, f"下载 PDF 失败：{e}")
     manager = raw.app.state.pdf_manager
     tmp_dir = tempfile.mkdtemp(prefix="lumina_out_")
-    job_id = manager.submit_translate(str(pdf_path), lang_out, tmp_dir)
+    # 直接提交 URL，在后台线程完成下载和翻译，避免阻塞 HTTP 请求导致界面卡在「处理中…」
+    job_id = manager.submit_translate(url, lang_out, tmp_dir)
     return {"job_id": job_id}
 
 @router.get("/v1/pdf/job/{job_id}")
@@ -230,20 +226,3 @@ async def pdf_url_summarize_sync(body: PdfUrlRequest, raw: Request):
     full_text = "".join(tokens)
     html_content = render_markdown_html(full_text)
     return HTMLResponse(f'<div class="result-text digest-item-body">{html_content}</div>')
-
-@router.get("/v1/pdf/pairs/{job_id}")
-async def pdf_pairs(job_id: str, raw: Request):
-    manager = raw.app.state.pdf_manager
-    job = manager.get_status(job_id)
-    if not job:
-        raise HTTPException(404, "Job not found")
-    if job["status"] != "done":
-        raise HTTPException(409, "Job not ready")
-    dual_path = manager.get_file(job_id, "dual")
-    if not dual_path:
-        raise HTTPException(404, "Dual PDF not found")
-    try:
-        pairs = await asyncio.to_thread(extract_pdf_pairs, str(dual_path))
-        return {"pairs": pairs}
-    except Exception as e:
-        raise HTTPException(500, f"解析失败：{e}")

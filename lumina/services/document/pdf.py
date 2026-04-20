@@ -121,13 +121,29 @@ class PdfJobManager:
         """后台翻译任务，结果写入 _jobs。完成后立即结束，清理由独立 task 负责。"""
         loop = asyncio.get_running_loop()
         try:
+            if pdf_path.startswith("http://") or pdf_path.startswith("https://"):
+                from lumina.services.document.pdf import fetch_pdf_url
+                pdf_path = str(await fetch_pdf_url(pdf_path))
+
             from lumina.services.document.pdf_translate import translate_pdfs
             tmp_dir = self._jobs[job_id]["dir"]
+
+            def _progress_cb(p) -> None:
+                try:
+                    if hasattr(p, "n") and hasattr(p, "total") and p.total:
+                        pct = int((p.n / p.total) * 100)
+                        # Avoid regressing if not strictly increasing
+                        if pct > self._jobs[job_id].get("progress", 0):
+                            self._jobs[job_id]["progress"] = pct
+                except Exception:
+                    pass
+
             results = await loop.run_in_executor(
                 None, lambda: translate_pdfs(
                     paths=[pdf_path],
                     output_dir=tmp_dir,
                     lang_out=lang_out,
+                    callback=_progress_cb,
                 )
             )
             if results:
@@ -184,22 +200,3 @@ async def write_upload(upload_file, dest: str) -> None:
         with open(dest, "wb") as f:
             shutil.copyfileobj(upload_file.file, f)
     await asyncio.to_thread(_sync_copy)
-
-
-def extract_pdf_pairs(dual_pdf_path: str, max_pairs: int = 200) -> list[dict]:
-    """解析 pdf2zh 双语 PDF，按 block 交替提取原文/译文段落对。"""
-    try:
-        import fitz
-    except ImportError:
-        raise RuntimeError("pymupdf 未安装")
-    
-    pairs = []
-    with fitz.open(dual_pdf_path) as doc:
-        for page_num, page in enumerate(doc):
-            blocks = page.get_text("blocks")
-            text_blocks = [b[4].strip() for b in blocks if b[6] == 0 and b[4].strip()]
-            for i in range(0, len(text_blocks) - 1, 2):
-                pairs.append({"page": page_num + 1, "original": text_blocks[i], "translated": text_blocks[i + 1]})
-                if len(pairs) >= max_pairs:
-                    return pairs
-    return pairs

@@ -14,9 +14,6 @@ document.addEventListener('htmx:afterSettle', function(evt) {
   }
 });
 var _translateJobId = '';
-var _comparePairs = [];
-var _compareSync = false;
-var _compareFullscreen = false;
 var _pendingPdfFile = null;
 var _documentBatchJobId = null;
 var _documentBatchPollTimer = null;
@@ -868,8 +865,7 @@ async function startDocumentTask() {
       }
       var translateData = await res.json();
       _translateJobId = translateData.job_id;
-      _comparePairs = [];
-      resultDiv.innerHTML = '<div hx-get="/fragments/pdf/status/' + translateData.job_id + '" hx-trigger="every 2s" hx-swap="outerHTML" class="w-full"><div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-6 w-full border border-zinc-100 dark:border-zinc-800"><div class="text-sm font-bold text-zinc-500 mb-4 flex justify-between items-center"><span>正在翻译，可能需要几分钟…</span><span>30%</span></div><div class="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2.5 overflow-hidden"><div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out" style="width: 30%"></div></div></div></div>';
+      resultDiv.innerHTML = '<div hx-get="/fragments/pdf/status/' + translateData.job_id + '" hx-trigger="every 2s" hx-swap="outerHTML" class="w-full"><div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl p-6 w-full border border-zinc-100 dark:border-zinc-800"><div class="text-sm font-bold text-zinc-500 mb-4 flex justify-between items-center"><span>正在处理，可能需要几分钟…</span><span>0%</span></div><div class="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2.5 overflow-hidden"><div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div></div></div></div>';
       if (window.htmx) htmx.process(resultDiv);
       return;
     }

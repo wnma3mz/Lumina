@@ -133,6 +133,7 @@ def translate_pdfs(
     base_url: str = _DEFAULT_BASE_URL,
     model: str = "",
     api_key: str = DEFAULT_API_KEY,
+    callback: object = None,
 ) -> List[tuple]:
     """
     调用 pdf2zh 翻译一批 PDF。
@@ -172,5 +173,6 @@ def translate_pdfs(
         service="openailiked",
         thread=threads,
         model=layout_model,
+        callback=callback,
     )
     return results
