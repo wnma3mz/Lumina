@@ -75,6 +75,8 @@ class Transcriber:
 
     def transcribe_audio_sync(self, audio: np.ndarray, language: Optional[str] = None) -> str:
         """同步转写 Numpy 数组。"""
+        if language == "auto":
+            language = None
         initial_prompt = _make_initial_prompt(language)
         if _BACKEND == "mlx":
             result = _mlx_whisper.transcribe(
@@ -108,6 +110,8 @@ class Transcriber:
 
     def transcribe_sync(self, wav_bytes: bytes, language: Optional[str] = None) -> str:
         """同步转写，在 executor 内调用。"""
+        if language == "auto":
+            language = None
         audio = _wav_bytes_to_float32(wav_bytes)
         initial_prompt = _make_initial_prompt(language)
 

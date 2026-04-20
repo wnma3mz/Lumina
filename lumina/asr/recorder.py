@@ -78,11 +78,14 @@ class AudioRecorder:
     def stop(self) -> bytes:
         """停止录音，返回 WAV bytes。"""
         self._recording = False
-        self._stream.stop()
-        self._stream.close()
+        if self._stream is not None:
+            self._stream.stop()
+            self._stream.close()
+            self._stream = None
 
         with self._lock:
             frames = self._frames[:]
+            self._frames = []
 
         if not frames:
             return b""

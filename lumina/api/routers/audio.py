@@ -61,7 +61,8 @@ async def transcriptions(
             raise HTTPException(413, "文件过大，最大支持 100MB")
     transcriber = raw.app.state.transcriber
     wav_bytes = await file.read()
-    text = await transcriber.transcribe(wav_bytes, language=language)
+    lang_param = None if language == "auto" else language
+    text = await transcriber.transcribe(wav_bytes, language=lang_param)
     return TranscriptionResponse(text=text)
 
 

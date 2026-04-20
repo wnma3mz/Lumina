@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+import numpy as np
 from typing import AsyncIterator
 
 from lumina.asr.recorder import AudioRecorder, SAMPLE_RATE
@@ -32,9 +33,11 @@ class LiveTranslator:
                     continue
                 
                 # 1. 转写 (使用 float32 数组)
-                import numpy as np
-                float_audio = audio_slice.astype(np.float32) / 32768.0
-                raw_text = await self.transcriber.transcribe_audio(float_audio, language=self.lang_in)
+                # 展平为 1D 数组，防止 (N, 1) 导致 whisper 报错
+                float_audio = audio_slice.flatten().astype(np.float32) / 32768.0
+                
+                lang_param = None if self.lang_in == "auto" else self.lang_in
+                raw_text = await self.transcriber.transcribe_audio(float_audio, language=lang_param)
                 
                 if not raw_text or not raw_text.strip():
                     continue
@@ -53,8 +56,8 @@ class LiveTranslator:
             if self.recorder:
                 try:
                     self.recorder.stop()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Stop recorder error: %s", e)
             logger.info("Live translation stopped.")
 
     def stop(self):
