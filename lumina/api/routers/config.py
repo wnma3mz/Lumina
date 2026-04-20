@@ -91,6 +91,7 @@ class UIHomePatch(BaseModel):
     digest_enabled: Optional[bool] = None
     document_enabled: Optional[bool] = None
     image_enabled: Optional[bool] = None
+    audio_enabled: Optional[bool] = None
     image_modules: Optional[List[str]] = None
     allow_local_override: Optional[bool] = None
 
@@ -300,6 +301,8 @@ async def patch_config_api(patch: ConfigPatch, request: Request):
                 home["document_enabled"] = patch.ui.home.document_enabled
             if patch.ui.home.image_enabled is not None:
                 home["image_enabled"] = patch.ui.home.image_enabled
+            if patch.ui.home.audio_enabled is not None:
+                home["audio_enabled"] = patch.ui.home.audio_enabled
             if patch.ui.home.image_modules is not None:
                 from lumina.config import normalize_image_modules
 

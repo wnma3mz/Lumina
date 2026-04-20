@@ -401,6 +401,26 @@
     </div>
   </div>
 
+  <div class="bento-card flex flex-col gap-6">
+    <div>
+      <h3 class="text-lg font-bold text-amber-600 dark:text-amber-500">实验性功能 (Experimental)</h3>
+      <p class="text-xs text-zinc-500 mt-1">这些功能可能还不稳定或需要额外的硬件/环境配置，请谨慎开启。</p>
+    </div>
+
+    <div class="flex flex-col gap-4">
+      <div class="flex items-center justify-between py-2">
+        <div class="flex flex-col gap-1">
+          <span class="text-sm font-semibold">音频工作室 (Beta)</span>
+          <span class="text-xs text-zinc-400">支持实时同传和音频转写，需麦克风权限与虚拟回路驱动</span>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="ui.home.audio_enabled" class="sr-only peer" {% if getattr(cfg.ui.home, 'audio_enabled', False) %}checked{% endif %} onchange="toggleFeature('audio', this.checked)">
+          <div class="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-amber-500"></div>
+        </label>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ── 服务器 tab ── -->

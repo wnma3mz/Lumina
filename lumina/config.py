@@ -109,6 +109,7 @@ class UIHomeConfig:
     digest_enabled: bool = True
     document_enabled: bool = True
     image_enabled: bool = True
+    audio_enabled: bool = False
     image_modules: list[str] = field(default_factory=lambda: list(_DEFAULT_IMAGE_MODULES))
     allow_local_override: bool = True
 
@@ -284,6 +285,7 @@ class Config:
                 digest_enabled=bool(home.get("digest_enabled", True)),
                 document_enabled=bool(home.get("document_enabled", True)),
                 image_enabled=bool(home.get("image_enabled", home.get("lab_enabled", True))),
+                audio_enabled=bool(home.get("audio_enabled", False)),
                 image_modules=image_modules or list(_DEFAULT_IMAGE_MODULES),
                 allow_local_override=bool(home.get("allow_local_override", True)),
             )

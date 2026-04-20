@@ -169,6 +169,22 @@ async function runAudioTask() {
         return;
     }
     
+    setActionButtonBusyState(btn, '环境检查中…');
+    try {
+      var checkRes = await fetch('/v1/audio/check_env');
+      if (!checkRes.ok) {
+        var errDetail = await checkRes.json().catch(function() { return {}; });
+        var msg = errDetail.detail || checkRes.statusText;
+        result.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex flex-col gap-3"><div class="flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">环境依赖缺失：' + escapeHtml(msg) + '</span></div><div class="text-xs bg-white/50 dark:bg-black/10 p-4 rounded-xl font-normal leading-relaxed text-zinc-800 dark:text-zinc-200 border border-red-100 dark:border-red-900/30"><strong>如何修复？</strong><br>由于系统限制，捕获系统声音需要第三方虚拟声卡作为桥梁。<br><br>1. 下载安装 <strong>BlackHole 2ch</strong>: <a href="https://existential.audio/blackhole/" target="_blank" class="underline text-blue-500 hover:text-blue-600">官网链接</a> 或终端执行 <code class="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded">brew install blackhole-2ch</code><br>2. 在 macOS「音频 MIDI 设置」中创建一个「多输出设备」，勾选你当前的耳机/扬声器和 BlackHole。<br>3. 将该「多输出设备」设为系统的默认声音输出。<br>4. 重试开启同传。</div></div>';
+        restoreActionButtonState(btn, '开启同传');
+        return;
+      }
+    } catch(e) {
+      result.innerHTML = '<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 w-full text-red-600 dark:text-red-400 font-bold flex items-start gap-2"><svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm">环境检查失败：' + escapeHtml(e.message) + '</span></div>';
+      restoreActionButtonState(btn, '开启同传');
+      return;
+    }
+    
     result.innerHTML = '<div class="flex flex-col gap-4 w-full" id="live-subtitles-container"></div>';
     var container = document.getElementById('live-subtitles-container');
     var source = new EventSource('/v1/audio/live?lang_out=zh');

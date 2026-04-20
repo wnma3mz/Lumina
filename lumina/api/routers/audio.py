@@ -36,6 +36,19 @@ async def live_translate(request: Request, lang_in: str = "auto", lang_out: str 
     return EventSourceResponse(event_generator())
 
 
+@router.get("/check_env")
+async def check_audio_env():
+    """检查是否安装了虚拟音频回路驱动（如 BlackHole）。"""
+    from lumina.asr.recorder import AudioRecorder
+    device_index = AudioRecorder.find_loopback_device()
+    if device_index is None:
+        raise HTTPException(
+            status_code=400, 
+            detail="未检测到虚拟音频回路设备 (如 BlackHole, Virtual Audio Cable)。请先安装才能使用系统级实时同传功能。"
+        )
+    return {"ok": True, "device_index": device_index}
+
+
 @router.post("/transcriptions")
 async def transcriptions(
     file: UploadFile = File(...),

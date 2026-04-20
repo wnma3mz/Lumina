@@ -149,7 +149,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
             "digest_enabled": cfg.ui.home.digest_enabled,
             "document_enabled": cfg.ui.home.document_enabled,
             "image_enabled": cfg.ui.home.image_enabled,
-            "audio_enabled": getattr(cfg.ui.home, "audio_enabled", True),
+            "audio_enabled": cfg.ui.home.audio_enabled,
             "image_modules": cfg.ui.home.image_modules,
             "allow_local_override": cfg.ui.home.allow_local_override,
         }
