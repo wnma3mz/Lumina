@@ -38,6 +38,7 @@ dependencies = [
     "torchvision>=0.26.0 ; sys_platform == 'darwin'",
     "nh3>=0.3.4",
     "sse-starlette>=3.3.4",
+    "mlx-lm>=0.31.2",
 ]
 
 [project.optional-dependencies]

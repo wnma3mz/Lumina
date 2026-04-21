@@ -141,6 +141,10 @@ class LocalProvider(BaseProvider):
         max_new_prefill_per_iter: int = _MAX_NEW_PREFILL_PER_ITER,
         enable_warmup: bool = True,
         warmup_decode_steps: int = _WARMUP_DECODE_STEPS,
+        lazy_load: bool = False,
+        offload_embedding: bool = False,
+        offload_vision: bool = False,
+        offload_audio: bool = False,
     ):
         if not _MLX_AVAILABLE:
             raise ImportError(
@@ -151,6 +155,10 @@ class LocalProvider(BaseProvider):
         self.max_new_prefill_per_iter = max(1, max_new_prefill_per_iter)
         self.enable_warmup = enable_warmup
         self.warmup_decode_steps = max(0, warmup_decode_steps)
+        self.lazy_load = lazy_load
+        self.offload_embedding = offload_embedding
+        self.offload_vision = offload_vision
+        self.offload_audio = offload_audio
         self._model = None
         self._tokenizer = None
         self._prefill_queue: Optional[asyncio.Queue] = None
@@ -183,7 +191,12 @@ class LocalProvider(BaseProvider):
     # ══════════════════════════════════════════════════════════════════════════
 
     def load(self):
-        model, tokenizer, batch_generator, batch_executor = self._loader.load()
+        model, tokenizer, batch_generator, batch_executor = self._loader.load(
+            lazy=self.lazy_load, 
+            offload_embedding=self.offload_embedding,
+            offload_vision=self.offload_vision,
+            offload_audio=self.offload_audio
+        )
         self._model = model
         self._tokenizer = tokenizer
         self._batch_generator = batch_generator
@@ -422,12 +435,33 @@ class LocalProvider(BaseProvider):
             slot.prompt_cache = [layer_cache.extract(idx) for layer_cache in self._continuous_batch_cache]
         self._reset_continuous_batch()
 
+    def _get_embeddings(self, input_ids: mx.array) -> Optional[mx.array]:
+        """优化：在 CPU 上执行 Embedding 查找，允许权重留在磁盘。"""
+        if not self.offload_embedding:
+            return None
+            
+        # 针对 Qwen/Llama 模型寻找 embed_tokens 层
+        model_internal = getattr(self._model, "model", self._model)
+        embed_layer = getattr(model_internal, "embed_tokens", None)
+        
+        if embed_layer is not None:
+            with mx.stream(mx.cpu):
+                return embed_layer(input_ids)
+        return None
+
     def _prefill_prompt_cache(self, prompt_tokens: mx.array, prompt_cache: List[Any]) -> mx.array:
         prompt = prompt_tokens
         while len(prompt) > 1:
             remaining = len(prompt) - 1
             n_to_process = min(2048, remaining)
-            self._model(prompt[:n_to_process][None], cache=prompt_cache)
+            inputs = prompt[:n_to_process][None]
+            
+            embeddings = self._get_embeddings(inputs)
+            if embeddings is not None:
+                self._model(embeddings, cache=prompt_cache)
+            else:
+                self._model(inputs, cache=prompt_cache)
+                
             mx.eval([c.state for c in prompt_cache])
             prompt = prompt[n_to_process:]
             mx.clear_cache()
@@ -460,7 +494,14 @@ class LocalProvider(BaseProvider):
         prompt_cache = mlx_cache.make_prompt_cache(self._model)
         try:
             prompt = self._prefill_prompt_cache(slot.prompt_tokens, prompt_cache)
-            logits = self._model(prompt[None], cache=prompt_cache)[:, -1, :]
+            inputs = prompt[None]
+            
+            embeddings = self._get_embeddings(inputs)
+            if embeddings is not None:
+                logits = self._model(embeddings, cache=prompt_cache)[:, -1, :]
+            else:
+                logits = self._model(inputs, cache=prompt_cache)[:, -1, :]
+                
             mx.eval(logits)
             token_id = self._sample_from_logits(logits, slot)
             slot.prompt_cache = prompt_cache
@@ -481,8 +522,13 @@ class LocalProvider(BaseProvider):
 
         eos_ids = self._eos_ids
         try:
-            input_tokens = mx.array([[slot.next_input_token]])
-            logits = self._model(input_tokens, cache=slot.prompt_cache)[:, -1, :]
+            inputs = mx.array([[slot.next_input_token]])
+            embeddings = self._get_embeddings(inputs)
+            if embeddings is not None:
+                logits = self._model(embeddings, cache=slot.prompt_cache)[:, -1, :]
+            else:
+                logits = self._model(inputs, cache=slot.prompt_cache)[:, -1, :]
+                
             mx.eval(logits)
             token_id = self._sample_from_logits(logits, slot)
         except Exception as e:
@@ -536,7 +582,14 @@ class LocalProvider(BaseProvider):
 
             while inputs.shape[1] > 1:
                 n_to_process = min(2048, inputs.shape[1] - 1)
-                self._model(inputs[:, :n_to_process], cache=prompt_cache)
+                batch_inputs = inputs[:, :n_to_process]
+                
+                embeddings = self._get_embeddings(batch_inputs)
+                if embeddings is not None:
+                    self._model(embeddings, cache=prompt_cache)
+                else:
+                    self._model(batch_inputs, cache=prompt_cache)
+                    
                 mx.eval([c.state for c in prompt_cache])
                 inputs = inputs[:, n_to_process:]
                 mx.clear_cache()
@@ -544,7 +597,12 @@ class LocalProvider(BaseProvider):
             for cache_layer in prompt_cache:
                 cache_layer.finalize()
 
-            logits = self._model(inputs, cache=prompt_cache)[:, -1, :]
+            embeddings = self._get_embeddings(inputs)
+            if embeddings is not None:
+                logits = self._model(embeddings, cache=prompt_cache)[:, -1, :]
+            else:
+                logits = self._model(inputs, cache=prompt_cache)[:, -1, :]
+                
             mx.eval(logits)
         except Exception:
             newly_active = []
@@ -607,7 +665,13 @@ class LocalProvider(BaseProvider):
                     for layer_caches in zip(*(slot.prompt_cache for slot in batch_slots))
                 ]
             input_tokens = mx.array([[slot.next_input_token] for slot in batch_slots])
-            logits = self._model(input_tokens, cache=merged_cache)[:, -1, :]
+            
+            embeddings = self._get_embeddings(input_tokens)
+            if embeddings is not None:
+                logits = self._model(embeddings, cache=merged_cache)[:, -1, :]
+            else:
+                logits = self._model(input_tokens, cache=merged_cache)[:, -1, :]
+                
             mx.eval(logits)
         except Exception:
             self._reset_continuous_batch()

@@ -231,6 +231,10 @@ class ProviderConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
     type: str = Field(default_factory=_default_provider_type)  # "local" | "llama_cpp" | "openai"
     model_path: str = _DEFAULT_MODEL
+    lazy_load: bool = False             # MLX 专有：是否延迟加载权重（磁盘映射）
+    offload_embedding: bool = False     # MLX 专有：是否将 Embedding 层保留在磁盘
+    offload_vision: bool = False        # MLX 专有：是否将 Vision Encoder 留在磁盘
+    offload_audio: bool = False         # MLX 专有：是否将 Audio Encoder 留在磁盘
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
     openai: OpenAIProviderConfig = Field(default_factory=OpenAIProviderConfig)
     llama_cpp: LlamaCppConfig = Field(default_factory=LlamaCppConfig)

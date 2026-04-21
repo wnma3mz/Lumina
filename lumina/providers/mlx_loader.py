@@ -127,17 +127,39 @@ class MlxModelLoader:
 
     # ── 加载 ──────────────────────────────────────────────────────────────────
 
-    def load(self) -> Tuple:
-        """加载模型，初始化 BatchGenerator / Executor。
-
-        返回 (model, tokenizer, batch_generator, batch_executor)。
-        batch_generator / batch_executor 在不使用内置引擎时为 None。
+    def load(self, lazy: bool = False, offload_embedding: bool = False, offload_vision: bool = False, offload_audio: bool = False) -> Tuple:
+        """加载模型。
+        
+        参数:
+            lazy: 若为 True，则不执行任何预加载（全量磁盘映射）。
+            offload_embedding: 若为 True，则 Embedding 层留在磁盘。
+            offload_vision: 若为 True，则 Vision Tower 留在磁盘。
+            offload_audio: 若为 True，则 Audio Tower 留在磁盘。
         """
         import mlx.core as mx
+        import mlx.utils as mx_utils
 
         load_target = self.resolve_target()
         model, tokenizer = mlx_load(load_target)
-        mx.eval(model.parameters())
+        
+        if lazy:
+            logger.info("Lazy loading: all weights remain disk-mapped.")
+        else:
+            # 始终预加载 Transformer Layers (L1) 以保证速度，
+            # 根据开关选择性卸载辅助塔 (L2)。
+            offload_keywords = []
+            if offload_embedding: offload_keywords.append("embed_tokens")
+            if offload_vision: offload_keywords.extend(["visual", "vision_tower"])
+            if offload_audio: offload_keywords.extend(["audio_tower"])
+
+            if offload_keywords:
+                logger.info(f"Hybrid loading: eager-loading backbone, offloading {offload_keywords}...")
+                all_params = mx_utils.tree_flatten(model.parameters())
+                to_eval = [p for name, p in all_params if not any(k in name for k in offload_keywords)]
+                mx.eval(to_eval)
+            else:
+                logger.info("Eager loading: evaluating all model parameters...")
+                mx.eval(model.parameters())
 
         batch_generator, batch_executor = self._init_batch_engine(model, tokenizer)
         return model, tokenizer, batch_generator, batch_executor
