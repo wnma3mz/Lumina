@@ -82,7 +82,8 @@ async def patch_config_api(patch: Config, request: Request):
 
         # Mark restart_required fields
         restart_keys = {
-            "provider": {"type", "model_path", "openai", "llama_cpp"},
+            "provider": {"type", "model_path", "openai", "llama_cpp",
+                         "offload_embedding", "offload_vision", "offload_audio"},
             "system": {"server", "desktop"},
             "audio": {"whisper_model"}
         }

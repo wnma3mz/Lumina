@@ -19,9 +19,17 @@ from typing import Callable, Optional, Tuple
 try:
     from mlx_lm import load as mlx_load
     from mlx_lm.generate import BatchGenerator
-    _MLX_AVAILABLE = True
+    _MLX_LM_AVAILABLE = True
 except ImportError:
-    _MLX_AVAILABLE = False
+    _MLX_LM_AVAILABLE = False
+
+try:
+    from mlx_vlm.utils import load as vlm_load
+    _MLX_VLM_AVAILABLE = True
+except ImportError:
+    _MLX_VLM_AVAILABLE = False
+
+_MLX_AVAILABLE = _MLX_LM_AVAILABLE or _MLX_VLM_AVAILABLE
 
 logger = logging.getLogger("lumina")
 
@@ -53,6 +61,7 @@ class MlxModelLoader:
         self._use_builtin_batch_engine = use_builtin_batch_engine_fn
         self._use_dedicated_batch_executor = use_dedicated_batch_executor_fn
         self._eos_ids = eos_ids_fn
+        self.loaded_as_vlm: bool = False  # set after load()
 
     # ── 路径解析 ──────────────────────────────────────────────────────────────
 
@@ -127,12 +136,11 @@ class MlxModelLoader:
 
     # ── 加载 ──────────────────────────────────────────────────────────────────
 
-    def load(self, lazy: bool = False, offload_embedding: bool = False, offload_vision: bool = False, offload_audio: bool = False) -> Tuple:
+    def load(self, offload_embedding: bool = True, offload_vision: bool = True, offload_audio: bool = True) -> Tuple:
         """加载模型。
-        
+
         参数:
-            lazy: 若为 True，则不执行任何预加载（全量磁盘映射）。
-            offload_embedding: 若为 True，则 Embedding 层留在磁盘。
+            offload_embedding: 若为 True，则 Embedding 层留在磁盘（节省显存，TTFT 略增）。
             offload_vision: 若为 True，则 Vision Tower 留在磁盘。
             offload_audio: 若为 True，则 Audio Tower 留在磁盘。
         """
@@ -140,36 +148,83 @@ class MlxModelLoader:
         import mlx.utils as mx_utils
 
         load_target = self.resolve_target()
-        model, tokenizer = mlx_load(load_target)
         
-        if lazy:
-            logger.info("Lazy loading: all weights remain disk-mapped.")
-        else:
-            # 始终预加载 Transformer Layers (L1) 以保证速度，
-            # 根据开关选择性卸载辅助塔 (L2)。
-            offload_keywords = []
-            if offload_embedding: offload_keywords.append("embed_tokens")
-            if offload_vision: offload_keywords.extend(["visual", "vision_tower"])
-            if offload_audio: offload_keywords.extend(["audio_tower"])
+        # ── 自动选择加载器 (VLM vs LM) ──────────────────────────────────────────
+        is_vlm = False
+        if _MLX_VLM_AVAILABLE:
+            from mlx_vlm.utils import load_config
+            try:
+                # 尝试通过 config 判断是否包含 vision
+                vlm_config = load_config(load_target)
+                if "vision_config" in vlm_config or "model_type" in vlm_config and "vl" in vlm_config["model_type"].lower():
+                    is_vlm = True
+            except Exception:
+                pass
 
-            if offload_keywords:
-                logger.info(f"Hybrid loading: eager-loading backbone, offloading {offload_keywords}...")
-                all_params = mx_utils.tree_flatten(model.parameters())
-                to_eval = [p for name, p in all_params if not any(k in name for k in offload_keywords)]
-                mx.eval(to_eval)
-            else:
-                logger.info("Eager loading: evaluating all model parameters...")
-                mx.eval(model.parameters())
+        if is_vlm:
+            logger.info(f"Multimodal detected. Loading with mlx_vlm: {load_target}")
+            model, tokenizer = vlm_load(load_target)
+            self.loaded_as_vlm = True
+        else:
+            logger.info(f"Text model detected. Loading with mlx_lm: {load_target}")
+            model, tokenizer = mlx_load(load_target)
+            self.loaded_as_vlm = False
+        # ────────────────────────────────────────────────────────────────────────
+        
+        # 始终预加载 Transformer Layers (L1) 以保证速度，
+        # 根据开关选择性卸载辅助塔 (L2)。
+        offload_keywords = []
+        if offload_embedding:
+            offload_keywords.append("embed_tokens")
+        if offload_vision:
+            offload_keywords.extend(["visual", "vision_tower", "merger", "projector", "projection"])
+        if offload_audio:
+            offload_keywords.extend(["audio_tower", "audio_projector"])
+
+        if offload_keywords:
+            logger.info(f"Hybrid loading: eager-loading backbone, offloading {offload_keywords}...")
+            all_params = mx_utils.tree_flatten(model.parameters())
+
+            def should_eval(name: str) -> bool:
+                name_low = name.lower()
+                # L1：核心语言模型层必须预加载
+                is_backbone_layer = (
+                    "language_model.model.layers." in name_low
+                    or (
+                        name_low.startswith("model.layers.")
+                        and "vision" not in name_low
+                        and "audio" not in name_low
+                    )
+                )
+                if is_backbone_layer:
+                    return True
+                # L2：辅助组件命中关键字则卸载
+                if any(k in name_low for k in offload_keywords):
+                    return False
+                # 其余（norm, head 等）默认预加载
+                return True
+
+            to_eval = [p for name, p in all_params if should_eval(name)]
+            mx.eval(to_eval)
+        else:
+            logger.info("Eager loading: evaluating all model parameters...")
+            mx.eval(model.parameters())
 
         batch_generator, batch_executor = self._init_batch_engine(model, tokenizer)
         return model, tokenizer, batch_generator, batch_executor
 
     def _init_batch_engine(self, model, tokenizer) -> Tuple:
         """初始化 BatchGenerator 和可选的专属 ThreadPoolExecutor。"""
-        if not self._use_builtin_batch_engine():
+        if not self._use_builtin_batch_engine() or self.loaded_as_vlm:
             return None, None
 
-        eos_ids = getattr(tokenizer, "eos_token_ids", None) or list(self._eos_ids())
+        raw = getattr(tokenizer, "eos_token_ids", None) or getattr(tokenizer, "eos_token_id", None)
+        if isinstance(raw, list):
+            eos_ids = raw
+        elif raw is not None:
+            eos_ids = [raw]
+        else:
+            eos_ids = []
         batch_generator = BatchGenerator(
             model,
             stop_tokens=set(eos_ids),

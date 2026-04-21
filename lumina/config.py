@@ -231,15 +231,33 @@ class ProviderConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
     type: str = Field(default_factory=_default_provider_type)  # "local" | "llama_cpp" | "openai"
     model_path: str = _DEFAULT_MODEL
-    lazy_load: bool = False             # MLX 专有：是否延迟加载权重（磁盘映射）
-    offload_embedding: bool = False     # MLX 专有：是否将 Embedding 层保留在磁盘
-    offload_vision: bool = False        # MLX 专有：是否将 Vision Encoder 留在磁盘
-    offload_audio: bool = False         # MLX 专有：是否将 Audio Encoder 留在磁盘
+    # MLX 内存分层参数（扁平化存储，从 config.json 的 mlx_memory 子对象或顶层读取）
+    offload_embedding: bool = True
+    offload_vision: bool = True
+    offload_audio: bool = True
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
     openai: OpenAIProviderConfig = Field(default_factory=OpenAIProviderConfig)
     llama_cpp: LlamaCppConfig = Field(default_factory=LlamaCppConfig)
     prompts: Dict[str, str] = Field(default_factory=dict)
-    
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unpack_mlx_memory(cls, data: Any) -> Any:
+        """将 config.json 中的 mlx_memory 子对象展开为顶层字段。
+
+        支持两种写法（后者向后兼容）：
+          1. provider.mlx_memory.offload_embedding = true  （推荐，文档格式）
+          2. provider.offload_embedding = true             （旧格式，直接平铺）
+        """
+        if not isinstance(data, dict):
+            return data
+        mem = data.pop("mlx_memory", None)
+        if isinstance(mem, dict):
+            for key in ("offload_embedding", "offload_vision", "offload_audio"):
+                if key not in data and key in mem:
+                    data[key] = mem[key]
+        return data
+
     @computed_field
     @property
     def backend(self) -> str:
@@ -288,6 +306,8 @@ class Config(BaseModel):
     def ptt(self): return self.audio.ptt
     @property
     def whisper_model(self): return self.audio.whisper_model
+    @property
+    def backend(self): return self.provider.backend
 
     @classmethod
     def load(cls, path: Optional[str] = None) -> "Config":

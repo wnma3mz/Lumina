@@ -65,7 +65,12 @@ def build_provider(cfg):
 
     from lumina.providers.local import LocalProvider
     logger.info("Provider: Local (mlx)  requested_type=%s  model_path=%s", ptype, cfg.provider.model_path)
-    return LocalProvider(model_path=cfg.provider.model_path)
+    return LocalProvider(
+        model_path=cfg.provider.model_path,
+        offload_embedding=cfg.provider.offload_embedding,
+        offload_vision=cfg.provider.offload_vision,
+        offload_audio=cfg.provider.offload_audio,
+    )
 
 
 # ── Digest 定时器 ─────────────────────────────────────────────────────────────
@@ -614,14 +619,6 @@ def cmd_server(args):
     setup_logging(cfg.log_level)
 
     provider = build_provider(cfg)
-    if cfg.backend == "local":
-        provider = LocalProvider(
-            model_path=cfg.provider.model_path,
-            lazy_load=cfg.provider.lazy_load,
-            offload_embedding=cfg.provider.offload_embedding,
-            offload_vision=cfg.provider.offload_vision,
-            offload_audio=cfg.provider.offload_audio,
-        )
     llm = LLMEngine(provider=provider, system_prompts=cfg.system_prompts)
 
     logger.info("Loading provider...")

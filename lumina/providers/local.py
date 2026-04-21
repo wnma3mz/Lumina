@@ -141,10 +141,9 @@ class LocalProvider(BaseProvider):
         max_new_prefill_per_iter: int = _MAX_NEW_PREFILL_PER_ITER,
         enable_warmup: bool = True,
         warmup_decode_steps: int = _WARMUP_DECODE_STEPS,
-        lazy_load: bool = False,
-        offload_embedding: bool = False,
-        offload_vision: bool = False,
-        offload_audio: bool = False,
+        offload_embedding: bool = True,
+        offload_vision: bool = True,
+        offload_audio: bool = True,
     ):
         if not _MLX_AVAILABLE:
             raise ImportError(
@@ -155,7 +154,6 @@ class LocalProvider(BaseProvider):
         self.max_new_prefill_per_iter = max(1, max_new_prefill_per_iter)
         self.enable_warmup = enable_warmup
         self.warmup_decode_steps = max(0, warmup_decode_steps)
-        self.lazy_load = lazy_load
         self.offload_embedding = offload_embedding
         self.offload_vision = offload_vision
         self.offload_audio = offload_audio
@@ -192,7 +190,6 @@ class LocalProvider(BaseProvider):
 
     def load(self):
         model, tokenizer, batch_generator, batch_executor = self._loader.load(
-            lazy=self.lazy_load, 
             offload_embedding=self.offload_embedding,
             offload_vision=self.offload_vision,
             offload_audio=self.offload_audio
@@ -277,13 +274,13 @@ class LocalProvider(BaseProvider):
         if not suffix_tokens:
             return
         if prompt_cache is None:
-            prompt_cache = mlx_cache.make_prompt_cache(self._model)
+            prompt_cache = self._make_prompt_cache()
 
         if len(suffix_tokens) > 1:
             self._prefill_full_prompt_cache(suffix_tokens[:-1], prompt_cache)
 
         input_tokens = mx.array([[suffix_tokens[-1]]])
-        logits = self._model(input_tokens, cache=prompt_cache)[:, -1, :]
+        logits = self._extract_logits(self._model(input_tokens, cache=prompt_cache))[:, -1, :]
         mx.eval(logits)
         next_token = int(mx.argmax(logits, axis=-1).item())
         eos_ids = self._eos_ids
@@ -291,7 +288,7 @@ class LocalProvider(BaseProvider):
         for _ in range(max(0, self.warmup_decode_steps - 1)):
             if next_token in eos_ids:
                 break
-            logits = self._model(mx.array([[next_token]]), cache=prompt_cache)[:, -1, :]
+            logits = self._extract_logits(self._model(mx.array([[next_token]]), cache=prompt_cache))[:, -1, :]
             mx.eval(logits)
             next_token = int(mx.argmax(logits, axis=-1).item())
 
@@ -303,7 +300,8 @@ class LocalProvider(BaseProvider):
 
     @property
     def _eos_ids(self) -> set:
-        eos = self._tokenizer.eos_token_id
+        tok = getattr(self._tokenizer, "tokenizer", self._tokenizer)
+        eos = getattr(tok, "eos_token_id", None)
         if isinstance(eos, list):
             return set(eos)
         return {eos} if eos is not None else set()
@@ -375,7 +373,7 @@ class LocalProvider(BaseProvider):
         return True
 
     def _use_builtin_batch_engine(self) -> bool:
-        return type(self) is LocalProvider
+        return type(self) is LocalProvider and not self._loader.loaded_as_vlm
 
     def _sample_from_logits(self, logits: mx.array, slot: _RequestSlot) -> int:
         logprobs = logits - mx.logsumexp(logits, keepdims=True)
@@ -386,7 +384,7 @@ class LocalProvider(BaseProvider):
         while len(prompt) > 0:
             n_to_process = min(2048, len(prompt))
             self._model(prompt[:n_to_process][None], cache=prompt_cache)
-            mx.eval([c.state for c in prompt_cache])
+            self._eval_cache_state(prompt_cache)
             prompt = prompt[n_to_process:]
             mx.clear_cache()
         for cache_layer in prompt_cache:
@@ -435,6 +433,40 @@ class LocalProvider(BaseProvider):
             slot.prompt_cache = [layer_cache.extract(idx) for layer_cache in self._continuous_batch_cache]
         self._reset_continuous_batch()
 
+    @staticmethod
+    def _extract_logits(output) -> "mx.array":
+        """从模型输出中提取 logits array。
+
+        mlx_lm 模型直接返回 mx.array；mlx_vlm 的 LanguageModel 返回
+        LanguageModelOutput(logits=...)，需要手动解包。
+        """
+        return getattr(output, "logits", output)
+
+    @staticmethod
+    def _eval_cache_state(prompt_cache: List[Any]) -> None:
+        """安全地 eval cache state，兼容 KVCache（mx.array pair）和 ArraysCache（list，含 None）。"""
+        flat = []
+        for c in prompt_cache:
+            s = c.state
+            if isinstance(s, list):
+                flat.extend(x for x in s if x is not None)
+            elif s is not None:
+                flat.append(s)
+        if flat:
+            mx.eval(flat)
+
+    def _make_prompt_cache(self):
+        """为当前模型创建正确的 prompt cache。
+
+        VLM 模型（loaded_as_vlm=True）的顶层 Model 没有 make_cache()，
+        需要用 language_model 的 make_cache() 才能得到正确的
+        混合 KVCache/ArraysCache 结构（Qwen3.5 Mamba-Hybrid 需要）。
+        """
+        if self._loader.loaded_as_vlm:
+            inner = getattr(self._model, "language_model", None) or self._model
+            return mlx_cache.make_prompt_cache(inner)
+        return mlx_cache.make_prompt_cache(self._model)
+
     def _get_embeddings(self, input_ids: mx.array) -> Optional[mx.array]:
         """优化：在 CPU 上执行 Embedding 查找，允许权重留在磁盘。"""
         if not self.offload_embedding:
@@ -462,7 +494,7 @@ class LocalProvider(BaseProvider):
             else:
                 self._model(inputs, cache=prompt_cache)
                 
-            mx.eval([c.state for c in prompt_cache])
+            self._eval_cache_state(prompt_cache)
             prompt = prompt[n_to_process:]
             mx.clear_cache()
         return prompt
@@ -491,16 +523,16 @@ class LocalProvider(BaseProvider):
             repetition_penalty=slot.repetition_penalty,
             token_ids=slot._token_ids,
         )
-        prompt_cache = mlx_cache.make_prompt_cache(self._model)
+        prompt_cache = self._make_prompt_cache()
         try:
             prompt = self._prefill_prompt_cache(slot.prompt_tokens, prompt_cache)
             inputs = prompt[None]
             
             embeddings = self._get_embeddings(inputs)
             if embeddings is not None:
-                logits = self._model(embeddings, cache=prompt_cache)[:, -1, :]
+                logits = self._extract_logits(self._model(embeddings, cache=prompt_cache))[:, -1, :]
             else:
-                logits = self._model(inputs, cache=prompt_cache)[:, -1, :]
+                logits = self._extract_logits(self._model(inputs, cache=prompt_cache))[:, -1, :]
                 
             mx.eval(logits)
             token_id = self._sample_from_logits(logits, slot)
@@ -525,9 +557,9 @@ class LocalProvider(BaseProvider):
             inputs = mx.array([[slot.next_input_token]])
             embeddings = self._get_embeddings(inputs)
             if embeddings is not None:
-                logits = self._model(embeddings, cache=slot.prompt_cache)[:, -1, :]
+                logits = self._extract_logits(self._model(embeddings, cache=slot.prompt_cache))[:, -1, :]
             else:
-                logits = self._model(inputs, cache=slot.prompt_cache)[:, -1, :]
+                logits = self._extract_logits(self._model(inputs, cache=slot.prompt_cache))[:, -1, :]
                 
             mx.eval(logits)
             token_id = self._sample_from_logits(logits, slot)
@@ -590,7 +622,7 @@ class LocalProvider(BaseProvider):
                 else:
                     self._model(batch_inputs, cache=prompt_cache)
                     
-                mx.eval([c.state for c in prompt_cache])
+                self._eval_cache_state(prompt_cache)
                 inputs = inputs[:, n_to_process:]
                 mx.clear_cache()
 
@@ -599,9 +631,9 @@ class LocalProvider(BaseProvider):
 
             embeddings = self._get_embeddings(inputs)
             if embeddings is not None:
-                logits = self._model(embeddings, cache=prompt_cache)[:, -1, :]
+                logits = self._extract_logits(self._model(embeddings, cache=prompt_cache))[:, -1, :]
             else:
-                logits = self._model(inputs, cache=prompt_cache)[:, -1, :]
+                logits = self._extract_logits(self._model(inputs, cache=prompt_cache))[:, -1, :]
                 
             mx.eval(logits)
         except Exception:
@@ -668,9 +700,9 @@ class LocalProvider(BaseProvider):
             
             embeddings = self._get_embeddings(input_tokens)
             if embeddings is not None:
-                logits = self._model(embeddings, cache=merged_cache)[:, -1, :]
+                logits = self._extract_logits(self._model(embeddings, cache=merged_cache))[:, -1, :]
             else:
-                logits = self._model(input_tokens, cache=merged_cache)[:, -1, :]
+                logits = self._extract_logits(self._model(input_tokens, cache=merged_cache))[:, -1, :]
                 
             mx.eval(logits)
         except Exception:

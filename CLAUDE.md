@@ -50,8 +50,8 @@ lumina/
       index.html       # 独立备份（含内联 HTMX），仅供离线测试，GET / 不再 serve 此文件
   providers/
     __init__.py        # 懒加载：LocalProvider / OpenAIProvider 按需 import（见下节）
-    local.py           # mlx-lm 本地推理，含 Continuous Batching
-    mlx_loader.py      # Layer 0：模型路径解析 + 加载 + BatchGenerator 初始化
+    local.py           # mlx-lm/mlx-vlm 本地推理，含 Continuous Batching 和 VLM 兼容层
+    mlx_loader.py      # Layer 0：模型路径解析 + 加载（自动识别 VLM/LM）+ BatchGenerator 初始化
     mlx_prompt.py      # Layer 1：chat_template 渲染 + tokenize + system prefix 提取
     openai.py          # OpenAI 兼容远程接口
   services/
@@ -100,6 +100,14 @@ def __getattr__(name: str):
 - 调度器：Phase 1 prefill 新请求，Phase 2 只推进 **prefill 前已存在** 的 slot（快照 `existing_decode`），防止首 token 被覆盖
 - EOS 检测：mlx-lm `generate_step` 不自动停，手动检测 token id 248046（`<|im_end|>`）
 
+### VLM 兼容层（`providers/local.py`）
+
+mlx_vlm 与 mlx_lm 在以下三处存在接口差异，均已在 `LocalProvider` 中统一处理：
+
+1. **`_extract_logits(output)`**：mlx_lm 直接返回 `mx.array`；mlx_vlm 的 `LanguageModel.__call__` 返回 `LanguageModelOutput(logits=...)`，需要 `getattr(output, "logits", output)` 解包。
+2. **`_make_prompt_cache()`**：VLM 模型顶层无 `make_cache()`，直接传给 `mlx_cache.make_prompt_cache` 会生成全 `KVCache` 结构，Mamba-Hybrid 架构（如 Qwen3.5）需要混合 `ArraysCache`+`KVCache`。必须用 `model.language_model.make_cache()` 获得正确结构。
+3. **`_eval_cache_state(prompt_cache)`**：`ArraysCache.state` 返回含 `None` 的列表，`mx.eval(None)` 会报错，需要 flatten + filter None 后再 eval。
+
 ### Digest 采集模式（纯全量快照）
 
 每个 collector 每次都取 `time.time() - cfg.history_hours * 3600` 作为截止时间，没有增量/全量之分。**没有 cursor 机制。**
@@ -133,6 +141,17 @@ def __getattr__(name: str):
 - 前端：HTMX `hx-trigger="every 5m"` 轮询 `/fragments/digest`，后端每次重新渲染时间轴内容（无 JS 比对逻辑）
 - **启动冷却**：`maybe_generate_digest()` 在生成前先检查上次生成时间（从 digest.md mtime 恢复），若距今不足 `refresh_hours`（默认 1h）则跳过，防止每次重启都重复采集
 - **采集顺序随机化**：`_collect_all()` 每次执行前 `random.shuffle(active)` 打乱 collector 顺序，确保各来源在 LLM token 上下文中均匀分布
+
+### MLX 内存分层（`providers/mlx_loader.py`）
+
+加载策略只有一种：**L1 Eager + L2 Offload（Hybrid）**，不再有 `lazy_load` 全量 offload 模式。
+
+- **L1（Backbone）**：`language_model.model.layers.*` 或 `model.layers.*`（非 vision/audio）始终 `mx.eval` 锁入 Metal 显存。
+- **L2（辅助组件）**：由三个开关控制，默认全部 `true`：
+  - `offload_embedding`：卸载 `embed_tokens`
+  - `offload_vision`：卸载 `visual / vision_tower / merger / projector / projection`
+  - `offload_audio`：卸载 `audio_tower / audio_projector`
+- **配置格式**：`config.json` 中用 `provider.mlx_memory` 嵌套块（推荐），也可直接写在 `provider` 顶层（向后兼容）。`ProviderConfig._unpack_mlx_memory` 在解析时自动展平。
 
 ### 配置 Web UI（`/v1/config`）
 - **GET `/v1/config`**：返回完整运行时配置（来自 `get_config()` singleton）

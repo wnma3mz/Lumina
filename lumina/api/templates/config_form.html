@@ -92,11 +92,41 @@
     <div id="local-fields" class="mt-2 {% if cfg.provider.type == 'local' %}block{% else %}hidden{% endif %}">
       <div class="flex flex-col gap-2">
         <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">本地模型路径</label>
-        <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm" 
+        <input class="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 outline-none transition-all text-sm"
                type="text" name="provider.model_path"
                value="{{ cfg.provider.model_path }}"
                placeholder="~/.lumina/models/qwen...">
         <div class="text-xs text-zinc-400">模型目录的绝对路径（留空使用默认）</div>
+      </div>
+      <div class="mt-4 flex flex-col gap-3">
+        <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider">MLX 内存分层 <span class="font-normal normal-case text-zinc-400">（修改后需重启）</span></label>
+        <label class="flex items-start gap-3 cursor-pointer group">
+          <input type="checkbox" name="provider.offload_embedding" value="true"
+                 {% if cfg.provider.offload_embedding %}checked{% endif %}
+                 class="mt-0.5 w-4 h-4 rounded accent-indigo-500 cursor-pointer">
+          <span class="flex flex-col gap-0.5">
+            <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">卸载 Embedding 层</span>
+            <span class="text-xs text-zinc-400">推荐开启。节省 300MB-1GB 显存，首字延迟增加约 200-500ms</span>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 cursor-pointer group">
+          <input type="checkbox" name="provider.offload_vision" value="true"
+                 {% if cfg.provider.offload_vision %}checked{% endif %}
+                 class="mt-0.5 w-4 h-4 rounded accent-indigo-500 cursor-pointer">
+          <span class="flex flex-col gap-0.5">
+            <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">卸载 Vision Encoder</span>
+            <span class="text-xs text-zinc-400">多模态模型推荐开启。纯文本任务时视觉组件完全不占显存</span>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 cursor-pointer group">
+          <input type="checkbox" name="provider.offload_audio" value="true"
+                 {% if cfg.provider.offload_audio %}checked{% endif %}
+                 class="mt-0.5 w-4 h-4 rounded accent-indigo-500 cursor-pointer">
+          <span class="flex flex-col gap-0.5">
+            <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">卸载 Audio Encoder</span>
+            <span class="text-xs text-zinc-400">含音频组件的多模态模型适用</span>
+          </span>
+        </label>
       </div>
     </div>
 

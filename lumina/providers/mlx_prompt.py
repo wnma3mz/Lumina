@@ -41,10 +41,14 @@ class MlxPromptBuilder:
         except TypeError:
             return self._tokenizer.apply_chat_template(messages, **kwargs)
 
+    def _base_tokenizer(self):
+        """返回底层文本 tokenizer（兼容 VLM processor 和普通 tokenizer）。"""
+        return getattr(self._tokenizer, "tokenizer", self._tokenizer)
+
     def encode(self, system: str, user_text: str):
         """渲染后 tokenize，返回 mx.array。"""
         import mlx.core as mx
-        return mx.array(self._tokenizer.encode(self.render(system, user_text)))
+        return mx.array(self._base_tokenizer().encode(self.render(system, user_text)))
 
     # ── System prefix 提取 ────────────────────────────────────────────────────
 
@@ -55,7 +59,7 @@ class MlxPromptBuilder:
         if sentinel_start < 0 or prompt_text.find(_SYSTEM_PROMPT_SENTINEL, sentinel_start + 1) != -1:
             return None
 
-        base_tokenizer = getattr(self._tokenizer, "_tokenizer", self._tokenizer)
+        base_tokenizer = self._base_tokenizer()
         encoded = base_tokenizer(
             prompt_text,
             add_special_tokens=True,

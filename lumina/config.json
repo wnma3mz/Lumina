@@ -4,6 +4,12 @@
     "_readme": "type: local（本地模型，按平台自动选后端）/ llama_cpp（显式 llama.cpp）/ openai（远程 OpenAI 兼容接口）",
     "type": "local",
     "model_path": null,
+    "mlx_memory": {
+      "_readme": "MLX 内存分层卸载（macOS 专有）。默认均为 true = 卸载辅助组件，节省 1-2GB 显存，TTFT 增加约 200-500ms。全部设为 false 可将所有权重锁入 Metal 显存以获得最低延迟。修改后需重启服务生效。",
+      "offload_embedding": true,
+      "offload_vision": true,
+      "offload_audio": true
+    },
     "sampling": {
       "_readme": "采样参数默认值，与当前 provider/模型绑定。API 请求中显式指定的参数优先级更高。",
       "temperature": 0.7,
