@@ -219,6 +219,46 @@ class MlxModelLoader:
             logger.info(f"Multimodal detected. Loading with mlx_vlm: {load_target}")
             model, tokenizer = vlm_load(load_target)
             self.loaded_as_vlm = True
+
+            # ── 协议适配：对齐 Processor 与 Tokenizer 接口 ────────────────────
+            if not hasattr(tokenizer, "eos_token_id") and hasattr(tokenizer, "tokenizer"):
+                inner_tok = tokenizer.tokenizer
+                tokenizer.eos_token_id = inner_tok.eos_token_id
+                raw_ids = getattr(inner_tok, "eos_token_ids", [inner_tok.eos_token_id])
+                tokenizer.eos_token_ids = (
+                    list(raw_ids) if isinstance(raw_ids, (list, tuple, set)) else [raw_ids]
+                )
+                try:
+                    vocab = inner_tok.get_vocab()
+                    turn_tokens = [i for k, i in vocab.items() if "<turn|" in k]
+                    if turn_tokens:
+                        tokenizer.eos_token_ids = list(
+                            set(tokenizer.eos_token_ids) | set(turn_tokens)
+                        )
+                except Exception:
+                    pass
+
+            # ── 协议适配：定义透明代理包装 VLM 模型 ────────────────────────────
+            class VLMModelWrapper:
+                def __init__(self, original_model):
+                    self.__dict__["_model"] = original_model
+
+                def __call__(self, *args, **kwargs):
+                    output = self._model(*args, **kwargs)
+                    # 关键：自动解包 LanguageModelOutput 提取 logits 数组
+                    return getattr(output, "logits", output)
+
+                def __getattr__(self, name):
+                    return getattr(self._model, name)
+
+                def __setattr__(self, name, value):
+                    setattr(self._model, name, value)
+
+                def parameters(self):
+                    return self._model.parameters()
+
+            model = VLMModelWrapper(model)
+
         else:
             logger.info(f"Text model detected. Loading with mlx_lm: {load_target}")
             model, tokenizer = mlx_load(load_target)
