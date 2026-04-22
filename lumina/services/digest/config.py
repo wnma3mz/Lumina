@@ -85,6 +85,7 @@ def configure(data: dict) -> None:
         ai_queries_max_source_chars=max(1, int(d.get("ai_queries_max_source_chars", 4000))),
         enabled_collectors=d.get("enabled_collectors", None),
         enabled=bool(d.get("enabled", False)),
+        active_watch_dirs=d["active_watch_dirs"] if "active_watch_dirs" in d else DigestConfig().active_watch_dirs,
         prompts=d.get("prompts", {}),
         sampling=d.get("sampling", {}),
     )
