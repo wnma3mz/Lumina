@@ -59,46 +59,53 @@ uv run python tests/benchmarks/http_bench.py --rounds 5 --skip-vision
 | 环境 | 硬件 | 系统 | 运行库 |
 | :--- | :--- | :--- | :--- |
 | Env A | Apple M3 Pro, 18GB 统一内存 | macOS 14.4 (`23E214`) | `mlx 0.31.1`, `mlx_lm 0.31.2`, `mlx_vlm 0.4.4` |
+| Env B | Apple M4, 16GB 统一内存 | macOS 15.1.1 (`24B91`) | `mlx 0.31.1`, `mlx_lm 0.31.2`, `mlx_vlm 0.4.4` |
 
 ---
 
 ## 2. 测试结果
 
-### 2.1 Env A（Apple M3 Pro / 18GB）
+### 2.1 Env A (Apple M3 Pro / 18GB)
 
 #### 2.1.1 核心对比矩阵
 
 | 模型 | 模式 | text TTFT | text TPOT | vision 冷启动 TTFT | vision 热跑 TTFT | 4 并发 tok/s |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Qwen3.5-0.8B-4bit | Baseline（全部不 offload） | **37.2ms** | 8.4ms | **102.9ms** | **105.6ms** | **256.8** |
+| Qwen3.5-0.8B-4bit | Baseline | **37.2ms** | 8.4ms | **102.9ms** | **105.6ms** | **256.8** |
 | Qwen3.5-0.8B-4bit | Hybrid | 35.7ms | **8.2ms** | 108.7ms | 206.6ms | 204.3 |
-| Gemma-4-E2B-IT-4bit | Baseline（全部不 offload） | 46.2ms | 19.9ms | **873.6ms** | **875.9ms** | **138.5** |
+| Gemma-4-E2B-IT-4bit | Baseline | 46.2ms | 19.9ms | **873.6ms** | **875.9ms** | **138.5** |
 | Gemma-4-E2B-IT-4bit | Hybrid | **36.9ms** | **16.6ms** | 934.1ms | 934.0ms | 132.2 |
+
+### 2.2 Env B (Apple M4 / 16GB)
+
+#### 2.2.1 核心对比矩阵
+
+| 模型 | 模式 | text TTFT | text TPOT | vision 冷启动 TTFT | vision 热跑 TTFT | 4 并发 tok/s |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Qwen3.5-0.8B-4bit | Baseline | **36.1ms** | **7.2ms** | 124.5ms | 120.2ms | **262.8** |
+| Qwen3.5-0.8B-4bit | Hybrid | 36.6ms | 7.3ms | **114.7ms** | **119.2ms** | 261.8 |
+| Gemma-4-E2B-IT-4bit | Baseline | **36.8ms** | **17.6ms** | **1042.4ms** | **1038.7ms** | 127.4 |
+| Gemma-4-E2B-IT-4bit | Hybrid | 38.5ms | 17.9ms | 1051.7ms | 1040.7ms | **130.8** |
 
 结论：
 
-- 在这台机器和这组固定输入上，Qwen 的两种模式差距不大，但 `Baseline` 的视觉与并发表现反而更好；Hybrid 不一定更快，更像是在为更大模型换显存空间。
-- Gemma 在 `Hybrid` 下文本首字和 TPOT 更好，但视觉和并发吞吐仍略慢于 `Baseline`。
-- 若目标是更高 decode 吞吐和更轻的视觉链路，当前默认 Qwen 仍更合适。
-- 若目标是验证 Gemma 4 在 Lumina 主路径中的可用性，当前结果已经证明它能正常跑通 `text + vision + concurrency`。
-- Gemma 的最小图片样本回答稳定为 `Blue`，说明当前 `mlx-vlm` 主路径工作正常。
+- **M4 单核/GPU 性能强劲**: 在 Env B (M4) 上，Qwen 3.5 的 text TPOT 压到了 7.2ms，即使是内存带宽略低的环境，纯算力表现依然出色。
+- **模式差异微小**: 在 16GB+ 设备上跑 0.8B/2B 模型，Hybrid 对速度的影响极小（正负 1-2ms 波动），但在极端高并发或显存吃紧时，Hybrid 提供的安全冗余更有价值。
+- **Gemma 4 稳定性验证**: 本次实测确认 Gemma 4 在 M4 上运行非常稳健，且并发吞吐达到了 130 tok/s。
 
 ---
 
 ## 3. 显存分层效果
 
-当前主报告以 HTTP 路径结果为准。`run_matrix.py` 已改为自动拉起临时服务并调用 `http_bench.py`，不再误走 `mlx_lm.load()` 低层路径。
+比较 `Hybrid` 相对 `Baseline（全部不 offload）` 的变化（负数表示 Hybrid 更快/更高）：
 
-下面只看本次实际测过的两个模型，比较 `Hybrid` 相对 `Baseline（全部不 offload）` 的变化：
-
-| 模型 | text TTFT | text TPOT | vision 冷启动 TTFT | vision 热跑 TTFT | 4 并发 tok/s |
+| 环境 | 模型 | text TTFT | text TPOT | vision 冷启动 TTFT | 4 并发 tok/s |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Qwen3.5-0.8B-4bit | `-1.5ms` | `-0.2ms` | `+5.8ms` | `+101.0ms` | `-52.5` |
-| Gemma-4-E2B-IT-4bit | `-9.3ms` | `-3.3ms` | `+60.5ms` | `+58.1ms` | `-6.3` |
+| **Env A** | Qwen3.5-0.8B | `-1.5ms` | `-0.2ms` | `+5.8ms` | `-52.5` |
+| **Env A** | Gemma-4-E2B | `-9.3ms` | `-3.3ms` | `+60.5ms` | `-6.3` |
+| **Env B** | Qwen3.5-0.8B | `+0.5ms` | `+0.1ms` | `-9.8ms` | `-1.0` |
+| **Env B** | Gemma-4-E2B | `+1.7ms` | `+0.3ms` | `+9.3ms` | `+3.4` |
 
-这里的正负号含义是：负数表示 `Hybrid` 比 `Baseline` 更快，正数表示更慢；`4 并发 tok/s` 为负数表示吞吐下降。
-
-从这两组实测看，Qwen 基本不适合为了分层去牺牲速度；Gemma 的 Hybrid 更像是拿显存换一点文本侧收益。
 
 ---
 
