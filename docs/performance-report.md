@@ -50,7 +50,7 @@ uv run python tests/benchmarks/http_bench.py --rounds 5 --skip-vision
 
 通用约束：
 
-- **软件**: Lumina v0.8.5
+- **软件**: Lumina v0.8.6
 - **加载模式**: 本节矩阵同时包含 `Baseline（全部不 offload）` 与 `Hybrid（offload_embedding/vision/audio=true）`
 - **测试方式**: 每项热跑 4 轮取均值，首轮预热不计入统计
 

@@ -93,7 +93,7 @@ app = BUNDLE(
     icon=str(project_dir / 'assets' / 'lumina.icns'),
     bundle_identifier='com.lumina.server',
     info_plist={
-        'CFBundleShortVersionString': '0.8.5',
+        'CFBundleShortVersionString': '0.8.6',
         'CFBundleName': 'Lumina',
         'LSUIElement': True,
         'NSMicrophoneUsageDescription': 'Lumina 需要麦克风权限用于语音转文本',
