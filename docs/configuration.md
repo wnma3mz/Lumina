@@ -46,6 +46,8 @@
 - `patch_requires_restart()`
 - `replace_runtime_config()`
 
+这里的意思是：运行时配置更新现在只有这一条正式路径。旧的按 section 局部 merge 的 runtime update 逻辑已经移除，不应再新增第二套“临时同步函数”。
+
 ### `ConfigApplier` (`lumina/config_apply.py`)
 
 负责：
@@ -60,6 +62,7 @@
 
 - `ConfigApplier` 只处理“已经确认可安全热更新”的副作用
 - 不能把 merge / validate / write 逻辑重新塞回 router
+- 也不要重新引入旧式的 section-based runtime update helper
 
 ## 4. 当前支持热更新的字段
 

@@ -303,32 +303,3 @@ class ConfigStore:
             restart_required=patch_requires_restart(old_cfg, new_cfg, patch_dict),
         )
 
-
-def update_runtime_config(cfg: Any, data: dict, *, sections: set[str]) -> None:
-    current = cfg.model_dump()
-    for sec in sections:
-        if sec == "ui":
-            ui_data = data.get("ui")
-            if isinstance(ui_data, dict):
-                system = current.setdefault("system", {})
-                system["ui"] = deep_merge(system.get("ui", {}), ui_data)
-            continue
-        actual_sec = "provider" if sec == "provider_sampling" else sec
-        if actual_sec not in current:
-            continue
-
-        sec_data = data.get(actual_sec)
-        if not isinstance(sec_data, dict):
-            continue
-
-        if sec == "provider_sampling":
-            if "sampling" in sec_data:
-                current["provider"]["sampling"] = deep_merge(current["provider"]["sampling"], sec_data["sampling"])
-        else:
-            current[actual_sec] = deep_merge(current[actual_sec], sec_data)
-
-    # Re-validate with deep merged dict
-    from lumina.config import Config
-    new_cfg = Config.model_validate(current)
-
-    replace_runtime_config(cfg, new_cfg)

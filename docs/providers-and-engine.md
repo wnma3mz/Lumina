@@ -19,6 +19,7 @@ HTTP / CLI
 - `lumina/engine/llm.py`
 - `lumina/providers/__init__.py`
 - `lumina/providers/local.py`
+- `lumina/providers/local_vlm.py`
 - `lumina/providers/mlx_loader.py`
 - `lumina/engine/request_history.py`
 - `lumina/api/sse.py`
@@ -48,6 +49,8 @@ Provider 工厂在 `lumina/cli/server.py:build_provider()`。
 - 处理 chat template 与 tokenizer
 - 管理 prompt cache
 - 执行 continuous batching
+
+当前结构上，`local.py` 主要保留生命周期、调度和公共接口；图片输入规范化、VLM prompt 组装、VLM sync/stream 推理已拆到 `local_vlm.py`。
 
 batching 设计要点：
 
@@ -208,6 +211,7 @@ Config
 - `lumina/config_apply.py`
 - `lumina/providers/mlx_loader.py`
 - `lumina/providers/local.py`
+- `lumina/providers/local_vlm.py`
 
 ## 11. 最近验证结果
 

@@ -46,8 +46,6 @@ Continuous Batching 工作原理（_legacy_scheduler 路径）
 from __future__ import annotations
 
 import asyncio
-import base64
-import io
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -67,6 +65,7 @@ from lumina.engine.scheduler import GenerationRequest
 from .base import BaseProvider, ProviderCapabilities
 from .mlx_loader import MlxModelLoader
 from .mlx_prompt import MlxPromptBuilder
+from .local_vlm import LocalVlmAdapter, _MLX_VLM_AVAILABLE
 from .system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
 from lumina.engine.sampling import (
     DEFAULT_MIN_P,
@@ -77,19 +76,6 @@ from lumina.engine.sampling import (
     DEFAULT_TOP_P,
     build_mlx_sampler,
 )
-
-try:
-    from mlx_vlm import generate as vlm_generate
-    from mlx_vlm.generate import stream_generate as vlm_stream_generate
-    from mlx_vlm.prompt_utils import apply_chat_template as vlm_apply_chat_template
-    from mlx_vlm.utils import load_config as vlm_load_config
-    _MLX_VLM_AVAILABLE = True
-except ImportError:
-    vlm_generate = None  # type: ignore[assignment]
-    vlm_stream_generate = None  # type: ignore[assignment]
-    vlm_apply_chat_template = None  # type: ignore[assignment]
-    vlm_load_config = None  # type: ignore[assignment]
-    _MLX_VLM_AVAILABLE = False
 
 # 每次迭代最多接入的新 prefill 请求数。
 # 取 4 可以更快吸收一小波同时到达的短请求，降低后到请求的排队 TTFT。
@@ -131,6 +117,9 @@ class _RequestSlot(GenerationRequest):
 class LocalProvider(BaseProvider):
     @property
     def capabilities(self) -> ProviderCapabilities:
+        vlm = getattr(self, "_vlm", None)
+        if vlm is not None:
+            return ProviderCapabilities(supports_image_input=vlm.supports_image_input)
         loader = getattr(self, "_loader", None)
         supports_loaded_vlm = bool(getattr(loader, "loaded_as_vlm", False))
         return ProviderCapabilities(supports_image_input=_MLX_VLM_AVAILABLE and supports_loaded_vlm)
@@ -172,10 +161,6 @@ class LocalProvider(BaseProvider):
         self._legacy_executor: Optional[ThreadPoolExecutor] = None
         self._spc: Optional[SystemPromptCache] = None
         self._prompt_builder: Optional[MlxPromptBuilder] = None
-        self._vlm_model = None
-        self._vlm_processor = None
-        self._vlm_config = None
-        self._vlm_lock = threading.Lock()
         self._worker_lock = threading.Lock()  # BUG-01: 保护 _ensure_worker 的 check-and-set
         self._loader = MlxModelLoader(
             model_path=model_path,
@@ -184,6 +169,7 @@ class LocalProvider(BaseProvider):
             use_dedicated_batch_executor_fn=self._use_dedicated_batch_executor,
             eos_ids_fn=lambda: self._eos_ids,
         )
+        self._vlm = LocalVlmAdapter(self)
 
     # ══════════════════════════════════════════════════════════════════════════
     # Layer 0 — 生命周期（委托给 MlxModelLoader，warmup 留在此处）
@@ -203,7 +189,7 @@ class LocalProvider(BaseProvider):
         self._spc = SystemPromptCache(
             self._model, self._tokenizer, loaded_as_vlm=self._loader.loaded_as_vlm
         )
-        self._bind_vlm_handles()
+        self._vlm.bind_loaded_model()
         if self._loader.loaded_as_vlm:
             logger.info(
                 "LocalProvider: loaded single VLM model for text and image requests "
@@ -215,20 +201,6 @@ class LocalProvider(BaseProvider):
         else:
             logger.info("LocalProvider: loaded text-only model; image input disabled for current model")
         self._maybe_run_warmup()
-
-    def _bind_vlm_handles(self) -> None:
-        if not self._loader.loaded_as_vlm:
-            self._vlm_model = None
-            self._vlm_processor = None
-            self._vlm_config = None
-            return
-        self._vlm_model = self._model
-        self._vlm_processor = self._tokenizer
-        if _MLX_VLM_AVAILABLE:
-            load_target = self._loader.last_load_target or self._loader.resolve_target()
-            self._vlm_config = vlm_load_config(load_target)
-        else:
-            self._vlm_config = None
 
     def _init_batch_engine(self) -> None:
         """重建 BatchGenerator / Executor（worker 重启时调用）。"""
@@ -839,105 +811,28 @@ class LocalProvider(BaseProvider):
 
     @staticmethod
     def _decode_data_url_image(image_ref: str):
-        try:
-            from PIL import Image
-        except ImportError as exc:
-            raise RuntimeError("Pillow 未安装，无法解析图片输入") from exc
-
-        try:
-            _, payload = image_ref.split(",", 1)
-        except ValueError as exc:
-            raise ValueError("无效的 data URL 图片输入") from exc
-        try:
-            image_bytes = base64.b64decode(payload)
-        except Exception as exc:
-            raise ValueError("无法解码 data URL 图片内容") from exc
-        # BUG-07: Image.open() 未关闭，高并发下积累内存压力
-        with Image.open(io.BytesIO(image_bytes)) as img:
-            return img.convert("RGB")
+        return LocalVlmAdapter._decode_data_url_image(image_ref)
 
     @classmethod
     def _normalize_vlm_image_input(cls, image_ref: str):
-        image_ref = (image_ref or "").strip()
-        if not image_ref:
-            raise ValueError("图片输入为空")
-        if image_ref.startswith("data:"):
-            return cls._decode_data_url_image(image_ref)
-        if image_ref.startswith("file://"):
-            return image_ref[len("file://"):]
-        return image_ref
+        return LocalVlmAdapter.normalize_image_input(image_ref)
 
     def _build_vlm_messages_and_images(
         self,
         messages: list[dict[str, Any]],
         system: Optional[str],
     ) -> tuple[list[dict[str, str]], list[Any]]:
-        vlm_messages: list[dict[str, str]] = []
-        image_inputs: list[Any] = []
-        if system:
-            vlm_messages.append({"role": "system", "content": system})
-        for message in messages:
-            role = str(message.get("role", "user"))
-            content = message.get("content", "")
-            if isinstance(content, str):
-                vlm_messages.append({"role": role, "content": content})
-                continue
-            if not isinstance(content, list):
-                raise TypeError("消息 content 格式不支持")
-            text_parts: list[str] = []
-            for part in content:
-                if not isinstance(part, dict):
-                    continue
-                part_type = part.get("type")
-                if part_type == "text":
-                    text = str(part.get("text", "")).strip()
-                    if text:
-                        text_parts.append(text)
-                    continue
-                if part_type == "image_url":
-                    image_url = part.get("image_url") or {}
-                    image_ref = str(image_url.get("url", "")).strip()
-                    image_inputs.append(self._normalize_vlm_image_input(image_ref))
-                    continue
-                raise ValueError(f"不支持的消息内容类型：{part_type}")
-            vlm_messages.append({"role": role, "content": "\n".join(text_parts).strip()})
-        if not image_inputs:
-            raise ValueError("未找到图片输入")
-        return vlm_messages, image_inputs
+        return self._vlm.build_messages_and_images(messages, system)
 
     def _ensure_vlm_loaded(self) -> None:
-        if self._vlm_model is not None and self._vlm_processor is not None and self._vlm_config is not None:
-            return
-        if not _MLX_VLM_AVAILABLE:
-            raise ImportError("mlx-vlm 未安装，无法使用本地视觉模型")
-        with self._vlm_lock:
-            if self._vlm_model is not None and self._vlm_processor is not None and self._vlm_config is not None:
-                return
-            if not self.is_ready:
-                raise RuntimeError("LocalProvider not loaded. Call load() first.")
-            if not self._loader.loaded_as_vlm:
-                raise NotImplementedError("当前已加载的本地模型不支持图片输入")
-            self._vlm_model = self._model
-            self._vlm_processor = self._tokenizer
-            load_target = self._loader.last_load_target or self._loader.resolve_target()
-            self._vlm_config = vlm_load_config(load_target)
+        self._vlm.ensure_loaded()
 
     def _prepare_vlm_prompt(
         self,
         messages: list[dict[str, Any]],
         system: Optional[str],
     ) -> tuple[str, list[Any]]:
-        self._ensure_vlm_loaded()
-        vlm_messages, image_inputs = self._build_vlm_messages_and_images(messages, system)
-        prompt = vlm_apply_chat_template(
-            self._vlm_processor,
-            self._vlm_config,
-            vlm_messages,
-            add_generation_prompt=True,
-            enable_thinking=False,
-            num_images=len(image_inputs),
-        )
-        return prompt, image_inputs
+        return self._vlm.prepare_prompt(messages, system)
 
     def _generate_vlm_text(
         self,
@@ -949,19 +844,14 @@ class LocalProvider(BaseProvider):
         top_p: float,
         repetition_penalty: float,
     ) -> str:
-        prompt, image_inputs = self._prepare_vlm_prompt(messages, system)
-        result = vlm_generate(
-            self._vlm_model,
-            self._vlm_processor,
-            prompt,
-            image=image_inputs,
-            verbose=False,
+        return self._vlm.generate_text(
+            messages,
+            system,
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
             repetition_penalty=repetition_penalty,
         )
-        return str(getattr(result, "text", result or "")).strip()
 
     def _stream_vlm_responses(
         self,
@@ -973,12 +863,9 @@ class LocalProvider(BaseProvider):
         top_p: float,
         repetition_penalty: float,
     ):
-        prompt, image_inputs = self._prepare_vlm_prompt(messages, system)
-        return vlm_stream_generate(
-            self._vlm_model,
-            self._vlm_processor,
-            prompt,
-            image=image_inputs,
+        return self._vlm.stream_responses(
+            messages,
+            system,
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,

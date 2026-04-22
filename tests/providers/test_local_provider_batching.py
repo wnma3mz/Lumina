@@ -23,6 +23,7 @@ mx = pytest.importorskip("mlx.core", reason="mlx not available on this platform"
 
 import lumina.providers.local as local_mod  # noqa: E402  (needed for _make_cache patch target)
 import lumina.providers.mlx_loader as mlx_loader_mod  # noqa: E402
+import lumina.providers.local_vlm as local_vlm_mod  # noqa: E402
 from lumina.providers.local import LocalProvider, _RequestSlot  # noqa: E402
 from lumina.providers.mlx_loader import _DEFAULT_MODEL_REPO_ID  # noqa: E402
 from lumina.providers.system_prompt_cache import SystemPromptCacheEntry as _SystemPromptCacheEntry  # noqa: E402
@@ -350,13 +351,13 @@ def test_load_binds_vlm_handles_to_loaded_model(monkeypatch):
         return FakeLoadedModel(), FakeLoadedTokenizer(), None, None
 
     monkeypatch.setattr(provider._loader, "load", _fake_vlm_loader)
-    monkeypatch.setattr(local_mod, "vlm_load_config", lambda target: {"target": target})
+    monkeypatch.setattr(local_vlm_mod, "vlm_load_config", lambda target: {"target": target})
 
     provider.load()
 
-    assert provider._vlm_model is provider._model
-    assert provider._vlm_processor is provider._tokenizer
-    assert provider._vlm_config == {"target": "synthetic-vlm"}
+    assert provider._vlm.model is provider._model
+    assert provider._vlm.processor is provider._tokenizer
+    assert provider._vlm.config == {"target": "synthetic-vlm"}
 
 
 def test_load_runs_warmup_by_default(monkeypatch):
@@ -727,9 +728,9 @@ def test_render_prompt_falls_back_when_tokenizer_has_no_thinking_flag():
 async def test_generate_messages_uses_vlm_for_image_inputs(monkeypatch):
     provider = LocalProvider(model_path="synthetic", enable_warmup=False)
     provider._model = object()
-    provider._vlm_model = object()
-    provider._vlm_processor = object()
-    provider._vlm_config = {}
+    provider._tokenizer = object()
+    provider._loader.loaded_as_vlm = True
+    provider._vlm._vlm_config = {}
 
     monkeypatch.setattr(provider, "_ensure_vlm_loaded", lambda: None)
 
@@ -749,8 +750,8 @@ async def test_generate_messages_uses_vlm_for_image_inputs(monkeypatch):
         captured["generate_kwargs"] = kwargs
         return _FakeResult()
 
-    monkeypatch.setattr(local_mod, "vlm_apply_chat_template", _fake_template)
-    monkeypatch.setattr(local_mod, "vlm_generate", _fake_generate)
+    monkeypatch.setattr(local_vlm_mod, "vlm_apply_chat_template", _fake_template)
+    monkeypatch.setattr(local_vlm_mod, "vlm_generate", _fake_generate)
 
     result = await provider.generate_messages(
         messages=[{
@@ -783,14 +784,14 @@ def test_ensure_vlm_loaded_reuses_existing_model(monkeypatch):
     def _should_not_reload(*args, **kwargs):
         raise AssertionError("should not call vlm_load")
 
-    monkeypatch.setattr(local_mod, "vlm_load_config", lambda target: {"target": target})
-    monkeypatch.setattr(local_mod, "vlm_generate", _should_not_reload)
+    monkeypatch.setattr(local_vlm_mod, "vlm_load_config", lambda target: {"target": target})
+    monkeypatch.setattr(local_vlm_mod, "vlm_generate", _should_not_reload)
 
     provider._ensure_vlm_loaded()
 
-    assert provider._vlm_model is provider._model
-    assert provider._vlm_processor is provider._tokenizer
-    assert provider._vlm_config == {"target": "synthetic-vlm"}
+    assert provider._vlm.model is provider._model
+    assert provider._vlm.processor is provider._tokenizer
+    assert provider._vlm.config == {"target": "synthetic-vlm"}
 
 
 @pytest.mark.anyio
@@ -816,19 +817,19 @@ async def test_generate_messages_rejects_images_for_text_only_model():
 async def test_generate_messages_stream_uses_vlm_for_image_inputs(monkeypatch):
     provider = LocalProvider(model_path="synthetic", enable_warmup=False)
     provider._model = object()
-    provider._vlm_model = object()
-    provider._vlm_processor = object()
-    provider._vlm_config = {}
+    provider._tokenizer = object()
+    provider._loader.loaded_as_vlm = True
+    provider._vlm._vlm_config = {}
 
     monkeypatch.setattr(provider, "_ensure_vlm_loaded", lambda: None)
-    monkeypatch.setattr(local_mod, "vlm_apply_chat_template", lambda processor, config, messages, **kwargs: "vlm-prompt")
+    monkeypatch.setattr(local_vlm_mod, "vlm_apply_chat_template", lambda processor, config, messages, **kwargs: "vlm-prompt")
 
     class _Chunk:
         def __init__(self, text):
             self.text = text
 
     monkeypatch.setattr(
-        local_mod,
+        local_vlm_mod,
         "vlm_stream_generate",
         lambda model, processor, prompt, image=None, **kwargs: [_Chunk("图"), _Chunk("像")],
     )
