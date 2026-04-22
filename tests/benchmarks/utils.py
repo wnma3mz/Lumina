@@ -1,9 +1,7 @@
-import time
 import os
 import psutil
 import gc
 import logging
-from pathlib import Path
 
 def setup_benchmark_logging():
     logging.basicConfig(
@@ -33,7 +31,8 @@ def clear_mlx_cache():
 
 def print_benchmark_table(results: list[dict]):
     """将测试结果打印为漂亮的 Markdown 表格。"""
-    if not results: return
+    if not results:
+        return
     
     headers = ["Model", "Mode", "TTFT (ms)", "TPOT (ms)", "Peak Metal (MB)", "Status"]
     rows = []

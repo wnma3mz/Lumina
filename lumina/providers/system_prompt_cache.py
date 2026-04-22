@@ -57,9 +57,10 @@ class SystemPromptCache:
 
     MAX_SIZE: int = _SYSTEM_PROMPT_CACHE_SIZE
 
-    def __init__(self, model: Any, tokenizer: Any) -> None:
+    def __init__(self, model: Any, tokenizer: Any, loaded_as_vlm: bool = False) -> None:
         self._model = model
         self._tokenizer = tokenizer
+        self.loaded_as_vlm = loaded_as_vlm
         self._cache: OrderedDict[str, SystemPromptCacheEntry] = OrderedDict()
 
     def get_or_create(
@@ -100,7 +101,11 @@ class SystemPromptCache:
             "system_prompt_cache MISS  key_len=%d → building prefix cache (%d tokens)",
             len(system_text), len(prefix_tokens),
         )
-        prompt_cache = mlx_cache.make_prompt_cache(self._model)
+        if getattr(self, "loaded_as_vlm", False):
+            inner = getattr(self._model, "language_model", None) or self._model
+            prompt_cache = mlx_cache.make_prompt_cache(inner)
+        else:
+            prompt_cache = mlx_cache.make_prompt_cache(self._model)
         self._prefill(prefix_tokens, prompt_cache)
         entry = SystemPromptCacheEntry(
             system_text=system_text,
@@ -135,8 +140,30 @@ class SystemPromptCache:
         prompt = mx.array(prefix_tokens)
         while len(prompt) > 0:
             n_to_process = min(2048, len(prompt))
-            self._model(prompt[:n_to_process][None], cache=prompt_cache)
-            mx.eval([c.state for c in prompt_cache])
+            inputs = prompt[:n_to_process][None]
+            
+            # 优化：在 CPU 上执行 Embedding 查找，允许权重留在磁盘
+            model_internal = getattr(self._model, "model", self._model)
+            embed_layer = getattr(model_internal, "embed_tokens", None)
+            
+            if embed_layer is not None:
+                with mx.stream(mx.cpu):
+                    embeddings = embed_layer(inputs)
+                self._model(embeddings, cache=prompt_cache)
+            else:
+                self._model(inputs, cache=prompt_cache)
+            
+            # 安全 eval state（兼容 ArraysCache 含 None 的情况）
+            flat = []
+            for c in prompt_cache:
+                s = c.state
+                if isinstance(s, list):
+                    flat.extend(x for x in s if x is not None)
+                elif s is not None:
+                    flat.append(s)
+            if flat:
+                mx.eval(flat)
+                
             prompt = prompt[n_to_process:]
             mx.clear_cache()
         for cache_layer in prompt_cache:

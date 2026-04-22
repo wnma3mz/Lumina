@@ -336,7 +336,7 @@ async def test_batch_engine_matches_legacy_scheduler_outputs():
     assert batch_results == legacy_results
 
 
-def _fake_loader_load():
+def _fake_loader_load(offload_embedding=True, offload_vision=True, offload_audio=True):
     """MlxModelLoader.load 的替代：返回 (FakeModel, FakeTokenizer, None, None)。"""
     return FakeLoadedModel(), FakeLoadedTokenizer(), None, None
 
@@ -386,6 +386,11 @@ def test_load_falls_back_to_default_repo_when_default_local_dir_missing(monkeypa
         mlx_loader_mod, "mlx_load",
         lambda model_path: (load_calls.append(model_path) or (FakeLoadedModel(), FakeLoadedTokenizer())),
     )
+    if getattr(mlx_loader_mod, "_MLX_VLM_AVAILABLE", False):
+        monkeypatch.setattr(
+            mlx_loader_mod, "vlm_load",
+            lambda model_path, **kwargs: (load_calls.append(model_path) or (FakeLoadedModel(), FakeLoadedTokenizer())),
+        )
     monkeypatch.setattr(provider._loader, "_init_batch_engine", lambda model, tokenizer: (None, None))
     monkeypatch.setattr(provider, "_run_warmup", lambda: None)
 
@@ -404,6 +409,11 @@ def test_load_uses_existing_local_model_dir(monkeypatch, tmp_path):
         mlx_loader_mod, "mlx_load",
         lambda model_path: (load_calls.append(model_path) or (FakeLoadedModel(), FakeLoadedTokenizer())),
     )
+    if getattr(mlx_loader_mod, "_MLX_VLM_AVAILABLE", False):
+        monkeypatch.setattr(
+            mlx_loader_mod, "vlm_load",
+            lambda model_path, **kwargs: (load_calls.append(model_path) or (FakeLoadedModel(), FakeLoadedTokenizer())),
+        )
     monkeypatch.setattr(provider._loader, "_init_batch_engine", lambda model, tokenizer: (None, None))
     monkeypatch.setattr(provider, "_run_warmup", lambda: None)
 

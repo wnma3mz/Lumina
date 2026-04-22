@@ -1,6 +1,5 @@
 import time
 import argparse
-import json
 import asyncio
 from pathlib import Path
 from tests.benchmarks.utils import setup_benchmark_logging, get_mem_stats, clear_mlx_cache
