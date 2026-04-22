@@ -35,6 +35,8 @@ logger = logging.getLogger("lumina")
 
 _DEFAULT_MODEL_REPO_ID = "mlx-community/Qwen3.5-0.8B-4bit"
 _DEFAULT_MODEL_DIRNAME = "qwen3.5-0.8b-4bit"
+_VISION_OFFLOAD_KEYWORDS = ("visual", "vision_tower", "merger", "projector", "projection")
+_AUDIO_OFFLOAD_KEYWORDS = ("audio_tower", "audio_projector")
 
 
 class MlxModelLoader:
@@ -135,6 +137,65 @@ class MlxModelLoader:
 
         return raw_target
 
+    @staticmethod
+    def _is_vlm_config(config: object) -> bool:
+        if not isinstance(config, dict):
+            return False
+        if "vision_config" in config:
+            return True
+        model_type = config.get("model_type")
+        return isinstance(model_type, str) and "vl" in model_type.lower()
+
+    def _detect_vlm_target(self, load_target: str) -> bool:
+        if not _MLX_VLM_AVAILABLE:
+            return False
+        from mlx_vlm.utils import load_config
+
+        try:
+            return self._is_vlm_config(load_config(load_target))
+        except Exception as exc:
+            logger.info(
+                "VLM probe failed for %s; fallback to mlx_lm loader (%s: %s)",
+                load_target,
+                type(exc).__name__,
+                exc,
+            )
+            logger.debug("VLM probe traceback for %s", load_target, exc_info=True)
+            return False
+
+    @staticmethod
+    def _build_offload_keywords(
+        *,
+        offload_embedding: bool,
+        offload_vision: bool,
+        offload_audio: bool,
+    ) -> tuple[str, ...]:
+        keywords: list[str] = []
+        if offload_embedding:
+            keywords.append("embed_tokens")
+        if offload_vision:
+            keywords.extend(_VISION_OFFLOAD_KEYWORDS)
+        if offload_audio:
+            keywords.extend(_AUDIO_OFFLOAD_KEYWORDS)
+        return tuple(keywords)
+
+    @staticmethod
+    def _should_eval_param(name: str, offload_keywords: tuple[str, ...]) -> bool:
+        name_low = name.lower()
+        is_backbone_layer = (
+            "language_model.model.layers." in name_low
+            or (
+                name_low.startswith("model.layers.")
+                and "vision" not in name_low
+                and "audio" not in name_low
+            )
+        )
+        if is_backbone_layer:
+            return True
+        if any(keyword in name_low for keyword in offload_keywords):
+            return False
+        return True
+
     # ── 加载 ──────────────────────────────────────────────────────────────────
 
     def load(self, offload_embedding: bool = True, offload_vision: bool = True, offload_audio: bool = True) -> Tuple:
@@ -150,23 +211,9 @@ class MlxModelLoader:
 
         load_target = self.resolve_target()
         self.last_load_target = load_target
-        
+
         # ── 自动选择加载器 (VLM vs LM) ──────────────────────────────────────────
-        is_vlm = False
-        if _MLX_VLM_AVAILABLE:
-            from mlx_vlm.utils import load_config
-            try:
-                # 尝试通过 config 判断是否包含 vision
-                vlm_config = load_config(load_target)
-                # BUG-08: model_type 可能为 None，.lower() 会抛 AttributeError
-                # 被外层 except Exception: pass 吃掉，导致 VLM 识别静默失败
-                model_type = vlm_config.get("model_type")
-                if "vision_config" in vlm_config or (
-                    model_type and "vl" in str(model_type).lower()
-                ):
-                    is_vlm = True
-            except Exception:
-                pass
+        is_vlm = self._detect_vlm_target(load_target)
 
         if is_vlm:
             logger.info(f"Multimodal detected. Loading with mlx_vlm: {load_target}")
@@ -180,38 +227,20 @@ class MlxModelLoader:
         
         # 始终预加载 Transformer Layers (L1) 以保证速度，
         # 根据开关选择性卸载辅助塔 (L2)。
-        offload_keywords = []
-        if offload_embedding:
-            offload_keywords.append("embed_tokens")
-        if offload_vision:
-            offload_keywords.extend(["visual", "vision_tower", "merger", "projector", "projection"])
-        if offload_audio:
-            offload_keywords.extend(["audio_tower", "audio_projector"])
+        offload_keywords = self._build_offload_keywords(
+            offload_embedding=offload_embedding,
+            offload_vision=offload_vision,
+            offload_audio=offload_audio,
+        )
 
         if offload_keywords:
             logger.info(f"Hybrid loading: eager-loading backbone, offloading {offload_keywords}...")
             all_params = mx_utils.tree_flatten(model.parameters())
-
-            def should_eval(name: str) -> bool:
-                name_low = name.lower()
-                # L1：核心语言模型层必须预加载
-                is_backbone_layer = (
-                    "language_model.model.layers." in name_low
-                    or (
-                        name_low.startswith("model.layers.")
-                        and "vision" not in name_low
-                        and "audio" not in name_low
-                    )
-                )
-                if is_backbone_layer:
-                    return True
-                # L2：辅助组件命中关键字则卸载
-                if any(k in name_low for k in offload_keywords):
-                    return False
-                # 其余（norm, head 等）默认预加载
-                return True
-
-            to_eval = [p for name, p in all_params if should_eval(name)]
+            to_eval = [
+                param
+                for name, param in all_params
+                if self._should_eval_param(name, offload_keywords)
+            ]
             mx.eval(to_eval)
         else:
             logger.info("Eager loading: evaluating all model parameters...")

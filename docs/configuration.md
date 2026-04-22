@@ -45,8 +45,11 @@
 - `ConfigStore.apply_patch()`
 - `patch_requires_restart()`
 - `replace_runtime_config()`
+- `serialize_runtime_config()`
 
 这里的意思是：运行时配置更新现在只有这一条正式路径。旧的按 section 局部 merge 的 runtime update 逻辑已经移除，不应再新增第二套“临时同步函数”。
+
+其中 `serialize_runtime_config()` 只序列化真实 runtime section（`provider/system/digest/document/vision/audio`），不再依赖额外 `include` 黑魔法去兜 computed property；`ui` 继续通过 `system.ui` 暴露。
 
 ### `ConfigApplier` (`lumina/config_apply.py`)
 

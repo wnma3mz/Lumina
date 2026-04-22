@@ -23,6 +23,8 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Callable, List, Optional
 
+from .local_offload import forward_with_cache
+
 logger = logging.getLogger("lumina")
 
 _SYSTEM_PROMPT_CACHE_SIZE = 32
@@ -57,10 +59,17 @@ class SystemPromptCache:
 
     MAX_SIZE: int = _SYSTEM_PROMPT_CACHE_SIZE
 
-    def __init__(self, model: Any, tokenizer: Any, loaded_as_vlm: bool = False) -> None:
+    def __init__(
+        self,
+        model: Any,
+        tokenizer: Any,
+        loaded_as_vlm: bool = False,
+        use_cpu_embedding: bool = True,
+    ) -> None:
         self._model = model
         self._tokenizer = tokenizer
         self.loaded_as_vlm = loaded_as_vlm
+        self.use_cpu_embedding = use_cpu_embedding
         self._cache: OrderedDict[str, SystemPromptCacheEntry] = OrderedDict()
 
     def get_or_create(
@@ -141,17 +150,13 @@ class SystemPromptCache:
         while len(prompt) > 0:
             n_to_process = min(2048, len(prompt))
             inputs = prompt[:n_to_process][None]
-            
-            # 优化：在 CPU 上执行 Embedding 查找，允许权重留在磁盘
-            model_internal = getattr(self._model, "model", self._model)
-            embed_layer = getattr(model_internal, "embed_tokens", None)
-            
-            if embed_layer is not None:
-                with mx.stream(mx.cpu):
-                    embeddings = embed_layer(inputs)
-                self._model(embeddings, cache=prompt_cache)
-            else:
-                self._model(inputs, cache=prompt_cache)
+
+            forward_with_cache(
+                self._model,
+                inputs,
+                cache=prompt_cache,
+                enable_cpu_embedding=self.use_cpu_embedding,
+            )
             
             # 安全 eval state（兼容 ArraysCache 含 None 的情况）
             flat = []

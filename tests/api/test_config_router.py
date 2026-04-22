@@ -14,57 +14,14 @@ from httpx import ASGITransport, AsyncClient
 
 from lumina.config import reset_config
 from lumina.config_runtime import set_active_config_path
+from tests.config_helpers import app_config, reset_config_state
 
 
 @pytest.fixture(autouse=True)
 def reset_singleton():
-    reset_config()
-    set_active_config_path(None)
+    reset_config_state()
     yield
-    reset_config()
-    set_active_config_path(None)
-
-
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-def _base_config() -> dict:
-    return {
-        "provider": {
-            "type": "local",
-            "model_path": "/tmp/model",
-            "sampling": {
-                "temperature": 0.6,
-                "top_p": 0.95,
-                "top_k": 20,
-                "min_p": 0.0,
-                "presence_penalty": 0.0,
-                "repetition_penalty": 1.0,
-                "max_tokens": 512,
-            },
-            "openai": {"base_url": "", "api_key": "", "model": ""},
-        },
-        "whisper_model": "whisper-tiny",
-        "host": "127.0.0.1",
-        "port": 31821,
-        "log_level": "INFO",
-        "system_prompts": {"_readme": "internal", "chat": "You are helpful."},
-        "digest": {"enabled": False},
-        "ptt": {"enabled": False, "hotkey": "f5", "language": "zh"},
-        "desktop": {"menubar_enabled": True},
-        "request_history": {"enabled": True},
-        "branding": {"username": "", "slogans": ["让 AI 留在本地"]},
-        "ui": {
-            "home": {
-                "enabled_tabs": ["digest", "document", "image", "settings"],
-                "image_enabled": True,
-                "image_modules": ["image_ocr"],
-                "allow_local_override": True,
-            }
-        },
-    }
+    reset_config_state()
 
 
 def _build_app(config_path: Path, *, config_data: dict | None = None):
@@ -109,7 +66,7 @@ def _build_app(config_path: Path, *, config_data: dict | None = None):
 @pytest.fixture
 def config_path(tmp_path) -> Path:
     p = tmp_path / "config.json"
-    p.write_text(json.dumps(_base_config()), encoding="utf-8")
+    p.write_text(json.dumps(app_config()), encoding="utf-8")
     return p
 
 
@@ -124,7 +81,7 @@ def client_and_llm(config_path):
 def openai_client_and_llm(config_path):
     from lumina.providers.openai import OpenAIProvider
 
-    config_data = _base_config()
+    config_data = app_config()
     config_data["provider"]["type"] = "openai"
     config_data["provider"]["openai"] = {
         "base_url": "http://old.example/v1",
@@ -211,7 +168,7 @@ class TestGetConfig:
         assert r.json()["system"]["branding"]["slogans"] == ["让 AI 留在本地"]
 
     async def test_legacy_ui_tabs_are_normalized(self, config_path):
-        payload = _base_config()
+        payload = app_config()
         payload.setdefault("system", {})["ui"] = {"home": {"enabled_tabs": ["digest", "document", "image", "settings"]}}
         config_path.write_text(json.dumps(payload), encoding="utf-8")
 

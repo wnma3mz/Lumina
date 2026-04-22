@@ -63,6 +63,7 @@ except ImportError:
 
 from lumina.engine.scheduler import GenerationRequest
 from .base import BaseProvider, ProviderCapabilities
+from .local_offload import forward_with_cache, maybe_embed_on_cpu
 from .mlx_loader import MlxModelLoader
 from .mlx_prompt import MlxPromptBuilder
 from .local_vlm import LocalVlmAdapter, _MLX_VLM_AVAILABLE
@@ -187,7 +188,10 @@ class LocalProvider(BaseProvider):
         self._batch_executor = batch_executor
         self._prompt_builder = MlxPromptBuilder(self._tokenizer)
         self._spc = SystemPromptCache(
-            self._model, self._tokenizer, loaded_as_vlm=self._loader.loaded_as_vlm
+            self._model,
+            self._tokenizer,
+            loaded_as_vlm=self._loader.loaded_as_vlm,
+            use_cpu_embedding=self.offload_embedding,
         )
         self._vlm.bind_loaded_model()
         if self._loader.loaded_as_vlm:
@@ -474,17 +478,19 @@ class LocalProvider(BaseProvider):
 
     def _get_embeddings(self, input_ids: mx.array) -> Optional[mx.array]:
         """优化：在 CPU 上执行 Embedding 查找，允许权重留在磁盘。"""
-        if not self.offload_embedding:
-            return None
-            
-        # 针对 Qwen/Llama 模型寻找 embed_tokens 层
-        model_internal = getattr(self._model, "model", self._model)
-        embed_layer = getattr(model_internal, "embed_tokens", None)
-        
-        if embed_layer is not None:
-            with mx.stream(mx.cpu):
-                return embed_layer(input_ids)
-        return None
+        return maybe_embed_on_cpu(
+            self._model,
+            input_ids,
+            enable_cpu_embedding=self.offload_embedding,
+        )
+
+    def _forward_with_cache(self, inputs: mx.array, cache: List[Any]) -> Any:
+        return forward_with_cache(
+            self._model,
+            inputs,
+            cache=cache,
+            enable_cpu_embedding=self.offload_embedding,
+        )
 
     def _prefill_prompt_cache(self, prompt_tokens: mx.array, prompt_cache: List[Any]) -> mx.array:
         prompt = prompt_tokens
@@ -493,11 +499,7 @@ class LocalProvider(BaseProvider):
             n_to_process = min(2048, remaining)
             inputs = prompt[:n_to_process][None]
             
-            embeddings = self._get_embeddings(inputs)
-            if embeddings is not None:
-                self._model(embeddings, cache=prompt_cache)
-            else:
-                self._model(inputs, cache=prompt_cache)
+            self._forward_with_cache(inputs, prompt_cache)
                 
             self._eval_cache_state(prompt_cache)
             prompt = prompt[n_to_process:]
@@ -533,11 +535,7 @@ class LocalProvider(BaseProvider):
             prompt = self._prefill_prompt_cache(slot.prompt_tokens, prompt_cache)
             inputs = prompt[None]
             
-            embeddings = self._get_embeddings(inputs)
-            if embeddings is not None:
-                logits = self._extract_logits(self._model(embeddings, cache=prompt_cache))[:, -1, :]
-            else:
-                logits = self._extract_logits(self._model(inputs, cache=prompt_cache))[:, -1, :]
+            logits = self._extract_logits(self._forward_with_cache(inputs, prompt_cache))[:, -1, :]
                 
             mx.eval(logits)
             token_id = self._sample_from_logits(logits, slot)
@@ -560,11 +558,7 @@ class LocalProvider(BaseProvider):
         eos_ids = self._eos_ids
         try:
             inputs = mx.array([[slot.next_input_token]])
-            embeddings = self._get_embeddings(inputs)
-            if embeddings is not None:
-                logits = self._extract_logits(self._model(embeddings, cache=slot.prompt_cache))[:, -1, :]
-            else:
-                logits = self._extract_logits(self._model(inputs, cache=slot.prompt_cache))[:, -1, :]
+            logits = self._extract_logits(self._forward_with_cache(inputs, slot.prompt_cache))[:, -1, :]
                 
             mx.eval(logits)
             token_id = self._sample_from_logits(logits, slot)
@@ -621,11 +615,7 @@ class LocalProvider(BaseProvider):
                 n_to_process = min(2048, inputs.shape[1] - 1)
                 batch_inputs = inputs[:, :n_to_process]
                 
-                embeddings = self._get_embeddings(batch_inputs)
-                if embeddings is not None:
-                    self._model(embeddings, cache=prompt_cache)
-                else:
-                    self._model(batch_inputs, cache=prompt_cache)
+                self._forward_with_cache(batch_inputs, prompt_cache)
                     
                 self._eval_cache_state(prompt_cache)
                 inputs = inputs[:, n_to_process:]
@@ -634,11 +624,7 @@ class LocalProvider(BaseProvider):
             for cache_layer in prompt_cache:
                 cache_layer.finalize()
 
-            embeddings = self._get_embeddings(inputs)
-            if embeddings is not None:
-                logits = self._extract_logits(self._model(embeddings, cache=prompt_cache))[:, -1, :]
-            else:
-                logits = self._extract_logits(self._model(inputs, cache=prompt_cache))[:, -1, :]
+            logits = self._extract_logits(self._forward_with_cache(inputs, prompt_cache))[:, -1, :]
                 
             mx.eval(logits)
         except Exception:
@@ -703,11 +689,7 @@ class LocalProvider(BaseProvider):
                 ]
             input_tokens = mx.array([[slot.next_input_token] for slot in batch_slots])
             
-            embeddings = self._get_embeddings(input_tokens)
-            if embeddings is not None:
-                logits = self._extract_logits(self._model(embeddings, cache=merged_cache))[:, -1, :]
-            else:
-                logits = self._extract_logits(self._model(input_tokens, cache=merged_cache))[:, -1, :]
+            logits = self._extract_logits(self._forward_with_cache(input_tokens, merged_cache))[:, -1, :]
                 
             mx.eval(logits)
         except Exception:
@@ -768,7 +750,6 @@ class LocalProvider(BaseProvider):
             tokenizer=self._tokenizer,
             batch_generator=self._batch_generator,
             batch_executor=self._batch_executor,
-            loop=self._loop,
             prepare_prompt_fn=self._prepare_batch_generator_prompt,
             emit_token_fn=self._emit_token_id_local,
         )

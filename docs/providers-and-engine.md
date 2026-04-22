@@ -19,6 +19,7 @@ HTTP / CLI
 - `lumina/engine/llm.py`
 - `lumina/providers/__init__.py`
 - `lumina/providers/local.py`
+- `lumina/providers/local_offload.py`
 - `lumina/providers/local_vlm.py`
 - `lumina/providers/mlx_loader.py`
 - `lumina/engine/request_history.py`
@@ -50,7 +51,7 @@ Provider 工厂在 `lumina/cli/server.py:build_provider()`。
 - 管理 prompt cache
 - 执行 continuous batching
 
-当前结构上，`local.py` 主要保留生命周期、调度和公共接口；图片输入规范化、VLM prompt 组装、VLM sync/stream 推理已拆到 `local_vlm.py`。
+当前结构上，`local.py` 主要保留生命周期、调度和公共接口；图片输入规范化、VLM prompt 组装、VLM sync/stream 推理已拆到 `local_vlm.py`，CPU embedding / offload 前向分支已抽到 `local_offload.py`，避免 legacy prefill、batched prefill、decode、SystemPromptCache 各自维护一份分叉逻辑。
 
 batching 设计要点：
 
@@ -78,6 +79,11 @@ batching 设计要点：
 
 - **L1**：语言 backbone 层始终 eager-load
 - **L2**：embedding / vision / audio 组件可选择不预加载
+
+`mlx_loader` 现在把 VLM 探测和 offload 参数判断都拆成了可测试 helper：
+
+- VLM 探测失败不会再被静默吞掉，会记录 fallback 日志
+- `should_eval` / offload 关键字命中规则可直接做单元测试
 
 `should_eval()` 的语义是：
 
@@ -211,6 +217,7 @@ Config
 - `lumina/config_apply.py`
 - `lumina/providers/mlx_loader.py`
 - `lumina/providers/local.py`
+- `lumina/providers/local_offload.py`
 - `lumina/providers/local_vlm.py`
 
 ## 11. 最近验证结果

@@ -6,7 +6,7 @@ lumina/providers/scheduler.py — MlxBatchScheduler
 调用方式：
     scheduler = MlxBatchScheduler(
         model=..., tokenizer=...,
-        batch_generator=..., batch_executor=..., loop=...,
+        batch_generator=..., batch_executor=...,
         prepare_prompt_fn=provider._prepare_batch_generator_prompt,
         emit_token_fn=provider._emit_token_id_local,
     )
@@ -25,12 +25,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("lumina")
 
-try:
-    _MLX_AVAILABLE = True
-except ImportError:
-    _MLX_AVAILABLE = False
-
-
 class MlxBatchScheduler:
     """mlx-lm BatchGenerator 调度器（LocalProvider 默认路径）。
 
@@ -42,7 +36,6 @@ class MlxBatchScheduler:
         tokenizer:          已加载的 tokenizer 实例。
         batch_generator:    mlx_lm.generate.BatchGenerator 实例。
         batch_executor:     专属 ThreadPoolExecutor（隔离 GPU 线程），可为 None。
-        loop:               当前 asyncio event loop（用于线程安全的 put）。
         prepare_prompt_fn:  Callable[[_RequestSlot], tuple[list[int], Optional[list]]]
                             由 LocalProvider._prepare_batch_generator_prompt 提供。
         emit_token_fn:      Callable[[_RequestSlot, int], None]
@@ -55,7 +48,6 @@ class MlxBatchScheduler:
         tokenizer: Any,
         batch_generator: Any,
         batch_executor: Optional["ThreadPoolExecutor"],
-        loop: asyncio.AbstractEventLoop,
         prepare_prompt_fn: Callable,
         emit_token_fn: Callable,
     ) -> None:
@@ -63,7 +55,6 @@ class MlxBatchScheduler:
         self._tokenizer = tokenizer
         self._batch_generator = batch_generator
         self._batch_executor = batch_executor
-        self._loop = loop
         self._prepare_prompt_fn = prepare_prompt_fn
         self._emit_token_fn = emit_token_fn
         self._batch_slots: dict = {}

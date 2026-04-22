@@ -133,20 +133,37 @@ def public_system_prompts(prompts: Optional[dict[str, Any]]) -> dict[str, str]:
     }
 
 
+def _set_nested(data: dict[str, Any], path: tuple[str, ...], value: Any) -> None:
+    cursor = data
+    for key in path[:-1]:
+        next_value = cursor.get(key)
+        if not isinstance(next_value, dict):
+            next_value = {}
+            cursor[key] = next_value
+        cursor = next_value
+    cursor[path[-1]] = value
+
+
+def _get_nested(data: dict[str, Any], path: tuple[str, ...]) -> Any:
+    cursor: Any = data
+    for key in path:
+        if not isinstance(cursor, dict) or key not in cursor:
+            return None
+        cursor = cursor[key]
+    return cursor
+
+
 def serialize_runtime_config(cfg: Any) -> dict[str, Any]:
-    if hasattr(cfg, "model_dump"):
-        res = cfg.model_dump(include={"provider", "system", "digest", "document", "vision", "audio", "ui"})
-    else:
-        res = {}
-        for sec in ["provider", "system", "digest", "document", "vision", "audio", "ui"]:
-            obj = getattr(cfg, sec, None)
-            if hasattr(obj, "model_dump"):
-                res[sec] = obj.model_dump()
-                
-    for sec in res:
-        if isinstance(res[sec], dict) and "prompts" in res[sec]:
-            res[sec]["prompts"] = public_system_prompts(res[sec]["prompts"])
-            
+    res: dict[str, Any] = {}
+    for section in ("provider", "system", "digest", "document", "vision", "audio"):
+        obj = getattr(cfg, section, None)
+        if hasattr(obj, "model_dump"):
+            res[section] = obj.model_dump()
+
+    for value in res.values():
+        if isinstance(value, dict) and "prompts" in value:
+            value["prompts"] = public_system_prompts(value["prompts"])
+
     return res
 
 
@@ -242,34 +259,26 @@ def _normalize_persisted_config_data(data: dict[str, Any]) -> dict[str, Any]:
 
 def _build_runtime_candidate(cfg: Any, patch_dict: dict[str, Any], persisted_data: dict[str, Any]) -> dict[str, Any]:
     current = cfg.model_dump()
-    for sec, sec_data in patch_dict.items():
-        if not isinstance(sec_data, dict):
-            continue
-        if sec == "ui":
-            system = current.setdefault("system", {})
-            system["ui"] = deep_merge(system.get("ui", {}), sec_data)
-            continue
-        if sec not in current or not isinstance(current.get(sec), dict):
-            continue
-        current[sec] = deep_merge(current[sec], sec_data)
 
-    if isinstance(current.get("vision"), dict):
-        vision_modules = persisted_data.get("vision", {}).get("enabled_modules")
-        if vision_modules is not None:
-            current["vision"]["enabled_modules"] = vision_modules
+    section_aliases = {"ui": ("system", "ui")}
+    for section, section_data in patch_dict.items():
+        if not isinstance(section_data, dict):
+            continue
+        target_path = section_aliases.get(section, (section,))
+        current_section = _get_nested(current, target_path)
+        if not isinstance(current_section, dict):
+            continue
+        _set_nested(current, target_path, deep_merge(current_section, section_data))
 
-    system = current.setdefault("system", {})
-    if isinstance(system.get("ui"), dict):
-        enabled_tabs = persisted_data.get("ui", {}).get("home", {}).get("enabled_tabs")
-        if enabled_tabs is not None:
-            system_ui = system.setdefault("ui", {})
-            system_home = system_ui.setdefault("home", {})
-            system_home["enabled_tabs"] = enabled_tabs
-
-    if isinstance(system.get("branding"), dict):
-        username = persisted_data.get("system", {}).get("branding", {}).get("username")
-        if username is not None:
-            system["branding"]["username"] = username
+    persisted_mirrors = (
+        (("vision", "enabled_modules"), ("vision", "enabled_modules")),
+        (("ui", "home", "enabled_tabs"), ("system", "ui", "home", "enabled_tabs")),
+        (("system", "branding", "username"), ("system", "branding", "username")),
+    )
+    for source_path, target_path in persisted_mirrors:
+        value = _get_nested(persisted_data, source_path)
+        if value is not None:
+            _set_nested(current, target_path, value)
 
     return current
 

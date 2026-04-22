@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import statistics
 import time
+import types
 from contextlib import suppress
 from pathlib import Path
 
@@ -24,6 +26,7 @@ mx = pytest.importorskip("mlx.core", reason="mlx not available on this platform"
 import lumina.providers.local as local_mod  # noqa: E402  (needed for _make_cache patch target)
 import lumina.providers.mlx_loader as mlx_loader_mod  # noqa: E402
 import lumina.providers.local_vlm as local_vlm_mod  # noqa: E402
+import lumina.providers.system_prompt_cache as spc_mod  # noqa: E402
 from lumina.providers.local import LocalProvider, _RequestSlot  # noqa: E402
 from lumina.providers.mlx_loader import _DEFAULT_MODEL_REPO_ID  # noqa: E402
 from lumina.providers.system_prompt_cache import SystemPromptCacheEntry as _SystemPromptCacheEntry  # noqa: E402
@@ -605,7 +608,6 @@ def _make_scheduler():
         tokenizer=object(),
         batch_generator=None,
         batch_executor=None,
-        loop=asyncio.new_event_loop(),
         prepare_prompt_fn=lambda slot: ([], None),
         emit_token_fn=lambda slot, tok: None,
     )
@@ -952,3 +954,112 @@ def test_mlx_batch_scheduler_iter_handles_none():
     """_iter_batch_responses(None) 应该安全地不 yield 任何值。"""
     scheduler = _make_scheduler()
     assert list(scheduler._iter_batch_responses(None)) == []
+
+
+def _make_loader() -> mlx_loader_mod.MlxModelLoader:
+    return mlx_loader_mod.MlxModelLoader(
+        model_path="synthetic",
+        max_new_prefill_per_iter=2,
+        use_builtin_batch_engine_fn=lambda: False,
+        use_dedicated_batch_executor_fn=lambda: False,
+        eos_ids_fn=lambda: set(),
+    )
+
+
+def test_mlx_loader_vlm_config_detection_handles_missing_model_type():
+    loader = _make_loader()
+    assert loader._is_vlm_config({"vision_config": {}}) is True
+    assert loader._is_vlm_config({"model_type": "qwen2_vl"}) is True
+    assert loader._is_vlm_config({"model_type": None}) is False
+    assert loader._is_vlm_config({}) is False
+
+
+def test_mlx_loader_vlm_probe_logs_and_falls_back(monkeypatch, caplog):
+    loader = _make_loader()
+    fake_pkg = types.ModuleType("mlx_vlm")
+    fake_utils = types.ModuleType("mlx_vlm.utils")
+
+    def _boom(_target):
+        raise RuntimeError("bad config")
+
+    fake_utils.load_config = _boom
+    fake_pkg.utils = fake_utils
+    monkeypatch.setattr(mlx_loader_mod, "_MLX_VLM_AVAILABLE", True)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "mlx_vlm", fake_pkg)
+        mp.setitem(sys.modules, "mlx_vlm.utils", fake_utils)
+        with caplog.at_level("INFO", logger="lumina"):
+            assert loader._detect_vlm_target("broken-model") is False
+
+    assert "VLM probe failed for broken-model" in caplog.text
+
+
+def test_mlx_loader_offload_keyword_matching_is_stable():
+    loader = _make_loader()
+    keywords = loader._build_offload_keywords(
+        offload_embedding=True,
+        offload_vision=True,
+        offload_audio=False,
+    )
+
+    assert "embed_tokens" in keywords
+    assert "vision_tower" in keywords
+    assert loader._should_eval_param("language_model.model.layers.0.mlp.gate.weight", keywords) is True
+    assert loader._should_eval_param("model.layers.0.self_attn.q_proj.weight", keywords) is True
+    assert loader._should_eval_param("model.embed_tokens.weight", keywords) is False
+    assert loader._should_eval_param("model.vision_tower.blocks.0.weight", keywords) is False
+    assert loader._should_eval_param("lm_head.weight", keywords) is True
+
+
+def test_system_prompt_cache_respects_cpu_embedding_toggle(monkeypatch):
+    class FakeCacheLayer:
+        def __init__(self):
+            self.finalized = False
+
+        @property
+        def state(self):
+            return mx.array([0])
+
+        def finalize(self):
+            self.finalized = True
+
+    class FakeEmbedLayer:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, inputs):
+            self.calls += 1
+            return ("embeddings", tuple(int(x) for x in inputs.reshape(-1).tolist()))
+
+    class FakeModel:
+        def __init__(self):
+            self.model = types.SimpleNamespace(embed_tokens=FakeEmbedLayer())
+            self.calls = []
+
+        def __call__(self, inputs, cache=None):
+            self.calls.append(inputs)
+            return mx.zeros((1, 1, 4))
+
+    prompt_cache = [FakeCacheLayer()]
+    model = FakeModel()
+    spc = spc_mod.SystemPromptCache(
+        model=model,
+        tokenizer=object(),
+        use_cpu_embedding=False,
+    )
+    spc._prefill([1, 2], prompt_cache)
+    assert model.model.embed_tokens.calls == 0
+    assert len(model.calls) == 1
+    assert hasattr(model.calls[0], "shape")
+
+    prompt_cache = [FakeCacheLayer()]
+    model = FakeModel()
+    spc = spc_mod.SystemPromptCache(
+        model=model,
+        tokenizer=object(),
+        use_cpu_embedding=True,
+    )
+    spc._prefill([1, 2], prompt_cache)
+    assert model.model.embed_tokens.calls == 1
+    assert model.calls[0][0] == "embeddings"
