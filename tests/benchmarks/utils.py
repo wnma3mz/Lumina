@@ -57,3 +57,47 @@ def print_benchmark_table(results: list[dict]):
     for row in rows:
         print(fmt_row(row))
     print("\n")
+
+
+def print_http_matrix_table(results: list[dict]):
+    """打印 HTTP benchmark matrix 结果。"""
+    if not results:
+        return
+
+    def fmt_metric(value):
+        return f"{value:.1f}" if isinstance(value, (int, float)) else "—"
+
+    headers = [
+        "Model",
+        "Mode",
+        "Text TTFT",
+        "Text TPOT",
+        "Vision Cold",
+        "Vision Warm",
+        "4c tok/s",
+        "Status",
+    ]
+    rows = []
+    for r in results:
+        status = "✅" if not r.get("error") else "❌"
+        rows.append([
+            r.get("model", "N/A").split("/")[-1],
+            r.get("mode", "N/A"),
+            fmt_metric(r.get("text_ttft_ms")),
+            fmt_metric(r.get("text_tpot_ms")),
+            fmt_metric(r.get("vision_cold_ttft_ms")),
+            fmt_metric(r.get("vision_warm_ttft_ms")),
+            fmt_metric(r.get("concurrent_tok_s")),
+            status,
+        ])
+
+    col_widths = [max(len(str(x)) for x in col) for col in zip(headers, *rows)]
+
+    def fmt_row(data):
+        return "| " + " | ".join(str(val).ljust(width) for val, width in zip(data, col_widths)) + " |"
+
+    print("\n" + fmt_row(headers))
+    print("| " + " | ".join("-" * w for w in col_widths) + " |")
+    for row in rows:
+        print(fmt_row(row))
+    print("\n")

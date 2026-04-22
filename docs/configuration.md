@@ -49,7 +49,12 @@
 
 这里的意思是：运行时配置更新现在只有这一条正式路径。旧的按 section 局部 merge 的 runtime update 逻辑已经移除，不应再新增第二套“临时同步函数”。
 
-其中 `serialize_runtime_config()` 只序列化真实 runtime section（`provider/system/digest/document/vision/audio`），不再依赖额外 `include` 黑魔法去兜 computed property；`ui` 继续通过 `system.ui` 暴露。
+其中：
+
+- `Config.from_data()` / `normalize_config_data()` 是冷启动与 PATCH 共用的唯一 normalize 入口
+- `ConfigStore.apply_patch()` 合并 patch 后会直接走这条入口，再 `model_validate()`
+- `serialize_runtime_config()` 只序列化真实 runtime section（`provider/system/digest/document/vision/audio`），不再依赖额外 `include` 黑魔法去兜 computed property；`ui` 继续通过 `system.ui` 暴露
+- 写盘仍保留旧契约：`ui` 可继续以顶层 legacy shape 持久化，但运行时只认 `system.ui`
 
 ### `ConfigApplier` (`lumina/config_apply.py`)
 
@@ -66,6 +71,14 @@
 - `ConfigApplier` 只处理“已经确认可安全热更新”的副作用
 - 不能把 merge / validate / write 逻辑重新塞回 router
 - 也不要重新引入旧式的 section-based runtime update helper
+
+### Router PATCH body
+
+`PATCH /v1/config` 的请求体不再直接复用完整 `Config` model，而是使用专用 `ConfigPatch`：
+
+- 显式允许 `provider/system/digest/document/vision/audio/ui` 这些顶层 patch key
+- `provider.backend` 这类 computed 字段会在写盘前剔除
+- 路由层不再假装“完整配置重验一次”，只负责接收合法 patch，再交给 `ConfigStore`
 
 ## 4. 当前支持热更新的字段
 
@@ -136,7 +149,7 @@
 新增字段时，优先按以下顺序检查：
 
 1. `lumina/config.py`
-   定义 schema、默认值、兼容迁移逻辑
+   定义 schema、默认值，并把兼容迁移收进 `normalize_config_data()`
 2. `lumina/config_runtime.py`
    处理 patch merge、规范化写盘、`restart_required` 判定
 3. `lumina/config_apply.py`
@@ -156,4 +169,5 @@
 - 不要把“保存成功”误写成“热更新成功”
 - 不要只改 `config.json` 模板而不改 Pydantic schema
 - 不要在 router 里手写某个 section 的局部 merge 逻辑
+- 不要同时维护 `Config.load()` 和 PATCH 路径两套 normalize 规则
 

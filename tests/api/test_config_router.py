@@ -14,7 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from lumina.config import reset_config
 from lumina.config_runtime import set_active_config_path
-from tests.config_helpers import app_config, reset_config_state
+from tests.config_helpers import legacy_app_config_payload as app_config, reset_config_state
 
 
 @pytest.fixture(autouse=True)

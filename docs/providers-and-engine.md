@@ -21,6 +21,7 @@ HTTP / CLI
 - `lumina/providers/local.py`
 - `lumina/providers/local_offload.py`
 - `lumina/providers/local_vlm.py`
+- `lumina/providers/message_parts.py`
 - `lumina/providers/mlx_loader.py`
 - `lumina/engine/request_history.py`
 - `lumina/api/sse.py`
@@ -42,6 +43,8 @@ Provider 工厂在 `lumina/cli/server.py:build_provider()`。
 
 因此不要把 `LocalProvider` 改回顶层静态 import。
 
+`BaseProvider` 现在还提供统一的 `metadata` 接口，`LLMEngine` 记录请求历史时不再靠类名或属性名猜 provider 类型 / model。
+
 ## 3. `LocalProvider` 与 batching
 
 `LocalProvider` 负责：
@@ -51,7 +54,7 @@ Provider 工厂在 `lumina/cli/server.py:build_provider()`。
 - 管理 prompt cache
 - 执行 continuous batching
 
-当前结构上，`local.py` 主要保留生命周期、调度和公共接口；图片输入规范化、VLM prompt 组装、VLM sync/stream 推理已拆到 `local_vlm.py`，CPU embedding / offload 前向分支已抽到 `local_offload.py`，避免 legacy prefill、batched prefill、decode、SystemPromptCache 各自维护一份分叉逻辑。
+当前结构上，`local.py` 主要保留生命周期、调度和公共接口；图片输入规范化、VLM prompt 组装、VLM sync/stream 推理已拆到 `local_vlm.py`，CPU embedding / offload 前向分支已抽到 `local_offload.py`，messages 遍历与 LM/history/VLM 三条文本拆分路径已抽到 `message_parts.py`，避免 legacy prefill、batched prefill、decode、SystemPromptCache 各自维护一份分叉逻辑。
 
 batching 设计要点：
 
@@ -172,6 +175,14 @@ Config
 - 不会出现“文本请求一套模型、图片请求另一套模型”的分叉
 - VLM 请求的内存行为和启动时记录的 offload 配置保持一致
 
+此外，图片请求与纯文本请求现在共用同一套 `messages` part 遍历逻辑：
+
+- `BaseProvider` 用它把 messages 降为 provider 文本
+- `LLMEngine` 用它把 messages 记录成 history 文本
+- `LocalVlmAdapter` 用它抽出文本部分和图片引用
+
+如果后续要新增新的 part 类型，优先从 `lumina/providers/message_parts.py` 改，而不是分别改三个调用点。
+
 ## 8. VLM 兼容层要点
 
 `mlx_vlm` 与 `mlx_lm` 在几个地方并不兼容，LocalProvider 已做过桥接：
@@ -209,6 +220,7 @@ Config
 3. VLM 请求是否仍复用启动时已加载的单模型路径
 4. 新模型架构下 offload 关键字是否仍能命中 vision / audio 组件
 5. `offload_embedding` 在 BatchGenerator 路径与 legacy 路径上的可观测差异
+6. `messages` 新 part 类型是否同时覆盖 provider/history/VLM 三条出口
 
 排查时优先看：
 
@@ -219,6 +231,7 @@ Config
 - `lumina/providers/local.py`
 - `lumina/providers/local_offload.py`
 - `lumina/providers/local_vlm.py`
+- `lumina/providers/message_parts.py`
 
 ## 11. 最近验证结果
 

@@ -89,9 +89,73 @@ COLLECTOR_DEFS: list[dict[str, str]] = [
     {"key": "collect_calendar", "label": "日历", "icon": "📅", "filter_key": "calendar"},
     {"key": "collect_markdown_notes", "label": "Markdown", "icon": "📄", "filter_key": "markdown"},
     {"key": "collect_ai_queries", "label": "AI", "icon": "🤖", "filter_key": "ai"},
+    {"key": "collect_recent_file_activities", "label": "最近文件", "icon": "🗂", "filter_key": "files"},
 ]
 COLLECTOR_META = {item["key"]: item for item in COLLECTOR_DEFS}
-FILTER_ICON_META = {item["filter_key"]: item["icon"] for item in COLLECTOR_DEFS}
+TIMELINE_COLOR_META = {
+    "shell": "bg-indigo-500",
+    "git": "bg-emerald-500",
+    "clipboard": "bg-amber-500",
+    "browser": "bg-blue-500",
+    "notes": "bg-purple-500",
+    "calendar": "bg-rose-500",
+    "markdown": "bg-cyan-500",
+    "ai": "bg-fuchsia-500",
+    "files": "bg-orange-500",
+}
+
+
+def _runtime_collector_keys() -> list[str]:
+    from lumina.services.digest.collectors import COLLECTORS
+
+    return [fn.__name__ for fn in COLLECTORS]
+
+
+def _default_collector_label(key: str) -> str:
+    base = key.removeprefix("collect_").replace("_", " ").strip()
+    return base.title() if base else key
+
+
+def _default_collector_filter_key(key: str) -> str:
+    return key.removeprefix("collect_").replace("_", "-").strip("-") or "collector"
+
+
+def resolve_collector_meta(key: str) -> dict[str, str]:
+    item = COLLECTOR_META.get(key)
+    if item is not None:
+        return item
+    return {
+        "key": key,
+        "label": _default_collector_label(key),
+        "icon": "📦",
+        "filter_key": _default_collector_filter_key(key),
+    }
+
+
+def collector_timeline_class(filter_key: Optional[str]) -> str:
+    if not filter_key:
+        return "bg-zinc-400"
+    return TIMELINE_COLOR_META.get(filter_key, "bg-zinc-400")
+
+
+def _collector_match_terms(meta: dict[str, str]) -> list[str]:
+    terms = [
+        meta.get("filter_key", ""),
+        meta.get("label", ""),
+        meta.get("key", "").removeprefix("collect_"),
+    ]
+    return [term.lower() for term in terms if term]
+
+
+def list_runtime_collectors(collectors: Optional[dict[str, Any]] = None) -> list[str]:
+    keys = _runtime_collector_keys()
+    seen = set(keys)
+    if isinstance(collectors, dict):
+        for key in collectors:
+            if isinstance(key, str) and key not in seen:
+                keys.append(key)
+                seen.add(key)
+    return keys
 
 
 def system_prompt_items(prompts: Optional[dict]) -> list[dict[str, str]]:
@@ -112,15 +176,17 @@ def system_prompt_items(prompts: Optional[dict]) -> list[dict[str, str]]:
 def collector_sources(collectors: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
     collectors = collectors if isinstance(collectors, dict) else {}
     sources: list[dict[str, Any]] = []
-    for item in COLLECTOR_DEFS:
-        info = collectors.get(item["key"], {})
+    for key in list_runtime_collectors(collectors):
+        item = resolve_collector_meta(key)
+        info = collectors.get(key, {})
         chars = info.get("chars", 0) if isinstance(info, dict) else 0
         active = chars > 0
         sources.append(
             {
-                "key": item["key"],
+                "key": key,
                 "name": item["label"],
                 "icon": item["icon"],
+                "filter_key": item["filter_key"],
                 "active": active,
                 "chars": chars,
                 "detail": (
@@ -135,6 +201,8 @@ def collector_sources(collectors: Optional[dict[str, Any]]) -> list[dict[str, An
 
 def digest_icon_for_text(text: str) -> tuple[str, Optional[str]]:
     lowered = text.lower()
-    filter_key = next((item["filter_key"] for item in COLLECTOR_DEFS if item["filter_key"] in lowered), None)
-    icon = FILTER_ICON_META.get(filter_key, "📋") if filter_key else "📋"
-    return icon, filter_key
+    for key in list_runtime_collectors():
+        meta = resolve_collector_meta(key)
+        if any(term in lowered for term in _collector_match_terms(meta)):
+            return meta["icon"], meta["filter_key"]
+    return "📋", None

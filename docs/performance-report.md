@@ -1,22 +1,20 @@
 # Lumina 性能基准测试报告
 
-本报告记录 Lumina 推理引擎在 Apple Silicon 上的性能表现，重点验证 **L1/L2 显存分层技术 (Hybrid Offloading)** 的实际效果。
+本报告记录 Lumina 在 Apple Silicon 上的 HTTP 端到端推理表现，重点看三件事：文本首字延迟、视觉链路开销，以及并发吞吐。
 
 ---
 
-## 1. 测试方法
+## 1. 测试口径
 
-### 测试路径
-
-所有指标均通过 **HTTP `/v1/chat/completions` (SSE 流式)** 采集，与真实用户请求路径完全一致：
+所有指标都通过 **HTTP `/v1/chat/completions` (SSE 流式)** 采集，走真实用户路径：
 
 ```
 HTTP 客户端 → FastAPI → LocalProvider → mlx_vlm (VLM) / mlx_lm (LM) → Metal GPU
 ```
 
-旧版 `engine_performance.py` 直接调用 `mlx_lm.load` + 裸 `model()` 推理，绕开了 VLM 分发、chat template、KV cache 管理等关键路径，数据仅供参考。新脚本 `http_bench.py` 替代了它。
+旧版 `engine_performance.py` 已不再作为主报告口径；当前以 `http_bench.py` / `run_matrix.py` 的 HTTP 路径结果为准。
 
-### 测试脚本
+### 测试命令
 
 ```bash
 # 启动服务（另开终端）
@@ -27,7 +25,18 @@ uv run python tests/benchmarks/http_bench.py
 uv run python tests/benchmarks/http_bench.py --rounds 5 --skip-vision
 ```
 
-### 指标定义
+### 固定输入
+
+这里不用公开数据集，而是统一使用脚本内固定构造的最小可复现实验输入。后续即使补充多套硬件环境，也尽量保持这一组输入不变，方便横向比较：
+
+- **text-only**：单轮用户消息 `"Explain why local LLMs are secure."`
+- **vision**：脚本运行时用 Pillow 生成一张 **64x64 纯色 RGB PNG**，颜色为 `(100, 149, 237)`，再以内联 `data:` URL 发给 `/v1/chat/completions`
+- **vision 文本提示**：`"What color is this image? One word."`
+- **concurrency=4**：4 个并发请求共享同一文本 prompt：`"Write a short paragraph about AI privacy."`
+
+这组视觉测试更接近“最小图片理解回路”和 Vision Encoder 冷热启动开销，不是复杂图片理解 benchmark。
+
+### 指标
 
 | 指标 | 说明 |
 | :--- | :--- |
@@ -37,74 +46,66 @@ uv run python tests/benchmarks/http_bench.py --rounds 5 --skip-vision
 
 ### 测试环境
 
-- **硬件**: Apple Silicon Mac (M-series)
-- **软件**: Lumina v0.8.5, mlx_vlm 0.4.4, mlx_lm 0.31.x, macOS 14+
-- **加载模式**: Hybrid（默认）— `offload_embedding=true`, `offload_vision=true`, `offload_audio=true`
+本报告允许记录多套硬件环境，但默认要求测试数据保持同一套脚本输入。
+
+通用约束：
+
+- **软件**: Lumina v0.8.5
+- **加载模式**: 本节矩阵同时包含 `Baseline（全部不 offload）` 与 `Hybrid（offload_embedding/vision/audio=true）`
 - **测试方式**: 每项热跑 4 轮取均值，首轮预热不计入统计
+
+本轮已记录环境：
+
+| 环境 | 硬件 | 系统 | 运行库 |
+| :--- | :--- | :--- | :--- |
+| Env A | Apple M3 Pro, 18GB 统一内存 | macOS 14.4 (`23E214`) | `mlx 0.31.1`, `mlx_lm 0.31.2`, `mlx_vlm 0.4.4` |
 
 ---
 
-## 2. 测试结果：Qwen3.5-0.8B-4bit（当前默认模型）
+## 2. 测试结果
 
-### 2.1 纯文本推理（text-only）
+### 2.1 Env A（Apple M3 Pro / 18GB）
 
-| 模式 | TTFT 均值 | TTFT 区间 | TPOT | 说明 |
-| :--- | :--- | :--- | :--- | :--- |
-| Hybrid（默认） | **43ms** | 36–52ms | **7.7ms** | offload_embedding/vision/audio=true |
+#### 2.1.1 核心对比矩阵
 
-TTFT 区间反映同一 system prompt 下的 KV cache 命中情况（hit 时更低）。TPOT 7.7ms ≈ **130 tok/s** decode 速度，对 0.8B 4-bit 模型属正常水平。
+| 模型 | 模式 | text TTFT | text TPOT | vision 冷启动 TTFT | vision 热跑 TTFT | 4 并发 tok/s |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Qwen3.5-0.8B-4bit | Baseline（全部不 offload） | **37.2ms** | 8.4ms | **102.9ms** | **105.6ms** | **256.8** |
+| Qwen3.5-0.8B-4bit | Hybrid | 35.7ms | **8.2ms** | 108.7ms | 206.6ms | 204.3 |
+| Gemma-4-E2B-IT-4bit | Baseline（全部不 offload） | 46.2ms | 19.9ms | **873.6ms** | **875.9ms** | **138.5** |
+| Gemma-4-E2B-IT-4bit | Hybrid | **36.9ms** | **16.6ms** | 934.1ms | 934.0ms | 132.2 |
 
-### 2.2 图片+文本推理（vision）
+结论：
 
-Vision Encoder 在 offload_vision=true 时留在磁盘，首次调用需换入内存：
-
-| 轮次 | TTFT | 说明 |
-| :--- | :--- | :--- |
-| 冷启动（首次） | **122ms** | Vision Encoder 从磁盘 mmap 换入 Metal |
-| 热跑均值 | **119ms** | Vision Encoder 已在 Metal cache，接近全量加载水平 |
-
-VLM 推理路径修复说明（v0.8.5+）：
-- **正确的 cache 结构**：Qwen3.5 是 Mamba-Hybrid 架构，需要混合 `ArraysCache`/`KVCache`。此前误用 `mlx_lm.make_prompt_cache` 生成的全 `KVCache` 结构，导致 `'KVCache' object is not subscriptable`。现在通过 `model.language_model.make_cache()` 获得正确结构。
-- **`LanguageModelOutput` 解包**：mlx_vlm 的 `LanguageModel.__call__` 返回 `LanguageModelOutput(logits=...)` 而非裸 array，所有推理调用点已通过 `_extract_logits()` 统一解包。
-
-### 2.3 并发吞吐（concurrency=4）
-
-| 并发数 | 总 tok/s | 平均 TTFT | 完成率 |
-| :--- | :--- | :--- | :--- |
-| 4 | **275 tok/s** | 73ms | 4/4 |
-
-4 路并发下总吞吐 275 tok/s，平均 TTFT 73ms（vs 单路 43ms），并发开销约 70%——符合单 GPU 串行 decode 的预期（batch size=1 的物理限制）。
+- 在这台机器和这组固定输入上，Qwen 的两种模式差距不大，但 `Baseline` 的视觉与并发表现反而更好；Hybrid 不一定更快，更像是在为更大模型换显存空间。
+- Gemma 在 `Hybrid` 下文本首字和 TPOT 更好，但视觉和并发吞吐仍略慢于 `Baseline`。
+- 若目标是更高 decode 吞吐和更轻的视觉链路，当前默认 Qwen 仍更合适。
+- 若目标是验证 Gemma 4 在 Lumina 主路径中的可用性，当前结果已经证明它能正常跑通 `text + vision + concurrency`。
+- Gemma 的最小图片样本回答稳定为 `Blue`，说明当前 `mlx-vlm` 主路径工作正常。
 
 ---
 
 ## 3. 显存分层效果
 
-### Hybrid vs Baseline 对比（Qwen3.5-0.8B）
+当前主报告以 HTTP 路径结果为准。`run_matrix.py` 已改为自动拉起临时服务并调用 `http_bench.py`，不再误走 `mlx_lm.load()` 低层路径。
 
-旧 `engine_performance.py`（非 HTTP 路径，仅供参考）：
+下面只看本次实际测过的两个模型，比较 `Hybrid` 相对 `Baseline（全部不 offload）` 的变化：
 
-| 模式 | TTFT | TPOT | Metal 显存 |
-| :--- | :--- | :--- | :--- |
-| Baseline（全量加载） | ~65ms | ~7.9ms | 405MB |
-| Hybrid（offload） | ~57ms | ~7.5ms | 405MB |
+| 模型 | text TTFT | text TPOT | vision 冷启动 TTFT | vision 热跑 TTFT | 4 并发 tok/s |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Qwen3.5-0.8B-4bit | `-1.5ms` | `-0.2ms` | `+5.8ms` | `+101.0ms` | `-52.5` |
+| Gemma-4-E2B-IT-4bit | `-9.3ms` | `-3.3ms` | `+60.5ms` | `+58.1ms` | `-6.3` |
 
-Qwen3.5-0.8B 极小（0.8B 4-bit ≈ 450MB），Embedding 层占比低，Hybrid 模式下显存节省不明显。**对 2B+ 模型效果更显著**（见下节）。
+这里的正负号含义是：负数表示 `Hybrid` 比 `Baseline` 更快，正数表示更慢；`4 并发 tok/s` 为负数表示吞吐下降。
 
-### 预期效果（按模型规模）
-
-| 模型规模 | offload_embedding | offload_vision | 预期显存节省 | TTFT 增量 |
-| :--- | :--- | :--- | :--- | :--- |
-| 0.8B（如 Qwen3.5） | 可忽略 | 可忽略 | < 50MB | < 10ms |
-| 2B（如 Gemma 4 2B） | ~200MB | ~500MB | ~700MB | 100–300ms（冷） |
-| 7B+ | ~500MB | ~1GB+ | 1–2GB | 200–500ms（冷） |
+从这两组实测看，Qwen 基本不适合为了分层去牺牲速度；Gemma 的 Hybrid 更像是拿显存换一点文本侧收益。
 
 ---
 
-## 4. 已知问题与局限
+## 4. 局限
 
-**vision TPOT 测试不准确**：当前视觉测试用 prompt "What color is this image?" 只回复一个词，decode 步数为 0–1，无法统计有效 TPOT。如需测量 VLM decode 速度，需换用需要长回复的 prompt（待改进）。
-
-**Metal 显存计数**：`mx.get_active_memory()` 返回当前活跃显存，不含 Metal driver 保留区域。真实峰值可通过 Instruments / `sudo powermetrics` 观察。
+- **vision TPOT 不准确**：当前视觉测试只要求一个词，decode 步数太少，不适合测 VLM 持续生成速度。
+- **Metal 显存不是完整峰值**：`mx.get_active_memory()` 只统计当前活跃显存，不含 Metal driver 保留区域。
 
 ---
 
@@ -114,16 +115,16 @@ Qwen3.5-0.8B 极小（0.8B 4-bit ≈ 450MB），Embedding 层占比低，Hybrid 
 # 确保服务运行中
 uv run lumina server
 
-# 完整基准（另开终端）
+# 单机 HTTP 基准
 uv run python tests/benchmarks/http_bench.py --rounds 4
 
-# 仅文本，跳过视觉和并发
-uv run python tests/benchmarks/http_bench.py --skip-vision --skip-concurrent
+# 批量矩阵（自动拉起临时服务）
+uv run python tests/benchmarks/run_matrix.py --rounds 4
 
-# 指定非默认地址
-uv run python tests/benchmarks/http_bench.py --url http://127.0.0.1:31821 --rounds 5
+# 仅文本
+uv run python tests/benchmarks/http_bench.py --skip-vision --skip-concurrent
 ```
 
 ---
 
-*最后更新: 2026-04-21 | 测试模型: Qwen3.5-0.8B-4bit (mlx_vlm hybrid mode)*
+*最后更新: 2026-04-22 | Env A: Qwen3.5-0.8B-4bit / Gemma-4-E2B-IT-4bit（含 Gemma HTTP 实测与 `run_matrix.py` HTTP 主路径修复）*

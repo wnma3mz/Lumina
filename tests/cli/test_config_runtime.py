@@ -1,10 +1,10 @@
 from lumina.config import Config
 from lumina.config_runtime import (
-    _build_runtime_candidate,
+    ConfigStore,
     patch_requires_restart,
     serialize_runtime_config,
 )
-from tests.config_helpers import minimal_config, write_config
+from tests.config_helpers import legacy_minimal_config_payload as minimal_config, write_config
 
 
 def test_patch_requires_restart_for_host_change(tmp_path):
@@ -87,19 +87,19 @@ def test_patch_requires_restart_false_for_openai_subconfig_on_openai_backend(tmp
     ) is False
 
 
-def test_build_runtime_candidate_maps_legacy_ui_to_system_ui(tmp_path):
-    cfg = Config.load(write_config(tmp_path, minimal_config()))
-    persisted = minimal_config()
-    persisted["ui"] = {"home": {"enabled_tabs": ["document", "settings"]}}
+def test_config_store_patch_keeps_legacy_ui_on_disk_and_runtime_system_ui(tmp_path):
+    path = write_config(tmp_path, minimal_config())
+    cfg = Config.load(path)
+    store = ConfigStore(path)
 
-    candidate = _build_runtime_candidate(
-        cfg,
-        patch_dict={"ui": {"home": {"enabled_tabs": ["settings", "document"]}}},
-        persisted_data=persisted,
+    result = store.apply_patch(
+        {"ui": {"home": {"enabled_tabs": ["settings", "document"]}}},
+        cfg=cfg,
     )
 
-    assert "ui" not in candidate
-    assert candidate["system"]["ui"]["home"]["enabled_tabs"] == ["document", "settings"]
+    assert result.new_cfg.system.ui.home.enabled_tabs == ["settings", "document"]
+    written = Config.load(path)
+    assert written.system.ui.home.enabled_tabs == ["settings", "document"]
 
 
 def test_serialize_runtime_config_uses_runtime_sections_only(tmp_path):

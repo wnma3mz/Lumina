@@ -5,6 +5,8 @@ import io
 import threading
 from typing import Any, Optional
 
+from .message_parts import to_vlm_messages_and_images
+
 try:
     from mlx_vlm import generate as vlm_generate
     from mlx_vlm.generate import stream_generate as vlm_stream_generate
@@ -104,38 +106,11 @@ class LocalVlmAdapter:
         messages: list[dict[str, Any]],
         system: Optional[str],
     ) -> tuple[list[dict[str, str]], list[Any]]:
-        vlm_messages: list[dict[str, str]] = []
-        image_inputs: list[Any] = []
-        if system:
-            vlm_messages.append({"role": "system", "content": system})
-        for message in messages:
-            role = str(message.get("role", "user"))
-            content = message.get("content", "")
-            if isinstance(content, str):
-                vlm_messages.append({"role": role, "content": content})
-                continue
-            if not isinstance(content, list):
-                raise TypeError("消息 content 格式不支持")
-            text_parts: list[str] = []
-            for part in content:
-                if not isinstance(part, dict):
-                    continue
-                part_type = part.get("type")
-                if part_type == "text":
-                    text = str(part.get("text", "")).strip()
-                    if text:
-                        text_parts.append(text)
-                    continue
-                if part_type == "image_url":
-                    image_url = part.get("image_url") or {}
-                    image_ref = str(image_url.get("url", "")).strip()
-                    image_inputs.append(self.normalize_image_input(image_ref))
-                    continue
-                raise ValueError(f"不支持的消息内容类型：{part_type}")
-            vlm_messages.append({"role": role, "content": "\n".join(text_parts).strip()})
-        if not image_inputs:
-            raise ValueError("未找到图片输入")
-        return vlm_messages, image_inputs
+        return to_vlm_messages_and_images(
+            messages,
+            system=system,
+            normalize_image_input=self.normalize_image_input,
+        )
 
     def prepare_prompt(
         self,

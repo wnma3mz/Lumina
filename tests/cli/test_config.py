@@ -11,7 +11,11 @@ import pytest
 from lumina.config import Config, reset_config
 from lumina.config_runtime import set_active_config_path
 from lumina.platform_support import runtime as runtime_mod
-from tests.config_helpers import minimal_config, reset_config_state, write_config
+from tests.config_helpers import (
+    legacy_minimal_config_payload as minimal_config,
+    reset_config_state,
+    write_config,
+)
 
 
 @pytest.fixture(autouse=True)

@@ -228,6 +228,22 @@ def _default_provider_type() -> str:
     return DEFAULT_PROVIDER_TYPE
 
 
+def _coerce_int(value: Any, default: int, *, field_path: str) -> int:
+    raw = default if value in (None, "") else value
+    try:
+        return int(raw)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"config.json {field_path} 字段类型错误（期望整数）: {exc}") from exc
+
+
+def _coerce_float(value: Any, default: float, *, field_path: str) -> float:
+    raw = default if value in (None, "") else value
+    try:
+        return float(raw)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"config.json {field_path} 字段类型错误（期望数字）: {exc}") from exc
+
+
 class ProviderConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
     type: str = Field(default_factory=_default_provider_type)  # "local" | "llama_cpp" | "openai"
@@ -266,6 +282,241 @@ class ProviderConfig(BaseModel):
 
 
 from lumina.services.digest.config import DigestConfig  # noqa: E402
+
+
+def normalize_config_data(data: Any, *, env: Optional[dict[str, str]] = None) -> dict[str, Any]:
+    env_map = os.environ if env is None else env
+    if not isinstance(data, dict):
+        data = {}
+    else:
+        data = json.loads(json.dumps(data))
+
+    p = data.setdefault("provider", {})
+    if not isinstance(p, dict):
+        p = {}
+        data["provider"] = p
+    oa = p.setdefault("openai", {})
+    if not isinstance(oa, dict):
+        oa = {}
+        p["openai"] = oa
+    lc = p.setdefault("llama_cpp", {})
+    if not isinstance(lc, dict):
+        lc = {}
+        p["llama_cpp"] = lc
+    sc = p.get("sampling", {}) if isinstance(p.get("sampling"), dict) else {}
+
+    req_type = env_map.get("LUMINA_PROVIDER_TYPE") or p.get("type", _default_provider_type())
+    p["type"] = normalize_provider_type(req_type)
+    p["model_path"] = resolve_local_model_path(
+        env_map.get("LUMINA_MODEL_PATH") or p.get("model_path"),
+        p["type"],
+    )
+    lc["model_path"] = resolve_local_model_path(
+        lc.get("model_path") or p["model_path"],
+        "llama_cpp",
+    )
+    p["sampling"] = SamplingConfig.model_validate(sc).model_dump()
+
+    oa["base_url"] = env_map.get("LUMINA_OPENAI_BASE_URL") or oa.get("base_url", "")
+    oa["api_key"] = env_map.get("LUMINA_OPENAI_API_KEY") or oa.get("api_key", "")
+    oa["model"] = env_map.get("LUMINA_OPENAI_MODEL") or oa.get("model", "")
+
+    lc["n_gpu_layers"] = _coerce_int(
+        lc.get("n_gpu_layers", -1),
+        -1,
+        field_path="provider.llama_cpp.n_gpu_layers",
+    )
+    lc["n_ctx"] = _coerce_int(
+        lc.get("n_ctx", 4096),
+        4096,
+        field_path="provider.llama_cpp.n_ctx",
+    )
+
+    sys_p = data.get("system_prompts", {})
+    if "prompts" not in p or not isinstance(p["prompts"], dict):
+        p["prompts"] = {}
+    p["prompts"]["chat"] = p["prompts"].get("chat", sys_p.get("chat", "You are a helpful assistant."))
+
+    sys_cfg = data.setdefault("system", {})
+    if not isinstance(sys_cfg, dict):
+        sys_cfg = {}
+        data["system"] = sys_cfg
+    srv = sys_cfg.setdefault("server", {})
+    if not isinstance(srv, dict):
+        srv = {}
+        sys_cfg["server"] = srv
+
+    srv_old = data.get("server", {})
+    if isinstance(srv_old, dict) and not srv:
+        srv.update(srv_old)
+
+    srv["host"] = env_map.get("LUMINA_HOST") or srv.get("host") or data.get("host", "127.0.0.1")
+    srv["port"] = _coerce_int(
+        env_map.get("LUMINA_PORT") or srv.get("port") or data.get("port", 31821),
+        31821,
+        field_path="system.server.port",
+    )
+    srv["log_level"] = env_map.get("LUMINA_LOG_LEVEL") or srv.get("log_level") or data.get("log_level", "INFO")
+
+    desktop = sys_cfg.setdefault("desktop", {})
+    if not isinstance(desktop, dict):
+        desktop = {}
+        sys_cfg["desktop"] = desktop
+    if not desktop:
+        d_old = data.get("desktop", {})
+        if isinstance(d_old, dict):
+            desktop.update(d_old)
+    if "menubar_enabled" not in desktop:
+        desktop["menubar_enabled"] = True
+
+    rh = sys_cfg.setdefault("request_history", {})
+    if not isinstance(rh, dict):
+        rh = {}
+        sys_cfg["request_history"] = rh
+    if not rh:
+        rh_old = data.get("request_history", {})
+        if isinstance(rh_old, dict):
+            rh.update(rh_old)
+
+    branding = sys_cfg.setdefault("branding", {})
+    if not isinstance(branding, dict):
+        branding = {}
+        sys_cfg["branding"] = branding
+    if not branding:
+        branding_old = data.get("branding", {})
+        if isinstance(branding_old, dict):
+            branding.update(branding_old)
+
+    branding["username"] = str(branding.get("username", "") or "").strip()
+    branding["slogans"] = [str(item).strip() for item in branding.get("slogans", []) if str(item).strip()]
+
+    ui = sys_cfg.setdefault("ui", {})
+    if not isinstance(ui, dict):
+        ui = {}
+        sys_cfg["ui"] = ui
+    if not ui:
+        ui_old = data.get("ui", {})
+        if isinstance(ui_old, dict):
+            ui.update(ui_old)
+
+    d = data.setdefault("digest", {})
+    if not isinstance(d, dict):
+        d = {}
+        data["digest"] = d
+    home = ui.get("home", {})
+    if not isinstance(home, dict):
+        home = {}
+
+    if "enabled" not in d:
+        if "digest_enabled" in home:
+            d["enabled"] = bool(home.get("digest_enabled"))
+        else:
+            d["enabled"] = False
+
+    d["history_hours"] = _coerce_float(
+        d.get("history_hours", 24.0),
+        24.0,
+        field_path="digest.history_hours",
+    )
+    d["refresh_hours"] = _coerce_float(
+        d.get("refresh_hours", 1.0),
+        1.0,
+        field_path="digest.refresh_hours",
+    )
+    d["notify_time"] = str(d.get("notify_time", "20:00"))
+    d["weekly_report_day"] = max(
+        0,
+        min(6, _coerce_int(d.get("weekly_report_day", 0), 0, field_path="digest.weekly_report_day")),
+    )
+    d["monthly_report_day"] = max(
+        1,
+        min(28, _coerce_int(d.get("monthly_report_day", 1), 1, field_path="digest.monthly_report_day")),
+    )
+    d["ai_queries_max_source_chars"] = max(
+        1,
+        _coerce_int(
+            d.get("ai_queries_max_source_chars", 4000),
+            4000,
+            field_path="digest.ai_queries_max_source_chars",
+        ),
+    )
+    if "prompts" not in d or not isinstance(d["prompts"], dict):
+        d["prompts"] = {}
+    dp = d["prompts"]
+    dp["digest"] = dp.get("digest", sys_p.get("digest", ""))
+    dp["daily_report"] = dp.get("daily_report", sys_p.get("daily_report", ""))
+    dp["weekly_report"] = dp.get("weekly_report", sys_p.get("weekly_report", ""))
+    dp["monthly_report"] = dp.get("monthly_report", sys_p.get("monthly_report", ""))
+    d["sampling"] = SamplingConfig.model_validate(d.get("sampling", {})).model_dump()
+
+    doc = data.setdefault("document", {})
+    if not isinstance(doc, dict):
+        doc = {}
+        data["document"] = doc
+    if "enabled" not in doc:
+        doc["enabled"] = bool(doc.get("enabled", home.get("document_enabled", True)))
+    doc["pdf_translation_threads"] = max(
+        1,
+        _coerce_int(
+            doc.get("pdf_translation_threads", 8),
+            8,
+            field_path="document.pdf_translation_threads",
+        ),
+    )
+    if "prompts" not in doc or not isinstance(doc["prompts"], dict):
+        doc["prompts"] = {}
+    d_p = doc["prompts"]
+    d_p["translate_to_zh"] = d_p.get("translate_to_zh", sys_p.get("translate_to_zh", ""))
+    d_p["translate_to_en"] = d_p.get("translate_to_en", sys_p.get("translate_to_en", ""))
+    d_p["summarize"] = d_p.get("summarize", sys_p.get("summarize", ""))
+    d_p["polish_zh"] = d_p.get("polish_zh", sys_p.get("polish_zh", ""))
+    d_p["polish_en"] = d_p.get("polish_en", sys_p.get("polish_en", ""))
+    doc["sampling"] = SamplingConfig.model_validate(doc.get("sampling", {})).model_dump()
+
+    vis = data.setdefault("vision", {})
+    if not isinstance(vis, dict):
+        vis = {}
+        data["vision"] = vis
+    if "enabled" not in vis:
+        vis["enabled"] = bool(vis.get("enabled", home.get("image_enabled", home.get("lab_enabled", True))))
+    vis["max_image_mb"] = max(
+        1,
+        _coerce_int(vis.get("max_image_mb", 12), 12, field_path="vision.max_image_mb"),
+    )
+    vis["enabled_modules"] = normalize_image_modules(
+        vis.get("enabled_modules", home.get("image_modules", home.get("lab_modules", [])))
+    )
+    if "prompts" not in vis or not isinstance(vis["prompts"], dict):
+        vis["prompts"] = {}
+    v_p = vis["prompts"]
+    v_p["image_ocr"] = v_p.get("image_ocr", sys_p.get("image_ocr", ""))
+    v_p["image_caption"] = v_p.get("image_caption", sys_p.get("image_caption", ""))
+
+    aud = data.setdefault("audio", {})
+    if not isinstance(aud, dict):
+        aud = {}
+        data["audio"] = aud
+    if "enabled" not in aud:
+        aud["enabled"] = bool(aud.get("enabled", home.get("audio_enabled", False)))
+    aud["whisper_model"] = resolve_whisper_model(
+        env_map.get("LUMINA_WHISPER_MODEL") or aud.get("whisper_model") or data.get("whisper_model")
+    )
+    pt = aud.setdefault("ptt", {})
+    if not isinstance(pt, dict):
+        pt = {}
+        aud["ptt"] = pt
+    if not pt:
+        pt_old = data.get("ptt", {})
+        if isinstance(pt_old, dict):
+            pt.update(pt_old)
+    if "prompts" not in aud or not isinstance(aud["prompts"], dict):
+        aud["prompts"] = {}
+    a_p = aud["prompts"]
+    a_p["asr_zh"] = a_p.get("asr_zh", sys_p.get("asr_zh", ""))
+    a_p["asr_en"] = a_p.get("asr_en", sys_p.get("asr_en", ""))
+    a_p["live_translate"] = a_p.get("live_translate", sys_p.get("live_translate", ""))
+
+    return data
 
 class Config(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -311,6 +562,10 @@ class Config(BaseModel):
     def backend(self): return self.provider.backend
 
     @classmethod
+    def from_data(cls, data: Any, *, env: Optional[dict[str, str]] = None) -> "Config":
+        return cls.model_validate(normalize_config_data(data, env=env))
+
+    @classmethod
     def load(cls, path: Optional[str] = None) -> "Config":
         cfg_path = Path(path) if path else _CONFIG_PATH
         try:
@@ -318,217 +573,7 @@ class Config(BaseModel):
                 data: dict = json.load(f)
         except Exception:
             data = {}
-            
-        if not isinstance(data, dict):
-            data = {}
-
-        # ── Migration from old config format ──────────────────────────────────
-        p = data.setdefault("provider", {})
-        if not isinstance(p, dict):
-            p = {}
-            data["provider"] = p
-        oa = p.setdefault("openai", {})
-        if not isinstance(oa, dict):
-            oa = {}
-            p["openai"] = oa
-        lc = p.setdefault("llama_cpp", {})
-        if not isinstance(lc, dict):
-            lc = {}
-            p["llama_cpp"] = lc
-        sc = p.get("sampling", {}) if isinstance(p.get("sampling"), dict) else {}
-        
-        req_type = os.environ.get("LUMINA_PROVIDER_TYPE") or p.get("type", _default_provider_type())
-        p["type"] = normalize_provider_type(req_type)
-        
-        p["model_path"] = resolve_local_model_path(
-            os.environ.get("LUMINA_MODEL_PATH") or p.get("model_path"),
-            p["type"],
-        )
-        lc["model_path"] = resolve_local_model_path(
-            lc.get("model_path") or p["model_path"],
-            "llama_cpp",
-        )
-        
-        p["sampling"] = SamplingConfig.model_validate(sc).model_dump()
-        
-        oa["base_url"] = os.environ.get("LUMINA_OPENAI_BASE_URL") or oa.get("base_url", "")
-        oa["api_key"] = os.environ.get("LUMINA_OPENAI_API_KEY") or oa.get("api_key", "")
-        oa["model"] = os.environ.get("LUMINA_OPENAI_MODEL") or oa.get("model", "")
-        
-        # BUG-14: 用户填写非数字字符串时 int() 直接抛 ValueError，服务无法启动且报错不友好
-        try:
-            lc["n_gpu_layers"] = int(lc.get("n_gpu_layers", -1))
-            lc["n_ctx"] = int(lc.get("n_ctx", 4096))
-        except (ValueError, TypeError) as exc:
-            raise ValueError(
-                f"config.json provider.llama_cpp 字段类型错误（期望整数）: {exc}"
-            ) from exc
-        
-        sys_p = data.get("system_prompts", {})
-        if "prompts" not in p or not isinstance(p["prompts"], dict):
-            p["prompts"] = {}
-        p["prompts"]["chat"] = p["prompts"].get("chat", sys_p.get("chat", "You are a helpful assistant."))
-        
-        # ── System ────────────────────────────────────────────────────────────
-        sys_cfg = data.setdefault("system", {})
-        if not isinstance(sys_cfg, dict):
-            sys_cfg = {}
-            data["system"] = sys_cfg
-        srv = sys_cfg.setdefault("server", {})
-        if not isinstance(srv, dict):
-            srv = {}
-            sys_cfg["server"] = srv
-        
-        srv_old = data.get("server", {})
-        if isinstance(srv_old, dict) and not srv:
-            srv.update(srv_old)
-        
-        srv["host"] = os.environ.get("LUMINA_HOST") or srv.get("host") or data.get("host", "127.0.0.1")
-        srv["port"] = int(os.environ.get("LUMINA_PORT") or srv.get("port") or data.get("port", 31821))
-        srv["log_level"] = os.environ.get("LUMINA_LOG_LEVEL") or srv.get("log_level") or data.get("log_level", "INFO")
-        
-        desktop = sys_cfg.setdefault("desktop", {})
-        if not isinstance(desktop, dict):
-            desktop = {}
-            sys_cfg["desktop"] = desktop
-        if not desktop:
-            d_old = data.get("desktop", {})
-            if isinstance(d_old, dict):
-                desktop.update(d_old)
-        if "menubar_enabled" not in desktop:
-            desktop["menubar_enabled"] = True
-            
-        rh = sys_cfg.setdefault("request_history", {})
-        if not isinstance(rh, dict):
-            rh = {}
-            sys_cfg["request_history"] = rh
-        if not rh:
-            rh_old = data.get("request_history", {})
-            if isinstance(rh_old, dict):
-                rh.update(rh_old)
-            
-        branding = sys_cfg.setdefault("branding", {})
-        if not isinstance(branding, dict):
-            branding = {}
-            sys_cfg["branding"] = branding
-        if not branding:
-            branding_old = data.get("branding", {})
-            if isinstance(branding_old, dict):
-                branding.update(branding_old)
-        
-        branding["username"] = str(branding.get("username", "") or "").strip()
-        branding["slogans"] = [str(item).strip() for item in branding.get("slogans", []) if str(item).strip()]
-        
-        ui = sys_cfg.setdefault("ui", {})
-        if not isinstance(ui, dict):
-            ui = {}
-            sys_cfg["ui"] = ui
-        if not ui:
-            ui_old = data.get("ui", {})
-            if isinstance(ui_old, dict):
-                ui.update(ui_old)
-            
-        # ── Digest ────────────────────────────────────────────────────────────
-        d = data.setdefault("digest", {})
-        if not isinstance(d, dict):
-            d = {}
-            data["digest"] = d
-        home = ui.get("home", {})
-        if not isinstance(home, dict):
-            home = {}
-        
-        if "enabled" not in d:
-            if "digest_enabled" in home:
-                d["enabled"] = bool(home.get("digest_enabled"))
-            else:
-                # BUG-13: 全新安装时（无 digest 段且无 digest_enabled 键）不应默认启用日报
-                # DigestConfig.enabled = False，此处保持语义一致
-                d["enabled"] = False
-                
-        d["history_hours"] = float(d.get("history_hours", 24.0))
-        d["refresh_hours"] = float(d.get("refresh_hours", 1.0))
-        d["notify_time"] = str(d.get("notify_time", "20:00"))
-        d["weekly_report_day"] = max(0, min(6, int(d.get("weekly_report_day", 0))))
-        d["monthly_report_day"] = max(1, min(28, int(d.get("monthly_report_day", 1))))
-        d["ai_queries_max_source_chars"] = max(1, int(d.get("ai_queries_max_source_chars", 4000)))
-        
-        if "prompts" not in d or not isinstance(d["prompts"], dict):
-            d["prompts"] = {}
-        dp = d["prompts"]
-        dp["digest"] = dp.get("digest", sys_p.get("digest", ""))
-        dp["daily_report"] = dp.get("daily_report", sys_p.get("daily_report", ""))
-        dp["weekly_report"] = dp.get("weekly_report", sys_p.get("weekly_report", ""))
-        dp["monthly_report"] = dp.get("monthly_report", sys_p.get("monthly_report", ""))
-        
-        ds = d.get("sampling", {})
-        d["sampling"] = SamplingConfig.model_validate(ds).model_dump()
-        
-        # ── Document ──────────────────────────────────────────────────────────
-        doc = data.setdefault("document", {})
-        if not isinstance(doc, dict):
-            doc = {}
-            data["document"] = doc
-        if "enabled" not in doc:
-            doc["enabled"] = bool(doc.get("enabled", home.get("document_enabled", True)))
-        doc["pdf_translation_threads"] = max(1, int(doc.get("pdf_translation_threads", 8)))
-        
-        if "prompts" not in doc or not isinstance(doc["prompts"], dict):
-            doc["prompts"] = {}
-        d_p = doc["prompts"]
-        d_p["translate_to_zh"] = d_p.get("translate_to_zh", sys_p.get("translate_to_zh", ""))
-        d_p["translate_to_en"] = d_p.get("translate_to_en", sys_p.get("translate_to_en", ""))
-        d_p["summarize"] = d_p.get("summarize", sys_p.get("summarize", ""))
-        d_p["polish_zh"] = d_p.get("polish_zh", sys_p.get("polish_zh", ""))
-        d_p["polish_en"] = d_p.get("polish_en", sys_p.get("polish_en", ""))
-        
-        doc_s = doc.get("sampling", {})
-        doc["sampling"] = SamplingConfig.model_validate(doc_s).model_dump()
-        
-        # ── Vision ────────────────────────────────────────────────────────────
-        vis = data.setdefault("vision", {})
-        if not isinstance(vis, dict):
-            vis = {}
-            data["vision"] = vis
-        if "enabled" not in vis:
-            vis["enabled"] = bool(vis.get("enabled", home.get("image_enabled", home.get("lab_enabled", True))))
-        vis["max_image_mb"] = max(1, int(vis.get("max_image_mb", 12)))
-        vis["enabled_modules"] = normalize_image_modules(vis.get("enabled_modules", home.get("image_modules", home.get("lab_modules", []))))
-        
-        if "prompts" not in vis or not isinstance(vis["prompts"], dict):
-            vis["prompts"] = {}
-        v_p = vis["prompts"]
-        v_p["image_ocr"] = v_p.get("image_ocr", sys_p.get("image_ocr", ""))
-        v_p["image_caption"] = v_p.get("image_caption", sys_p.get("image_caption", ""))
-        
-        # ── Audio ─────────────────────────────────────────────────────────────
-        aud = data.setdefault("audio", {})
-        if not isinstance(aud, dict):
-            aud = {}
-            data["audio"] = aud
-        if "enabled" not in aud:
-            aud["enabled"] = bool(aud.get("enabled", home.get("audio_enabled", False)))
-            
-        aud["whisper_model"] = resolve_whisper_model(
-            os.environ.get("LUMINA_WHISPER_MODEL") or aud.get("whisper_model") or data.get("whisper_model")
-        )
-        
-        pt = aud.setdefault("ptt", {})
-        if not isinstance(pt, dict):
-            pt = {}
-            aud["ptt"] = pt
-        if not pt:
-            pt_old = data.get("ptt", {})
-            if isinstance(pt_old, dict):
-                pt.update(pt_old)
-            
-        if "prompts" not in aud or not isinstance(aud["prompts"], dict):
-            aud["prompts"] = {}
-        a_p = aud["prompts"]
-        a_p["asr_zh"] = a_p.get("asr_zh", sys_p.get("asr_zh", ""))
-        a_p["asr_en"] = a_p.get("asr_en", sys_p.get("asr_en", ""))
-        a_p["live_translate"] = a_p.get("live_translate", sys_p.get("live_translate", ""))
-        
-        return cls.model_validate(data)
+        return cls.from_data(data, env=os.environ)
 
 # 全局单例
 _instance: Optional[Config] = None

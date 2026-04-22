@@ -8,8 +8,18 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, Request
-from lumina.config import Config
+from pydantic import BaseModel, ConfigDict
+
+from lumina.config import (
+    AudioConfig,
+    DocumentConfig,
+    ProviderConfig,
+    SystemConfig,
+    UIConfig,
+    VisionConfig,
+)
 from lumina.config_apply import ConfigApplier
+from lumina.services.digest.config import DigestConfig
 
 from lumina.config_runtime import (
     ConfigStore,
@@ -27,6 +37,18 @@ _config_applier = ConfigApplier()
 
 # ── Pydantic 请求体 ────────────────────────────────────────────────────────────
 
+
+class ConfigPatch(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    provider: ProviderConfig | None = None
+    system: SystemConfig | None = None
+    digest: DigestConfig | None = None
+    document: DocumentConfig | None = None
+    vision: VisionConfig | None = None
+    audio: AudioConfig | None = None
+    ui: UIConfig | None = None
+
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 
 @router.get("/v1/config")
@@ -37,7 +59,7 @@ async def get_config_api():
 
 
 @router.patch("/v1/config")
-async def patch_config_api(patch: Config, request: Request):
+async def patch_config_api(patch: ConfigPatch, request: Request):
     """
     部分更新配置，写回 ~/.lumina/config.json。
     """

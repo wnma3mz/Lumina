@@ -1,3 +1,5 @@
+"""测试配置辅助：生成持久化层使用的 legacy config payload。"""
+
 import json
 from copy import deepcopy
 
@@ -16,7 +18,7 @@ def write_config(tmp_path, data: dict) -> str:
     return str(path)
 
 
-def minimal_config() -> dict:
+def legacy_minimal_config_payload() -> dict:
     return {
         "provider": {
             "type": "local",
@@ -31,8 +33,8 @@ def minimal_config() -> dict:
     }
 
 
-def app_config() -> dict:
-    data = deepcopy(minimal_config())
+def legacy_app_config_payload() -> dict:
+    data = deepcopy(legacy_minimal_config_payload())
     data["provider"]["sampling"] = {
         "temperature": 0.6,
         "top_p": 0.95,

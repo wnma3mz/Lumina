@@ -35,16 +35,7 @@
   {% for sec in sections %}
   <div class="relative group">
     <!-- Timeline Dot -->
-    <div class="absolute -left-[43px] top-1 w-6 h-6 rounded-full 
-        {% if sec.filter_key == 'shell' %}bg-indigo-500
-        {% elif sec.filter_key == 'git' %}bg-emerald-500
-        {% elif sec.filter_key == 'clipboard' %}bg-amber-500
-        {% elif sec.filter_key == 'browser' %}bg-blue-500
-        {% elif sec.filter_key == 'notes' %}bg-purple-500
-        {% elif sec.filter_key == 'calendar' %}bg-rose-500
-        {% elif sec.filter_key == 'markdown' %}bg-cyan-500
-        {% elif sec.filter_key == 'ai' %}bg-fuchsia-500
-        {% else %}bg-zinc-400{% endif %}
+    <div class="absolute -left-[43px] top-1 w-6 h-6 rounded-full {{ sec.timeline_badge_class }}
         border-4 border-white dark:border-zinc-900 shadow-md group-hover:scale-125 transition-transform flex items-center justify-center">
         <span class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-white">{{ sec.icon }}</span>
     </div>

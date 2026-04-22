@@ -44,7 +44,10 @@ if [[ "$OS" == "Darwin" ]]; then
     if [[ "$EDITION" == "full" ]]; then
         # Full 版需要本地模型库
         HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 \
-        uv pip install --python "$INSTALL_DIR/.venv/bin/python" mlx mlx-lm
+        uv pip install --python "$INSTALL_DIR/.venv/bin/python" \
+            "mlx>=0.30.0" \
+            "mlx-lm>=0.31.2" \
+            "mlx-vlm>=0.4.4"
     fi
 
     # 安装 lumina 包

@@ -16,6 +16,7 @@ from lumina.engine.sampling import (
     DEFAULT_TOP_K,
     DEFAULT_TOP_P,
 )
+from .message_parts import messages_include_images, to_provider_text
 
 
 @dataclass(frozen=True)
@@ -39,51 +40,37 @@ class ProviderCapabilities:
     )
 
 
+@dataclass(frozen=True)
+class ProviderMetadata:
+    provider_type: str
+    model: Optional[str] = None
+
+
 class BaseProvider(ABC):
     @property
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities()
 
+    @property
+    def metadata(self) -> ProviderMetadata:
+        model = None
+        for attr in ("model", "model_path", "_model_path"):
+            value = getattr(self, attr, None)
+            if value:
+                model = str(value)
+                break
+        provider_type = type(self).__name__.removesuffix("Provider").lower()
+        return ProviderMetadata(provider_type=provider_type, model=model)
+
     @staticmethod
     def _flatten_messages(messages: list[dict[str, Any]]) -> str:
-        chunks: list[str] = []
-        for msg in messages:
-            role = str(msg.get("role", "user"))
-            content = msg.get("content", "")
-            if isinstance(content, str):
-                text = content.strip()
-                if text:
-                    chunks.append(f"{role}: {text}")
-                continue
-            if isinstance(content, list):
-                text_parts: list[str] = []
-                for part in content:
-                    if not isinstance(part, dict):
-                        continue
-                    if part.get("type") == "text":
-                        text = str(part.get("text", "")).strip()
-                        if text:
-                            text_parts.append(text)
-                        continue
-                    raise NotImplementedError("当前模型后端不支持图片输入")
-                if text_parts:
-                    chunks.append(f"{role}: {' '.join(text_parts)}")
-                continue
-            raise TypeError("消息 content 格式不支持")
-        return "\n\n".join(chunks).strip()
+        return to_provider_text(messages)
 
     def _validate_messages(self, messages: list[dict[str, Any]]) -> None:
         if not self.capabilities.supports_messages:
             raise NotImplementedError("当前模型后端不支持 messages 输入")
-        if self.capabilities.supports_image_input:
-            return
-        for msg in messages:
-            content = msg.get("content", "")
-            if not isinstance(content, list):
-                continue
-            for part in content:
-                if isinstance(part, dict) and part.get("type") == "image_url":
-                    raise NotImplementedError("当前模型后端不支持图片输入")
+        if not self.capabilities.supports_image_input and messages_include_images(messages):
+            raise NotImplementedError("当前模型后端不支持图片输入")
 
     @abstractmethod
     async def generate_stream(

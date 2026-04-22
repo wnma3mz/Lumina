@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any, AsyncIterator, Dict, Optional
 
 from lumina.providers.base import BaseProvider
+from lumina.providers.message_parts import to_history_text
 from lumina.engine.request_context import get_request_context
 from lumina.engine import request_history
 from lumina.engine.sampling import resolve_sampling
@@ -53,15 +54,10 @@ class LLMEngine:
         return self._system_prompts.get(task) or self._system_prompts.get("chat")
 
     def _provider_type(self) -> str:
-        name = type(self._provider).__name__
-        return name.removesuffix("Provider").lower()
+        return self._provider.metadata.provider_type
 
     def _provider_model(self) -> Optional[str]:
-        for attr in ("model", "model_path", "_model_path"):
-            value = getattr(self._provider, attr, None)
-            if value:
-                return str(value)
-        return None
+        return self._provider.metadata.model
 
     @staticmethod
     def _text_hash(text: Optional[str]) -> Optional[str]:
@@ -146,35 +142,7 @@ class LLMEngine:
 
     @staticmethod
     def _messages_to_history_text(messages: list[dict[str, Any]]) -> str:
-        chunks: list[str] = []
-        for msg in messages:
-            role = str(msg.get("role", "user"))
-            content = msg.get("content", "")
-            if isinstance(content, str):
-                chunks.append(f"{role}: {content}")
-                continue
-            if not isinstance(content, list):
-                continue
-            parts: list[str] = []
-            for item in content:
-                if not isinstance(item, dict):
-                    continue
-                item_type = item.get("type")
-                if item_type == "text":
-                    text = str(item.get("text", "")).strip()
-                    if text:
-                        parts.append(text)
-                elif item_type == "image_url":
-                    payload = item.get("image_url") or {}
-                    url = str(payload.get("url", ""))
-                    if url.startswith("data:"):
-                        parts.append("[image:data-url omitted]")
-                    elif url:
-                        parts.append(f"[image:{url}]")
-                    else:
-                        parts.append("[image]")
-            chunks.append(f"{role}: {' '.join(parts).strip()}")
-        return "\n\n".join(chunk for chunk in chunks if chunk.strip()).strip()
+        return to_history_text(messages)
 
     @property
     def provider_model_name(self) -> str:

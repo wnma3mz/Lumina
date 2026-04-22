@@ -848,6 +848,31 @@ def test_collector_sources_only_exposes_activity_state():
     assert by_key["collect_ai_queries"]["detail"] == "最近 24 小时无活动"
 
 
+def test_collector_sources_falls_back_for_runtime_keys_without_ui_override():
+    from lumina.api.ui_meta import collector_sources
+
+    sources = collector_sources(
+        {
+            "collect_custom_plugin": {"chars": 12},
+        }
+    )
+    by_key = {item["key"]: item for item in sources}
+
+    assert by_key["collect_custom_plugin"]["name"] == "Custom Plugin"
+    assert by_key["collect_custom_plugin"]["icon"] == "📦"
+    assert by_key["collect_custom_plugin"]["filter_key"] == "custom-plugin"
+    assert by_key["collect_custom_plugin"]["active"] is True
+
+
+def test_digest_icon_for_text_matches_collector_label():
+    from lumina.api.ui_meta import digest_icon_for_text
+
+    icon, filter_key = digest_icon_for_text("## 最近文件活动\n发现了新的下载文件")
+
+    assert icon == "🗂"
+    assert filter_key == "files"
+
+
 # ── CollectorRunner ────────────────────────────────────────────────────────────
 
 @pytest.mark.anyio
@@ -929,6 +954,7 @@ def test_collectors_auto_discovered():
         "collect_calendar",
         "collect_markdown_notes",
         "collect_ai_queries",
+        "collect_recent_file_activities",
     }
     assert expected.issubset(names)
 

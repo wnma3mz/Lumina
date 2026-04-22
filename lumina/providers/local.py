@@ -63,6 +63,7 @@ except ImportError:
 
 from lumina.engine.scheduler import GenerationRequest
 from .base import BaseProvider, ProviderCapabilities
+from .message_parts import messages_include_images
 from .local_offload import forward_with_cache, maybe_embed_on_cpu
 from .mlx_loader import MlxModelLoader
 from .mlx_prompt import MlxPromptBuilder
@@ -370,13 +371,20 @@ class LocalProvider(BaseProvider):
     # Layer 3 — 请求槽操作（token 投递、decode 推进）
     # ══════════════════════════════════════════════════════════════════════════
 
+    @staticmethod
+    def _queue_put(queue: asyncio.Queue, value, *, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+        if loop is None:
+            queue.put_nowait(value)
+            return
+        loop.call_soon_threadsafe(queue.put_nowait, value)
+
     def _put_token(self, slot: _RequestSlot, value) -> None:
         """线程安全地往 asyncio Queue put 值（在 executor 线程中调用）。"""
-        self._loop.call_soon_threadsafe(slot.token_queue.put_nowait, value)
+        self._queue_put(slot.token_queue, value, loop=self._loop)
 
     def _put_token_local(self, slot: _RequestSlot, value) -> None:
         """在 event loop 线程内直接投递 token。"""
-        slot.token_queue.put_nowait(value)
+        self._queue_put(slot.token_queue, value)
 
     def _use_dedicated_batch_executor(self) -> bool:
         return True
@@ -781,14 +789,7 @@ class LocalProvider(BaseProvider):
 
     @staticmethod
     def _messages_include_images(messages: list[dict[str, Any]]) -> bool:
-        for message in messages:
-            content = message.get("content", "")
-            if not isinstance(content, list):
-                continue
-            for part in content:
-                if isinstance(part, dict) and part.get("type") == "image_url":
-                    return True
-        return False
+        return messages_include_images(messages)
 
     @staticmethod
     def _decode_data_url_image(image_ref: str):
@@ -954,11 +955,11 @@ class LocalProvider(BaseProvider):
                         break
                     text = str(getattr(response, "text", response or ""))
                     if text:
-                        loop.call_soon_threadsafe(queue.put_nowait, text)
+                        self._queue_put(queue, text, loop=loop)
             except Exception as exc:
-                loop.call_soon_threadsafe(queue.put_nowait, exc)
+                self._queue_put(queue, exc, loop=loop)
             finally:
-                loop.call_soon_threadsafe(queue.put_nowait, None)
+                self._queue_put(queue, None, loop=loop)
 
         threading.Thread(target=_run, daemon=True).start()
 

@@ -20,7 +20,12 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from lumina.api.rendering import render_markdown_html
-from lumina.api.ui_meta import collector_sources, digest_icon_for_text, system_prompt_items
+from lumina.api.ui_meta import (
+    collector_sources,
+    collector_timeline_class,
+    digest_icon_for_text,
+    system_prompt_items,
+)
 
 router = APIRouter(prefix="/fragments", tags=["fragments"])
 
@@ -54,6 +59,7 @@ def _parse_sections(content: str) -> list[dict]:
                 "html": html_body,
                 "icon": icon,
                 "filter_key": filter_key,
+                "timeline_badge_class": collector_timeline_class(filter_key),
                 "open": i == 0,
             }
         )

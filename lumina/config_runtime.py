@@ -133,26 +133,6 @@ def public_system_prompts(prompts: Optional[dict[str, Any]]) -> dict[str, str]:
     }
 
 
-def _set_nested(data: dict[str, Any], path: tuple[str, ...], value: Any) -> None:
-    cursor = data
-    for key in path[:-1]:
-        next_value = cursor.get(key)
-        if not isinstance(next_value, dict):
-            next_value = {}
-            cursor[key] = next_value
-        cursor = next_value
-    cursor[path[-1]] = value
-
-
-def _get_nested(data: dict[str, Any], path: tuple[str, ...]) -> Any:
-    cursor: Any = data
-    for key in path:
-        if not isinstance(cursor, dict) or key not in cursor:
-            return None
-        cursor = cursor[key]
-    return cursor
-
-
 def serialize_runtime_config(cfg: Any) -> dict[str, Any]:
     res: dict[str, Any] = {}
     for section in ("provider", "system", "digest", "document", "vision", "audio"):
@@ -257,32 +237,6 @@ def _normalize_persisted_config_data(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def _build_runtime_candidate(cfg: Any, patch_dict: dict[str, Any], persisted_data: dict[str, Any]) -> dict[str, Any]:
-    current = cfg.model_dump()
-
-    section_aliases = {"ui": ("system", "ui")}
-    for section, section_data in patch_dict.items():
-        if not isinstance(section_data, dict):
-            continue
-        target_path = section_aliases.get(section, (section,))
-        current_section = _get_nested(current, target_path)
-        if not isinstance(current_section, dict):
-            continue
-        _set_nested(current, target_path, deep_merge(current_section, section_data))
-
-    persisted_mirrors = (
-        (("vision", "enabled_modules"), ("vision", "enabled_modules")),
-        (("ui", "home", "enabled_tabs"), ("system", "ui", "home", "enabled_tabs")),
-        (("system", "branding", "username"), ("system", "branding", "username")),
-    )
-    for source_path, target_path in persisted_mirrors:
-        value = _get_nested(persisted_data, source_path)
-        if value is not None:
-            _set_nested(current, target_path, value)
-
-    return current
-
-
 class ConfigStore:
     def __init__(self, preferred_path: str | Path | None = None) -> None:
         self._preferred_path = preferred_path
@@ -298,8 +252,7 @@ class ConfigStore:
         merged_data = _merge_patch_into_data(data, patch_dict)
         _normalize_persisted_config_data(merged_data)
 
-        runtime_candidate = _build_runtime_candidate(cfg, patch_dict, merged_data)
-        new_cfg = Config.model_validate(runtime_candidate)
+        new_cfg = Config.from_data(merged_data)
 
         write_config_atomic(merged_data, self._preferred_path)
         replace_runtime_config(cfg, new_cfg)

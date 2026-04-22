@@ -128,6 +128,16 @@ mlx_vlm 与 mlx_lm 在以下三处存在接口差异，均已在 `LocalProvider`
 
 **Markdown 去重：** `cursor_store.py` 仅保留 `md5_of_file` + `load_md_hashes`/`save_md_hashes`，用于过滤 mtime 改变但内容未变的文件（iCloud 同步、编辑器扫描等）。
 
+### Digest collector 元数据（`api/ui_meta.py`）
+
+- 运行时 collector key 的唯一来源是 `services/digest/collectors/__init__.py` 自动发现出的 `COLLECTORS`
+- `api/ui_meta.py` 里的 `COLLECTOR_DEFS` 只是**显式覆盖表**，不再是完整真源
+- 新增或插件 collector 时：
+  - 有显式元数据就用显式元数据
+  - 没有就自动生成默认 `label` / `icon` / `filter_key`
+  - 时间轴颜色默认回落到中性样式
+- 不要再写一份独立的“前端 collector 列表”去和运行时发现结果并行维护
+
 ### Digest 并发安全（`services/digest/core.py`）
 
 - **锁机制**：`asyncio.Lock`（`_digest_lock`），懒初始化（`_get_digest_lock()`）。`maybe_generate_digest` / `maybe_generate_changelog` 在 acquire 前先检查 `lock.locked()`，已锁则直接跳过（非阻塞等待）。
@@ -156,9 +166,11 @@ mlx_vlm 与 mlx_lm 在以下三处存在接口差异，均已在 `LocalProvider`
 ### 配置 Web UI（`/v1/config`）
 - **GET `/v1/config`**：返回完整运行时配置（来自 `get_config()` singleton）
 - **运行时唯一真源**：内存中只认 `get_config()` 返回的 `Config` singleton。不要再为新功能引入第二套长期配置 singleton。
+- **normalize 真源**：`Config.from_data()` / `normalize_config_data()` 是冷启动和 `PATCH /v1/config` 共用的唯一配置规范化入口。不要再在 `Config.load()` 和 PATCH 路径各写一套迁移逻辑。
 - **PATCH `/v1/config`` 实现分层**：
   - `ConfigStore`（`config_runtime.py`）负责 merge / validate / 原子写盘 / 更新运行时 `Config`
   - `ConfigApplier`（`config_apply.py`）负责热更新副作用（digest、request_history、ASR、LLM prompts 等）
+  - router 使用专用 `ConfigPatch` body，只接收 patch 允许的顶层 section；`provider.backend` 这类 computed 字段不写盘
   - 新增字段时优先改 `config.py`、`config_runtime.py`、`config_apply.py`，不要把同步逻辑重新塞回 router
 - **当前支持热更新的高频字段**：
   - `digest.*`、各域 `prompts.*`、各域 `sampling.*`
@@ -169,6 +181,12 @@ mlx_vlm 与 mlx_lm 在以下三处存在接口差异，均已在 `LocalProvider`
   - `ptt.*` 仍依赖 config 文件 mtime watcher 自动重载
 - **仍需重启的字段**：`system.server.host/port`、`system.desktop.*`、`provider.type`、`provider.model_path`、`provider.llama_cpp.*`、`provider.offload_*` / `provider.mlx_memory.*`
 - **并发安全**：写操作通过模块级 `asyncio.Lock` 保护；临时文件 + `rename()` 原子写入
+
+### Messages 解析单源（`providers/message_parts.py`）
+
+- `messages` 的 part 遍历、provider 文本降级、history 文本记录、VLM 图片拆分都走 `providers/message_parts.py`
+- `BaseProvider` / `LLMEngine` / `LocalVlmAdapter` 不应再各自维护一份 `role/content/parts` 遍历逻辑
+- 新增消息 part 类型时，先改 `message_parts.py`，再按需要补具体 provider 能力分支
 
 ### PyInstaller + multiprocessing
 - `babeldoc`（pdf2zh 依赖）用 `multiprocessing.Process` 做字体子集化
@@ -198,6 +216,16 @@ uv run --with ruff ruff check <改动的文件...>
 # 可自动修复的先跑：
 uv run --with ruff ruff check --fix <改动的文件...>
 ```
+
+Provider 相关回归测试已按主题拆分，不再往单个超大文件里堆：
+
+- `tests/providers/test_local_provider_scheduling.py`
+- `tests/providers/test_local_provider_loading.py`
+- `tests/providers/test_local_provider_vlm_messages.py`
+- `tests/providers/test_mlx_model_loader.py`
+- `tests/providers/test_mlx_batch_scheduler.py`
+- `tests/providers/test_system_prompt_cache.py`
+- 共享 helper 在 `tests/providers/local_provider_test_helpers.py`
 
 ## Git 操作规范
 
