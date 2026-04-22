@@ -62,6 +62,7 @@ class MlxModelLoader:
         self._use_dedicated_batch_executor = use_dedicated_batch_executor_fn
         self._eos_ids = eos_ids_fn
         self.loaded_as_vlm: bool = False  # set after load()
+        self.last_load_target: Optional[str] = None
 
     # ── 路径解析 ──────────────────────────────────────────────────────────────
 
@@ -148,6 +149,7 @@ class MlxModelLoader:
         import mlx.utils as mx_utils
 
         load_target = self.resolve_target()
+        self.last_load_target = load_target
         
         # ── 自动选择加载器 (VLM vs LM) ──────────────────────────────────────────
         is_vlm = False

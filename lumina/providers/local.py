@@ -80,14 +80,12 @@ from lumina.engine.sampling import (
 
 try:
     from mlx_vlm import generate as vlm_generate
-    from mlx_vlm import load as vlm_load
     from mlx_vlm.generate import stream_generate as vlm_stream_generate
     from mlx_vlm.prompt_utils import apply_chat_template as vlm_apply_chat_template
     from mlx_vlm.utils import load_config as vlm_load_config
     _MLX_VLM_AVAILABLE = True
 except ImportError:
     vlm_generate = None  # type: ignore[assignment]
-    vlm_load = None  # type: ignore[assignment]
     vlm_stream_generate = None  # type: ignore[assignment]
     vlm_apply_chat_template = None  # type: ignore[assignment]
     vlm_load_config = None  # type: ignore[assignment]
@@ -133,7 +131,9 @@ class _RequestSlot(GenerationRequest):
 class LocalProvider(BaseProvider):
     @property
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_image_input=_MLX_VLM_AVAILABLE)
+        loader = getattr(self, "_loader", None)
+        supports_loaded_vlm = bool(getattr(loader, "loaded_as_vlm", False))
+        return ProviderCapabilities(supports_image_input=_MLX_VLM_AVAILABLE and supports_loaded_vlm)
 
     def __init__(
         self,
@@ -203,7 +203,32 @@ class LocalProvider(BaseProvider):
         self._spc = SystemPromptCache(
             self._model, self._tokenizer, loaded_as_vlm=self._loader.loaded_as_vlm
         )
+        self._bind_vlm_handles()
+        if self._loader.loaded_as_vlm:
+            logger.info(
+                "LocalProvider: loaded single VLM model for text and image requests "
+                "(offload_embedding=%s offload_vision=%s offload_audio=%s)",
+                self.offload_embedding,
+                self.offload_vision,
+                self.offload_audio,
+            )
+        else:
+            logger.info("LocalProvider: loaded text-only model; image input disabled for current model")
         self._maybe_run_warmup()
+
+    def _bind_vlm_handles(self) -> None:
+        if not self._loader.loaded_as_vlm:
+            self._vlm_model = None
+            self._vlm_processor = None
+            self._vlm_config = None
+            return
+        self._vlm_model = self._model
+        self._vlm_processor = self._tokenizer
+        if _MLX_VLM_AVAILABLE:
+            load_target = self._loader.last_load_target or self._loader.resolve_target()
+            self._vlm_config = vlm_load_config(load_target)
+        else:
+            self._vlm_config = None
 
     def _init_batch_engine(self) -> None:
         """重建 BatchGenerator / Executor（worker 重启时调用）。"""
@@ -888,8 +913,13 @@ class LocalProvider(BaseProvider):
         with self._vlm_lock:
             if self._vlm_model is not None and self._vlm_processor is not None and self._vlm_config is not None:
                 return
-            load_target = self._loader.resolve_target()
-            self._vlm_model, self._vlm_processor = vlm_load(load_target)
+            if not self.is_ready:
+                raise RuntimeError("LocalProvider not loaded. Call load() first.")
+            if not self._loader.loaded_as_vlm:
+                raise NotImplementedError("当前已加载的本地模型不支持图片输入")
+            self._vlm_model = self._model
+            self._vlm_processor = self._tokenizer
+            load_target = self._loader.last_load_target or self._loader.resolve_target()
             self._vlm_config = vlm_load_config(load_target)
 
     def _prepare_vlm_prompt(

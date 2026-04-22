@@ -341,6 +341,24 @@ def _fake_loader_load(offload_embedding=True, offload_vision=True, offload_audio
     return FakeLoadedModel(), FakeLoadedTokenizer(), None, None
 
 
+def test_load_binds_vlm_handles_to_loaded_model(monkeypatch):
+    provider = LocalProvider(model_path="synthetic", enable_warmup=False)
+
+    def _fake_vlm_loader(*, offload_embedding=True, offload_vision=True, offload_audio=True):
+        provider._loader.loaded_as_vlm = True
+        provider._loader.last_load_target = "synthetic-vlm"
+        return FakeLoadedModel(), FakeLoadedTokenizer(), None, None
+
+    monkeypatch.setattr(provider._loader, "load", _fake_vlm_loader)
+    monkeypatch.setattr(local_mod, "vlm_load_config", lambda target: {"target": target})
+
+    provider.load()
+
+    assert provider._vlm_model is provider._model
+    assert provider._vlm_processor is provider._tokenizer
+    assert provider._vlm_config == {"target": "synthetic-vlm"}
+
+
 def test_load_runs_warmup_by_default(monkeypatch):
     provider = LocalProvider(model_path="synthetic")
     warmup_calls = []
@@ -753,6 +771,45 @@ async def test_generate_messages_uses_vlm_for_image_inputs(monkeypatch):
     assert captured["prompt"] == "vlm-prompt"
     assert len(captured["image"]) == 1
     assert getattr(captured["image"][0], "size", None) == (1, 1)
+
+
+def test_ensure_vlm_loaded_reuses_existing_model(monkeypatch):
+    provider = LocalProvider(model_path="synthetic", enable_warmup=False)
+    provider._model = object()
+    provider._tokenizer = object()
+    provider._loader.loaded_as_vlm = True
+    provider._loader.last_load_target = "synthetic-vlm"
+
+    def _should_not_reload(*args, **kwargs):
+        raise AssertionError("should not call vlm_load")
+
+    monkeypatch.setattr(local_mod, "vlm_load_config", lambda target: {"target": target})
+    monkeypatch.setattr(local_mod, "vlm_generate", _should_not_reload)
+
+    provider._ensure_vlm_loaded()
+
+    assert provider._vlm_model is provider._model
+    assert provider._vlm_processor is provider._tokenizer
+    assert provider._vlm_config == {"target": "synthetic-vlm"}
+
+
+@pytest.mark.anyio
+async def test_generate_messages_rejects_images_for_text_only_model():
+    provider = LocalProvider(model_path="synthetic", enable_warmup=False)
+    provider._model = object()
+
+    with pytest.raises(NotImplementedError, match="不支持图片输入"):
+        await provider.generate_messages(
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "请描述"},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/demo.png"}},
+                ],
+            }],
+            system="system prompt",
+            max_tokens=16,
+        )
 
 
 @pytest.mark.anyio

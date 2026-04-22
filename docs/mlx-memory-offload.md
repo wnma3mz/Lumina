@@ -72,7 +72,32 @@
 
 ---
 
-## 4. 基准测试工具
+## 4. 当前实现说明
+
+### 单模型原则
+
+当前多模态请求不会再单独加载第二套 VLM 模型。
+
+也就是说：
+
+- 如果启动时加载的是 VLM，文本请求和图片请求共用同一套已加载模型
+- 如果启动时加载的是纯文本模型，图片请求会直接报错，不会隐式走另一条 `vlm_load()` 路径
+
+这样做的目的，是保证 `offload_vision` / `offload_audio` 对真实图片请求路径同样成立，而不是只对文本路径生效。
+
+### 关于 `offload_embedding`
+
+当前 `offload_embedding` 的工程语义是：
+
+- 在加载阶段，`embed_tokens` 不会被 eager `mx.eval`
+- 在 legacy prefill / system prompt cache 相关路径中，代码会显式使用 CPU stream 做 embedding 查找
+- 在默认 BatchGenerator 路径中，主要依赖“embedding 权重未 eager eval”的分层结果，而不是完全独立的一套手写 CPU embedding 主循环
+
+因此它确实生效，但不同调度路径的可观测方式并不完全相同。
+
+---
+
+## 5. 基准测试工具
 
 性能指标通过 **HTTP `/v1/chat/completions` (SSE 流式)** 采集，与真实用户请求路径完全一致：
 
@@ -104,7 +129,27 @@ uv run python tests/benchmarks/http_bench.py --url http://127.0.0.1:31821 --roun
 
 ---
 
-## 5. 参考资料
+## 6. 最近验证结果
+
+本轮围绕 offload / VLM 主路径做过完整回归：
+
+```bash
+uv run pytest -q
+```
+
+结果：
+
+- `282 passed, 1 skipped`
+
+重点验证项：
+
+- 图片请求不再二次加载另一套 VLM 模型
+- 图片请求与文本请求共享启动时已加载的同一模型对象
+- 纯文本模型明确拒绝图片输入
+
+---
+
+## 7. 参考资料
 
 - MLX Lazy Loading: `mlx.core.load` with safetensors.
 - Memory Mapping: `mmap(2)` via macOS Page Cache.

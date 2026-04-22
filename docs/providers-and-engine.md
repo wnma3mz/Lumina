@@ -147,7 +147,23 @@ Config
 
 因此 `offload_*` / `mlx_memory.*` 属于**保存成功但需重启生效**的配置。
 
-## 7. VLM 兼容层要点
+## 7. 图片输入与 VLM 主路径
+
+当前实现里，图片请求不再单独重新 `vlm_load()` 第二套模型。
+
+实际语义是：
+
+- 启动时由 `MlxModelLoader.load()` 决定当前模型是 LM 还是 VLM
+- 如果当前加载的是 VLM，`LocalProvider` 会把文本请求和图片请求都绑定到**同一套已加载模型对象**
+- 如果当前加载的是纯文本模型，则 `supports_image_input=False`，图片请求会明确报错，而不是隐式再走一条单独加载路径
+
+这条约束的意义是：
+
+- offload 策略只在一套模型对象上生效
+- 不会出现“文本请求一套模型、图片请求另一套模型”的分叉
+- VLM 请求的内存行为和启动时记录的 offload 配置保持一致
+
+## 8. VLM 兼容层要点
 
 `mlx_vlm` 与 `mlx_lm` 在几个地方并不兼容，LocalProvider 已做过桥接：
 
@@ -157,7 +173,7 @@ Config
 
 这也是为什么不要直接在别处绕过 `LocalProvider` 自己拼调用链。
 
-## 8. 当前维护约定
+## 9. 当前维护约定
 
 ### 对 offload 配置
 
@@ -170,14 +186,20 @@ Config
 - 真正做了运行时同步，才记为 hot-reload
 - 仅保存但未在当前进程生效时，不应误报为 hot-reloaded
 
-## 9. 推荐补测与排查方向
+### 对图片能力判断
+
+- `supports_image_input` 取决于**当前已加载模型是否为 VLM**
+- 不能只根据“环境里安装了 `mlx-vlm`”来判断
+
+## 10. 推荐补测与排查方向
 
 如果未来继续改这块，建议优先覆盖：
 
 1. `provider.mlx_memory.*` 嵌套 patch
 2. `restart_required` 与运行时行为是否一致
-3. VLM 检测是否走对 `mlx_vlm`
+3. VLM 请求是否仍复用启动时已加载的单模型路径
 4. 新模型架构下 offload 关键字是否仍能命中 vision / audio 组件
+5. `offload_embedding` 在 BatchGenerator 路径与 legacy 路径上的可观测差异
 
 排查时优先看：
 
@@ -186,4 +208,22 @@ Config
 - `lumina/config_apply.py`
 - `lumina/providers/mlx_loader.py`
 - `lumina/providers/local.py`
+
+## 11. 最近验证结果
+
+本轮针对 offload / VLM 主路径做过回归验证：
+
+```bash
+uv run pytest -q
+```
+
+结果：
+
+- `282 passed, 1 skipped`
+
+新增或重点覆盖的断言包括：
+
+- VLM 图片请求复用启动时已加载模型，不再二次 `vlm_load()`
+- 纯文本模型会明确拒绝图片输入
+- `supports_image_input` 与“当前已加载模型是否为 VLM”一致
 

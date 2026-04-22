@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import types
+
 import pytest
 
 from lumina.engine.llm import LLMEngine
@@ -55,11 +57,15 @@ def test_local_provider_capabilities_follow_vlm_availability(monkeypatch):
     import lumina.providers.local as local_mod
 
     provider = local_mod.LocalProvider.__new__(local_mod.LocalProvider)
+    provider._loader = types.SimpleNamespace(loaded_as_vlm=False)
 
     monkeypatch.setattr(local_mod, "_MLX_VLM_AVAILABLE", False)
     assert provider.capabilities.supports_image_input is False
 
     monkeypatch.setattr(local_mod, "_MLX_VLM_AVAILABLE", True)
+    assert provider.capabilities.supports_image_input is False
+
+    provider._loader.loaded_as_vlm = True
     assert provider.capabilities.supports_image_input is True
 
 

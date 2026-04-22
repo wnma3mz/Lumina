@@ -9,8 +9,6 @@
   <img src="assets/showcase.jpg" width="850" style="border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.1);">
 </div>
 
----
-
 ## 能做什么
 
 ### 📋 活动回顾
