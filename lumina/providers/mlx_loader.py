@@ -156,7 +156,12 @@ class MlxModelLoader:
             try:
                 # 尝试通过 config 判断是否包含 vision
                 vlm_config = load_config(load_target)
-                if "vision_config" in vlm_config or "model_type" in vlm_config and "vl" in vlm_config["model_type"].lower():
+                # BUG-08: model_type 可能为 None，.lower() 会抛 AttributeError
+                # 被外层 except Exception: pass 吃掉，导致 VLM 识别静默失败
+                model_type = vlm_config.get("model_type")
+                if "vision_config" in vlm_config or (
+                    model_type and "vl" in str(model_type).lower()
+                ):
                     is_vlm = True
             except Exception:
                 pass

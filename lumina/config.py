@@ -28,6 +28,7 @@ audio                音频域配置（ASR、PTT 等）
 """
 import json
 import os
+import threading
 from pydantic import BaseModel, Field, ConfigDict, model_validator, computed_field
 from typing import Any, Dict, Optional
 from pathlib import Path
@@ -354,8 +355,14 @@ class Config(BaseModel):
         oa["api_key"] = os.environ.get("LUMINA_OPENAI_API_KEY") or oa.get("api_key", "")
         oa["model"] = os.environ.get("LUMINA_OPENAI_MODEL") or oa.get("model", "")
         
-        lc["n_gpu_layers"] = int(lc.get("n_gpu_layers", -1))
-        lc["n_ctx"] = int(lc.get("n_ctx", 4096))
+        # BUG-14: 用户填写非数字字符串时 int() 直接抛 ValueError，服务无法启动且报错不友好
+        try:
+            lc["n_gpu_layers"] = int(lc.get("n_gpu_layers", -1))
+            lc["n_ctx"] = int(lc.get("n_ctx", 4096))
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"config.json provider.llama_cpp 字段类型错误（期望整数）: {exc}"
+            ) from exc
         
         sys_p = data.get("system_prompts", {})
         if "prompts" not in p or not isinstance(p["prompts"], dict):
@@ -434,7 +441,9 @@ class Config(BaseModel):
             if "digest_enabled" in home:
                 d["enabled"] = bool(home.get("digest_enabled"))
             else:
-                d["enabled"] = True
+                # BUG-13: 全新安装时（无 digest 段且无 digest_enabled 键）不应默认启用日报
+                # DigestConfig.enabled = False，此处保持语义一致
+                d["enabled"] = False
                 
         d["history_hours"] = float(d.get("history_hours", 24.0))
         d["refresh_hours"] = float(d.get("refresh_hours", 1.0))
@@ -524,14 +533,18 @@ class Config(BaseModel):
 # 全局单例
 _instance: Optional[Config] = None
 _instance_source_path: Optional[str] = None
+_instance_lock = threading.Lock()  # BUG-12: 防止多线程并发时重复初始化单例
 
 
 def get_config(path: Optional[str] = None) -> Config:
     global _instance, _instance_source_path
     resolved_path = resolve_runtime_config_path(path)
+    # BUG-12: double-checked locking，先快速检查再加锁，避免每次调用都获取锁
     if _instance is None or (path is not None and resolved_path != _instance_source_path):
-        _instance = Config.load(resolved_path)
-        _instance_source_path = resolved_path
+        with _instance_lock:
+            if _instance is None or (path is not None and resolved_path != _instance_source_path):
+                _instance = Config.load(resolved_path)
+                _instance_source_path = resolved_path
     return _instance
 
 

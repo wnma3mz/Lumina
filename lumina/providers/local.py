@@ -176,6 +176,7 @@ class LocalProvider(BaseProvider):
         self._vlm_processor = None
         self._vlm_config = None
         self._vlm_lock = threading.Lock()
+        self._worker_lock = threading.Lock()  # BUG-01: 保护 _ensure_worker 的 check-and-set
         self._loader = MlxModelLoader(
             model_path=model_path,
             max_new_prefill_per_iter=self.max_new_prefill_per_iter,
@@ -199,7 +200,9 @@ class LocalProvider(BaseProvider):
         self._batch_generator = batch_generator
         self._batch_executor = batch_executor
         self._prompt_builder = MlxPromptBuilder(self._tokenizer)
-        self._spc = SystemPromptCache(self._model, self._tokenizer)
+        self._spc = SystemPromptCache(
+            self._model, self._tokenizer, loaded_as_vlm=self._loader.loaded_as_vlm
+        )
         self._maybe_run_warmup()
 
     def _init_batch_engine(self) -> None:
@@ -213,26 +216,31 @@ class LocalProvider(BaseProvider):
         return self._model is not None
 
     def _ensure_worker(self):
-        current_loop = asyncio.get_running_loop()
-        # asyncio.run() 每次创建新 loop；Queue/Event 绑定旧 loop 时必须重建
-        if self._prefill_queue is None or self._loop is not current_loop:
-            self._prefill_queue = asyncio.Queue()
-            self._not_empty = asyncio.Event()
-        if self._worker_task is None or self._worker_task.done():
-            self._loop = current_loop
-            # _batch_scheduler finally 会 close batch_generator / shutdown executor；
-            # 新 worker 启动前必须重建，否则下次调用时使用已关闭的对象导致卡死。
-            if self._use_builtin_batch_engine():
-                self._init_batch_engine()
-            if self._use_builtin_batch_engine():
-                worker = self._mlx_batch_scheduler
-            else:
-                if self._legacy_executor is None:
-                    self._legacy_executor = ThreadPoolExecutor(
-                        max_workers=1, thread_name_prefix="lumina_legacy"
-                    )
-                worker = self._legacy_scheduler
-            self._worker_task = asyncio.create_task(worker())
+        # BUG-01: 用 _worker_lock 保护整个 check-and-set，防止多 event loop 场景下
+        # 创建两个并行 worker 或旧 Queue 里的 slot 永久挂起
+        with self._worker_lock:
+            current_loop = asyncio.get_running_loop()
+            # asyncio.run() 每次创建新 loop；Queue/Event 绑定旧 loop 时必须重建
+            if self._prefill_queue is None or self._loop is not current_loop:
+                self._prefill_queue = asyncio.Queue()
+                self._not_empty = asyncio.Event()
+            if self._worker_task is None or self._worker_task.done():
+                self._loop = current_loop
+                # _batch_scheduler finally 会 close batch_generator / shutdown executor；
+                # 新 worker 启动前必须重建，否则下次调用时使用已关闭的对象导致卡死。
+                # BUG-02: 缓存调用结果，避免 _use_builtin_batch_engine() 被调用两次
+                use_batch = self._use_builtin_batch_engine()
+                if use_batch:
+                    self._init_batch_engine()
+                if use_batch:
+                    worker = self._mlx_batch_scheduler
+                else:
+                    if self._legacy_executor is None:
+                        self._legacy_executor = ThreadPoolExecutor(
+                            max_workers=1, thread_name_prefix="lumina_legacy"
+                        )
+                    worker = self._legacy_scheduler
+                self._worker_task = asyncio.create_task(worker())
 
     # ══════════════════════════════════════════════════════════════════════════
     # Layer 1 — Prompt 构建（委托给 MlxPromptBuilder）
@@ -819,7 +827,9 @@ class LocalProvider(BaseProvider):
             image_bytes = base64.b64decode(payload)
         except Exception as exc:
             raise ValueError("无法解码 data URL 图片内容") from exc
-        return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        # BUG-07: Image.open() 未关闭，高并发下积累内存压力
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            return img.convert("RGB")
 
     @classmethod
     def _normalize_vlm_image_input(cls, image_ref: str):
@@ -1028,6 +1038,9 @@ class LocalProvider(BaseProvider):
 
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue = asyncio.Queue()
+        # BUG-06: 客户端断开时 daemon 线程无法被取消，持续占用 GPU
+        # stop_event 让消费方协程通知后台线程提前退出
+        stop_event = threading.Event()
 
         def _run():
             try:
@@ -1039,6 +1052,8 @@ class LocalProvider(BaseProvider):
                     top_p=top_p,
                     repetition_penalty=repetition_penalty,
                 ):
+                    if stop_event.is_set():
+                        break
                     text = str(getattr(response, "text", response or ""))
                     if text:
                         loop.call_soon_threadsafe(queue.put_nowait, text)
@@ -1049,13 +1064,16 @@ class LocalProvider(BaseProvider):
 
         threading.Thread(target=_run, daemon=True).start()
 
-        while True:
-            item = await queue.get()
-            if item is None:
-                break
-            if isinstance(item, Exception):
-                raise item
-            yield item
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            stop_event.set()
 
     async def generate_messages(
         self,
