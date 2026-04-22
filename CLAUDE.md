@@ -155,11 +155,19 @@ mlx_vlm 与 mlx_lm 在以下三处存在接口差异，均已在 `LocalProvider`
 
 ### 配置 Web UI（`/v1/config`）
 - **GET `/v1/config`**：返回完整运行时配置（来自 `get_config()` singleton）
-- **PATCH `/v1/config`**：部分更新，原子写回 `~/.lumina/config.json`，并热重载部分字段：
-  - `digest.*` → 调用 `configure()` 重新初始化 DigestConfig singleton（立即生效）
-  - `system_prompts.*` → 原地 mutate `app.state.llm._system_prompts` dict（立即生效）
-  - `ptt.*` → 仅写 config.json，依赖 PTT 文件 mtime watcher 自动重载
-  - `provider.*`、`whisper_model`、`host`、`port`、`log_level` → 写 config.json，响应附带 `"restart_required": true`，前端提示重启
+- **运行时唯一真源**：内存中只认 `get_config()` 返回的 `Config` singleton。不要再为新功能引入第二套长期配置 singleton。
+- **PATCH `/v1/config`` 实现分层**：
+  - `ConfigStore`（`config_runtime.py`）负责 merge / validate / 原子写盘 / 更新运行时 `Config`
+  - `ConfigApplier`（`config_apply.py`）负责热更新副作用（digest、request_history、ASR、LLM prompts 等）
+  - 新增字段时优先改 `config.py`、`config_runtime.py`、`config_apply.py`，不要把同步逻辑重新塞回 router
+- **当前支持热更新的高频字段**：
+  - `digest.*`、各域 `prompts.*`、各域 `sampling.*`
+  - `system.request_history.*`
+  - `audio.whisper_model`
+  - `system.server.log_level`
+  - `provider.openai.base_url` / `api_key` / `model`（仅当前 backend 已是 openai 时）
+  - `ptt.*` 仍依赖 config 文件 mtime watcher 自动重载
+- **仍需重启的字段**：`system.server.host/port`、`system.desktop.*`、`provider.type`、`provider.model_path`、`provider.llama_cpp.*`、`provider.offload_*` / `provider.mlx_memory.*`
 - **并发安全**：写操作通过模块级 `asyncio.Lock` 保护；临时文件 + `rename()` 原子写入
 
 ### PyInstaller + multiprocessing

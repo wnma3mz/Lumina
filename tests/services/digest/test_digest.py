@@ -64,6 +64,13 @@ def test_digest_config_scan_dirs_missing_uses_defaults():
     assert get_cfg().scan_dirs == DigestConfig().scan_dirs
 
 
+def test_digest_config_preserves_active_watch_dirs():
+    from lumina.services.digest.config import configure, get_cfg
+
+    configure({"digest": {"active_watch_dirs": ["/tmp/a", "/tmp/b"]}})
+    assert get_cfg().active_watch_dirs == ["/tmp/a", "/tmp/b"]
+
+
 # ── md5_of_file ───────────────────────────────────────────────────────────────
 
 def test_md5_of_file(tmp_path):

@@ -1,7 +1,9 @@
 """
 API 契约测试：验证端点的请求/响应结构，不依赖真实 LLM 或 PDF 翻译。
 """
+import asyncio
 import io
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -43,6 +45,19 @@ def _make_app():
 async def aiter(items):
     for item in items:
         yield item
+
+
+async def wait_batch_done(client, job_id: str, *, timeout: float = 2.0):
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        r = await client.get(f"/v1/batch/{job_id}")
+        assert r.status_code == 200
+        data = r.json()
+        if data["status"] in {"done", "error"}:
+            return data
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError("batch job did not finish in time")
+        await asyncio.sleep(0.01)
 
 
 @pytest.fixture
@@ -404,18 +419,86 @@ async def test_pdf_download_not_found(client):
     assert r.status_code == 404
 
 
-# ── PDF 路径穿越防护（Fix #4）────────────────────────────────────────────────
+# ── Batch / PDF 串联 ─────────────────────────────────────────────────────────
 
-def test_pdf_upload_path_traversal_stripped():
-    """Fix #4：上传文件名含目录前缀（如 ../../etc/passwd.pdf）时，
-    服务端应只取文件名部分，不应落到 tmp_dir 之外。"""
-    from pathlib import Path
-    # 直接测试防护逻辑：Path(filename).name 应剥离目录分量
-    malicious_filename = "../../etc/passwd.pdf"
-    safe_name = Path(malicious_filename).name
-    assert safe_name == "passwd.pdf"
-    assert "/" not in safe_name
-    assert ".." not in safe_name
+async def test_batch_document_endpoint_processes_files(client, tmp_path):
+    source = tmp_path / "docs"
+    source.mkdir()
+    (source / "a.txt").write_text("hello", encoding="utf-8")
+    (source / "nested").mkdir()
+    (source / "nested" / "b.md").write_text("world", encoding="utf-8")
+
+    r = await client.post(
+        "/v1/batch/document",
+        json={"input_dir": str(source), "task": "translate", "target_language": "zh"},
+    )
+    assert r.status_code == 200
+    job_id = r.json()["job_id"]
+
+    done = await wait_batch_done(client, job_id)
+    assert done["status"] == "done"
+    assert done["succeeded"] == 2
+    assert sorted(Path(item["output_paths"][0]).name for item in done["items"]) == [
+        "a.translated.txt",
+        "b.translated.md",
+    ]
+
+
+async def test_batch_document_endpoint_rejects_nested_output_dir(client, tmp_path):
+    source = tmp_path / "docs"
+    source.mkdir()
+    (source / "a.txt").write_text("hello", encoding="utf-8")
+
+    r = await client.post(
+        "/v1/batch/document",
+        json={
+            "input_dir": str(source),
+            "output_dir": str(source / "out"),
+            "task": "translate",
+            "target_language": "zh",
+        },
+    )
+    assert r.status_code == 400
+    assert "输出目录不能位于输入目录内部" in r.text
+
+
+@pytest.mark.anyio
+async def test_pdf_upload_strips_path_components_before_submit(client, app, tmp_path):
+    captured = {}
+    tmp_dir = tmp_path / "lumina_tmp"
+    tmp_dir.mkdir()
+
+    def _fake_submit(pdf_path: str, lang_out: str, tmp_dir: str) -> str:
+        captured["pdf_path"] = pdf_path
+        captured["lang_out"] = lang_out
+        captured["tmp_dir"] = tmp_dir
+        return "job-upload"
+
+    app.state.pdf_manager.submit_translate = _fake_submit
+    with patch("tempfile.mkdtemp", return_value=str(tmp_dir)):
+        data = {"file": ("../../etc/passwd.pdf", io.BytesIO(b"%PDF-1.4 mock"), "application/pdf")}
+        r = await client.post("/v1/pdf/upload", files=data, params={"lang_out": "zh"})
+
+    assert r.status_code == 200
+    assert r.json()["job_id"] == "job-upload"
+    assert Path(captured["pdf_path"]).name == "passwd.pdf"
+    assert Path(captured["pdf_path"]).parent == Path(captured["tmp_dir"])
+    assert ".." not in captured["pdf_path"]
+
+
+@pytest.mark.anyio
+async def test_pdf_url_submits_job_without_downloading_in_request(client, app):
+    app.state.pdf_manager.submit_translate = MagicMock(return_value="job-url")
+
+    r = await client.post("/v1/pdf/url", json={"url": "https://example.com/demo.pdf", "lang_out": "en"})
+
+    assert r.status_code == 200
+    assert r.json()["job_id"] == "job-url"
+    app.state.pdf_manager.submit_translate.assert_called_once()
+    submitted_url, submitted_lang, submitted_tmp_dir = app.state.pdf_manager.submit_translate.call_args.args
+    assert submitted_url == "https://example.com/demo.pdf"
+    assert submitted_lang == "en"
+    assert "lumina_out_" in Path(submitted_tmp_dir).name
 
 
 @pytest.mark.anyio

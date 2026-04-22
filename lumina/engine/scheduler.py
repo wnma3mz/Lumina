@@ -116,6 +116,9 @@ class EngineScheduler:
                 await loop.run_in_executor(
                     executor, self._iteration_fn, prefill_list
                 )
+        except asyncio.CancelledError:
+            self._drain(prefill_queue, RuntimeError("Scheduler cancelled"))
+            raise
         except Exception as e:
             logger.error("EngineScheduler crashed: %s", e, exc_info=True)
             self._drain(prefill_queue, e)

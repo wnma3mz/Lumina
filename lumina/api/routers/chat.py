@@ -1,6 +1,7 @@
 """
 lumina/api/routers/chat.py — Chat Completions 路由（OpenAI 兼容）
 """
+import asyncio
 import logging
 import re
 from typing import Optional
@@ -204,6 +205,8 @@ async def _stream_chat(
             yield f"data: {chunk.model_dump_json()}\n\n"
             if await raw_request_disconnected(raw_req):
                 break
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         logger.error("stream_chat error: %s", e)
         finish_reason = "error"

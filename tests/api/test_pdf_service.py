@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from lumina.services.document.pdf import PdfJobManager
+from lumina.services.document.pdf import PdfJobManager, _delayed_rmtree
 
 
 # ── PdfJobManager 基础生命周期 ─────────────────────────────────────────────────
@@ -69,6 +69,24 @@ def test_pdf_job_manager_get_file_returns_none_for_missing_job():
     assert manager.get_file("ghost", "mono") is None
 
 
+def test_pdf_job_manager_resolve_download_evicts_stale_done_job(tmp_path):
+    manager = PdfJobManager()
+    missing_file = tmp_path / "missing.pdf"
+    manager._jobs["j1"] = {
+        "status": "done",
+        "dir": str(tmp_path),
+        "mono": str(missing_file),
+        "dual": str(missing_file),
+        "ts": time.time(),
+    }
+
+    state, path = manager.resolve_download("j1", "mono")
+
+    assert state == "missing"
+    assert path is None
+    assert "j1" not in manager._jobs
+
+
 @pytest.mark.anyio
 async def test_pdf_job_manager_run_translate_updates_status_on_success(tmp_path):
     manager = PdfJobManager()
@@ -107,6 +125,23 @@ async def test_pdf_job_manager_run_translate_updates_status_on_error(tmp_path):
     assert "boom" in manager._jobs["j_err"]["error"]
 
 
+@pytest.mark.anyio
+async def test_pdf_job_manager_run_translate_marks_cancelled(tmp_path):
+    manager = PdfJobManager()
+    out_dir = str(tmp_path / "out_cancel")
+    manager._jobs["j_cancel"] = {"status": "running", "dir": out_dir, "ts": time.time()}
+
+    async def _cancelled_fetch(_url: str) -> str:
+        raise asyncio.CancelledError
+
+    with patch("lumina.services.document.pdf.fetch_pdf_url", _cancelled_fetch):
+        with pytest.raises(asyncio.CancelledError):
+            await manager._run_translate("j_cancel", "https://example.com/a.pdf", "zh")
+
+    assert manager._jobs["j_cancel"]["status"] == "cancelled"
+    assert manager._jobs["j_cancel"]["error"] == "cancelled"
+
+
 def test_pdf_job_manager_track_holds_task_reference():
     manager = PdfJobManager()
     loop = asyncio.new_event_loop()
@@ -125,3 +160,17 @@ def test_pdf_job_manager_track_holds_task_reference():
         loop.run_until_complete(_test())
     finally:
         loop.close()
+
+
+@pytest.mark.anyio
+async def test_delayed_rmtree_cancel_keeps_directory(tmp_path):
+    target = tmp_path / "keep_me"
+    target.mkdir()
+    (target / "file.txt").write_text("hello", encoding="utf-8")
+
+    task = asyncio.create_task(_delayed_rmtree(str(target), delay=60))
+    await asyncio.sleep(0)
+    task.cancel()
+    await task
+
+    assert target.exists()

@@ -48,6 +48,17 @@ def set_asr_prompts(zh: str, en: str) -> None:
 
 
 def _make_initial_prompt(language: Optional[str]) -> Optional[str]:
+    try:
+        from lumina.config import peek_config
+
+        cfg = peek_config()
+        if cfg is not None:
+            if language == "zh":
+                return cfg.system_prompts.get("asr_zh") or None
+            if language == "en":
+                return cfg.system_prompts.get("asr_en") or None
+    except Exception:
+        pass
     if language == "zh":
         return _asr_prompt_zh
     if language == "en":

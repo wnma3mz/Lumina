@@ -36,7 +36,10 @@ async def fetch_pdf_url(url: str) -> Path:
     tmp_path = Path(tmp_str)
     _committed = False
     try:
-        os.close(tmp_fd)
+        try:
+            os.close(tmp_fd)
+        except OSError:
+            pass
         async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
             async with client.stream("GET", url) as resp:
                 resp.raise_for_status()
@@ -87,7 +90,9 @@ class PdfJobManager:
     """
 
     def __init__(self) -> None:
+        import threading
         self._jobs: dict[str, dict] = {}
+        self._jobs_lock = threading.Lock()
         self._bg_tasks: set = set()
         self._cleanup_orphans()
 
@@ -109,23 +114,46 @@ class PdfJobManager:
     def submit_translate(self, pdf_path: str, lang_out: str, tmp_dir: str) -> str:
         """注册翻译 job，启动后台 task，返回 job_id。"""
         job_id = uuid.uuid4().hex
-        self._jobs[job_id] = {"status": "running", "dir": tmp_dir, "ts": time.time()}
+        with self._jobs_lock:
+            self._jobs[job_id] = {"status": "running", "dir": tmp_dir, "ts": time.time()}
         task = asyncio.create_task(self._run_translate(job_id, pdf_path, lang_out))
         self._track(task)
         return job_id
 
     def get_status(self, job_id: str) -> Optional[dict]:
         """返回 job dict 或 None（不存在时）。"""
-        return self._jobs.get(job_id)
+        with self._jobs_lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return None
+            return dict(job)
 
     def get_file(self, job_id: str, variant: str) -> Optional[Path]:
         """返回翻译完成的 PDF 路径；job 未完成或文件不存在时返回 None。"""
-        job = self._jobs.get(job_id)
-        if not job or job["status"] != "done":
-            return None
-        key = "mono" if variant == "mono" else "dual"
-        p = job.get(key)
+        with self._jobs_lock:
+            job = self._jobs.get(job_id)
+            if not job or job["status"] != "done":
+                return None
+            p = job.get("mono" if variant == "mono" else "dual")
         return Path(p) if p and Path(p).exists() else None
+
+    def resolve_download(self, job_id: str, variant: str) -> tuple[str, Optional[Path]]:
+        """原子化解析下载状态，尽量避免 status 与文件状态不一致。"""
+        with self._jobs_lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return "missing", None
+            if job["status"] != "done":
+                return "not_ready", None
+            p = job.get("mono" if variant == "mono" else "dual")
+
+        path = Path(p) if p else None
+        if not path or not path.exists():
+            # 自愈陈旧元数据，避免继续暴露 status=done 但文件已不存在的状态。
+            with self._jobs_lock:
+                self._jobs.pop(job_id, None)
+            return "missing", None
+        return "ready", path
 
     async def _run_translate(self, job_id: str, pdf_path: str, lang_out: str) -> None:
         """后台翻译任务，结果写入 _jobs。完成后立即结束，清理由独立 task 负责。"""
@@ -136,15 +164,18 @@ class PdfJobManager:
                 pdf_path = str(await fetch_pdf_url(pdf_path))
 
             from lumina.services.document.pdf_translate import translate_pdfs
-            tmp_dir = self._jobs[job_id]["dir"]
+            with self._jobs_lock:
+                tmp_dir = self._jobs[job_id]["dir"]
 
             def _progress_cb(p) -> None:
                 try:
                     if hasattr(p, "n") and hasattr(p, "total") and p.total:
                         pct = int((p.n / p.total) * 100)
-                        # Avoid regressing if not strictly increasing
-                        if pct > self._jobs[job_id].get("progress", 0):
-                            self._jobs[job_id]["progress"] = pct
+                        with self._jobs_lock:
+                            if job_id in self._jobs:
+                                # Avoid regressing if not strictly increasing
+                                if pct > self._jobs[job_id].get("progress", 0):
+                                    self._jobs[job_id]["progress"] = pct
                 except Exception:
                     pass
 
@@ -156,26 +187,36 @@ class PdfJobManager:
                     callback=_progress_cb,
                 )
             )
-            if results:
-                mono, dual = results[0]
-                self._jobs[job_id].update({"status": "done", "mono": mono, "dual": dual})
-            else:
-                self._jobs[job_id].update({"status": "error", "error": "no output"})
+            with self._jobs_lock:
+                if job_id in self._jobs:
+                    if results:
+                        mono, dual = results[0]
+                        self._jobs[job_id].update({"status": "done", "mono": mono, "dual": dual})
+                    else:
+                        self._jobs[job_id].update({"status": "error", "error": "no output"})
+        except asyncio.CancelledError:
+            with self._jobs_lock:
+                if job_id in self._jobs:
+                    self._jobs[job_id].update({"status": "cancelled", "error": "cancelled"})
+            raise
         except Exception as e:
-            self._jobs[job_id].update({"status": "error", "error": str(e)})
+            with self._jobs_lock:
+                if job_id in self._jobs:
+                    self._jobs[job_id].update({"status": "error", "error": str(e)})
         finally:
-            # 3600 秒后删临时目录（与 job 记录清理时间对齐，避免 status=done 但文件已删的 404）
-            tmp_dir = self._jobs.get(job_id, {}).get("dir")
-            if tmp_dir:
-                t1 = asyncio.create_task(_delayed_rmtree(tmp_dir, delay=3600))
-                self._track(t1)
+            # 3600 秒后按固定顺序过期：先移除 job，再删除目录，避免暴露 done 但文件已删。
+            with self._jobs_lock:
+                tmp_dir = self._jobs.get(job_id, {}).get("dir") if job_id in self._jobs else None
 
-            async def _cleanup_job(jid: str) -> None:
+            async def _expire_job(jid: str, job_tmp_dir: Optional[str]) -> None:
                 await asyncio.sleep(3600)
-                self._jobs.pop(jid, None)
+                with self._jobs_lock:
+                    self._jobs.pop(jid, None)
+                if job_tmp_dir:
+                    await _delayed_rmtree(job_tmp_dir, delay=0)
 
-            t2 = asyncio.create_task(_cleanup_job(job_id))
-            self._track(t2)
+            task = asyncio.create_task(_expire_job(job_id, tmp_dir))
+            self._track(task)
 
     def _track(self, task: asyncio.Task) -> None:
         """持有 task 引用，task 完成后自动释放。"""
@@ -189,9 +230,9 @@ async def _delayed_rmtree(path: str, delay: int = 300) -> None:
     """延迟删除临时目录（在 asyncio 协程内使用）。"""
     try:
         await asyncio.sleep(delay)
-    finally:
-        await asyncio.to_thread(shutil.rmtree, path, True)
-
+    except asyncio.CancelledError:
+        return
+    await asyncio.to_thread(shutil.rmtree, path, True)
 
 def cleanup_after(tmp_dir: str, delay: int = 30):
     """返回 BackgroundTask：延迟删除临时目录（流式响应结束后挂载）。"""

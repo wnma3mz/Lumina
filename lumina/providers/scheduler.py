@@ -175,6 +175,21 @@ class MlxBatchScheduler:
                         slot.done = True
                         slot.token_queue.put_nowait(None)
                         self._batch_slots.pop(uid, None)
+        except asyncio.CancelledError:
+            for slot in list(self._batch_slots.values()):
+                if not slot.done:
+                    slot.done = True
+                    slot.token_queue.put_nowait(RuntimeError("Scheduler cancelled"))
+            self._batch_slots.clear()
+            while True:
+                try:
+                    slot = prefill_queue.get_nowait()
+                    if not slot.done:
+                        slot.done = True
+                        slot.token_queue.put_nowait(RuntimeError("Scheduler cancelled"))
+                except asyncio.QueueEmpty:
+                    break
+            raise
         except Exception as e:
             logger.error("mlx_batch_scheduler crashed: %s", e, exc_info=True)
             for slot in list(self._batch_slots.values()):

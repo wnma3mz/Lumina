@@ -567,6 +567,7 @@ def cmd_server(args):
     from lumina.services.digest.scheduler import DigestScheduler
     from lumina.engine.llm import LLMEngine
     from lumina.api.server import create_app
+    from lumina.config_apply import sync_asr_prompts, sync_digest_config, sync_request_history
     from lumina.cli.utils import (
         setup_logging, sync_user_config,
         is_port_in_use, print_ready_banner,
@@ -612,10 +613,7 @@ def cmd_server(args):
     cfg.system_prompts = _merged
 
     from lumina.engine import request_history as _request_history
-    _request_history.configure(
-        {"request_history": cfg.request_history.__dict__},
-        run_startup_cleanup=True,
-    )
+    sync_request_history(cfg, run_startup_cleanup=True)
     setup_logging(cfg.log_level)
 
     provider = build_provider(cfg)
@@ -629,11 +627,7 @@ def cmd_server(args):
     logger.info("Whisper model: %s", transcriber.model)
 
     # 将配置中的 ASR prompts 注入 transcriber 模块
-    from lumina.services.audio.transcriber import set_asr_prompts as _set_asr_prompts
-    _set_asr_prompts(
-        zh=cfg.system_prompts.get("asr_zh", ""),
-        en=cfg.system_prompts.get("asr_en", ""),
-    )
+    sync_asr_prompts(cfg)
 
     if is_port_in_use(cfg.host, cfg.port):
         msg = f"端口 {cfg.port} 已被占用，Lumina 可能已在运行。\n请先检查现有 Lumina 进程，或运行 lumina stop 后重试。"
@@ -641,8 +635,7 @@ def cmd_server(args):
         notify("Lumina 已在运行", f"端口 {cfg.port} 已被占用，请检查现有进程")
         sys.exit(1)
 
-    from lumina.services import digest as _digest_mod
-    _digest_mod.configure({"digest": cfg.digest} if hasattr(cfg, "digest") else {})
+    sync_digest_config(cfg)
 
     _uvicorn_loop: list = []
 

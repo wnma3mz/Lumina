@@ -1,6 +1,7 @@
 """
 lumina/digest/config.py — DigestConfig 及全局配置单例
 """
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -45,50 +46,94 @@ class DigestConfig(BaseModel):
 
 
 _cfg: DigestConfig = DigestConfig()
+_thread_local = threading.local()
+
+
+def _get_main_digest_cfg() -> Optional[DigestConfig]:
+    try:
+        from lumina.config import peek_config
+
+        cfg = peek_config()
+        if cfg is not None and hasattr(cfg, "digest"):
+            return cfg.digest
+    except Exception:
+        return None
+    return None
 
 
 def get_cfg() -> DigestConfig:
-    return _cfg
+    base = _get_main_digest_cfg() or _cfg
+    override = getattr(_thread_local, "history_hours_override", None)
+    if override is None:
+        return base
+    return base.model_copy(update={"history_hours": float(override)})
 
 
 @contextmanager
 def override_history_hours(hours: float):
-    """临时覆盖 history_hours（主线程调用，collector 线程启动前设置，完成后恢复）。"""
-    old = _cfg.history_hours
-    _cfg.history_hours = hours
+    """在线程内临时覆盖 history_hours，避免与热重载互相覆盖。"""
+    had_old = hasattr(_thread_local, "history_hours_override")
+    old = getattr(_thread_local, "history_hours_override", None)
+    _thread_local.history_hours_override = float(hours)
     try:
         yield
     finally:
-        _cfg.history_hours = old
+        if had_old:
+            _thread_local.history_hours_override = old
+        else:
+            delattr(_thread_local, "history_hours_override")
 
 
 def configure(data: dict) -> None:
     """从 config.json 的 digest 节点初始化配置。"""
     global _cfg
-    d = data.get("digest", {})
+    if isinstance(data, DigestConfig):
+        d = data
+    elif hasattr(data, "model_dump") and isinstance(data, DigestConfig):
+        d = data
+    elif isinstance(data, dict):
+        d = data.get("digest", {})
+    else:
+        d = {}
+
     if isinstance(d, DigestConfig):
         _cfg = d
+        main_cfg = _get_main_digest_cfg()
+        if main_cfg is not None:
+            from lumina.config import peek_config
+
+            cfg = peek_config()
+            if cfg is not None:
+                cfg.digest = d
         return
     elif hasattr(d, "model_dump"):
         d = d.model_dump()
     elif hasattr(d, "__dict__"):
         d = d.__dict__
-    
-    # 用 key 存在性而非真值判断：scan_dirs=[] 是"不扫描任何目录"，不能回退到默认值
-    _cfg = DigestConfig(
-        scan_dirs=d["scan_dirs"] if "scan_dirs" in d else DigestConfig().scan_dirs,
-        history_hours=float(d.get("history_hours", 24.0)),
-        refresh_hours=float(d.get("refresh_hours", 1.0)),
-        notify_time=str(d.get("notify_time", "20:00")),
-        weekly_report_day=max(0, min(6, int(d.get("weekly_report_day", 0)))),
-        monthly_report_day=max(1, min(28, int(d.get("monthly_report_day", 1)))),
-        ai_queries_max_source_chars=max(1, int(d.get("ai_queries_max_source_chars", 4000))),
-        enabled_collectors=d.get("enabled_collectors", None),
-        enabled=bool(d.get("enabled", False)),
-        prompts=d.get("prompts", {}),
-        sampling=d.get("sampling", {}),
-    )
+
+    if not isinstance(d, dict):
+        d = {}
+
+    normalized = dict(d)
+    if "weekly_report_day" in normalized:
+        normalized["weekly_report_day"] = max(0, min(6, int(normalized["weekly_report_day"])))
+    if "monthly_report_day" in normalized:
+        normalized["monthly_report_day"] = max(1, min(28, int(normalized["monthly_report_day"])))
+    if "ai_queries_max_source_chars" in normalized:
+        normalized["ai_queries_max_source_chars"] = max(1, int(normalized["ai_queries_max_source_chars"]))
+
+    new_cfg = DigestConfig.model_validate(normalized)
+    _cfg = new_cfg
+    try:
+        from lumina.config import peek_config
+
+        cfg = peek_config()
+        if cfg is not None:
+            cfg.digest = new_cfg
+    except Exception:
+        pass
 
 
 def set_enabled(enabled: bool) -> None:
-    _cfg.enabled = bool(enabled)
+    target = _get_main_digest_cfg() or _cfg
+    target.enabled = bool(enabled)

@@ -548,6 +548,11 @@ def get_config(path: Optional[str] = None) -> Config:
     return _instance
 
 
+def peek_config() -> Optional[Config]:
+    """返回当前已加载的配置单例；若尚未初始化则返回 None。"""
+    return _instance
+
+
 def reset_config() -> None:
     """重置全局配置单例，下次 get_config() 调用时重新加载。测试用。"""
     global _instance, _instance_source_path

@@ -9,6 +9,8 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import CancelledError as FutureCancelledError
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Optional
 
 logger = logging.getLogger("lumina")
@@ -137,12 +139,18 @@ class DigestScheduler:
         if loop and loop.is_running():
             future = asyncio.run_coroutine_threadsafe(coro, loop)
             if wait:
-                future.result(timeout=timeout)
+                try:
+                    future.result(timeout=timeout)
+                except FutureTimeoutError as exc:
+                    future.cancel()
+                    raise TimeoutError(f"{label} timed out after {timeout}s") from exc
                 return
 
             def _done(done_future):
                 try:
                     done_future.result()
+                except FutureCancelledError:
+                    return
                 except Exception as exc:
                     logger.error("%s failed: %s", label, exc)
 

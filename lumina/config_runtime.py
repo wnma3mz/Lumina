@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -149,30 +150,185 @@ def serialize_runtime_config(cfg: Any) -> dict[str, Any]:
     return res
 
 
+@dataclass
+class ConfigPatchResult:
+    old_cfg: Any
+    new_cfg: Any
+    data: dict[str, Any]
+    patch_dict: dict[str, Any]
+    restart_required: bool
+
+
+def replace_runtime_config(cfg: Any, new_cfg: Any) -> None:
+    """将 new_cfg 的字段原地写回已发布的全局 Config 单例。"""
+    for key in new_cfg.__class__.model_fields:
+        setattr(cfg, key, getattr(new_cfg, key))
+
+
+def patch_requires_restart(old_cfg: Any, new_cfg: Any, patch_dict: dict[str, Any]) -> bool:
+    provider_patch = patch_dict.get("provider")
+    if isinstance(provider_patch, dict):
+        if "type" in provider_patch:
+            return True
+
+        old_backend = getattr(old_cfg.provider, "backend", None)
+        new_backend = getattr(new_cfg.provider, "backend", None)
+        if old_backend != new_backend:
+            return True
+
+        if "llama_cpp" in provider_patch:
+            return True
+        if "model_path" in provider_patch:
+            return True
+        if any(k in provider_patch for k in {"offload_embedding", "offload_vision", "offload_audio", "mlx_memory"}):
+            return True
+
+    system_patch = patch_dict.get("system")
+    if isinstance(system_patch, dict):
+        if any(field in system_patch for field in {"desktop"}):
+            return True
+        server_patch = system_patch.get("server")
+        if isinstance(server_patch, dict) and any(field in server_patch for field in {"host", "port"}):
+            return True
+
+    return False
+
+
+def _merge_patch_into_data(data: dict[str, Any], patch_dict: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(data)
+    for sec, sec_data in patch_dict.items():
+        if sec_data is None:
+            continue
+        current_sec = merged.get(sec, {})
+        if not isinstance(current_sec, dict):
+            current_sec = {}
+        if isinstance(sec_data, dict):
+            merged[sec] = deep_merge(current_sec, sec_data)
+        else:
+            merged[sec] = sec_data
+    return merged
+
+
+def _normalize_persisted_config_data(data: dict[str, Any]) -> dict[str, Any]:
+    from lumina.config import normalize_home_tabs, normalize_image_modules
+
+    provider = data.get("provider")
+    if isinstance(provider, dict):
+        provider.pop("backend", None)
+        mlx_memory = provider.get("mlx_memory")
+        if not isinstance(mlx_memory, dict):
+            mlx_memory = {}
+        for key in ("offload_embedding", "offload_vision", "offload_audio"):
+            if key in provider:
+                mlx_memory[key] = provider.pop(key)
+        if mlx_memory:
+            provider["mlx_memory"] = mlx_memory
+
+    if isinstance(data.get("vision"), dict) and "enabled_modules" in data["vision"]:
+        data["vision"]["enabled_modules"] = normalize_image_modules(data["vision"]["enabled_modules"])
+
+    if isinstance(data.get("ui"), dict):
+        home = data["ui"].get("home")
+        if isinstance(home, dict) and "enabled_tabs" in home:
+            home["enabled_tabs"] = normalize_home_tabs(home["enabled_tabs"])
+
+    if isinstance(data.get("system"), dict):
+        branding = data["system"].get("branding")
+        if isinstance(branding, dict) and "username" in branding:
+            branding["username"] = str(branding["username"] or "").strip()
+
+    return data
+
+
+def _build_runtime_candidate(cfg: Any, patch_dict: dict[str, Any], persisted_data: dict[str, Any]) -> dict[str, Any]:
+    current = cfg.model_dump()
+    for sec, sec_data in patch_dict.items():
+        if not isinstance(sec_data, dict):
+            continue
+        if sec == "ui":
+            system = current.setdefault("system", {})
+            system["ui"] = deep_merge(system.get("ui", {}), sec_data)
+            continue
+        if sec not in current or not isinstance(current.get(sec), dict):
+            continue
+        current[sec] = deep_merge(current[sec], sec_data)
+
+    if isinstance(current.get("vision"), dict):
+        vision_modules = persisted_data.get("vision", {}).get("enabled_modules")
+        if vision_modules is not None:
+            current["vision"]["enabled_modules"] = vision_modules
+
+    system = current.setdefault("system", {})
+    if isinstance(system.get("ui"), dict):
+        enabled_tabs = persisted_data.get("ui", {}).get("home", {}).get("enabled_tabs")
+        if enabled_tabs is not None:
+            system_ui = system.setdefault("ui", {})
+            system_home = system_ui.setdefault("home", {})
+            system_home["enabled_tabs"] = enabled_tabs
+
+    if isinstance(system.get("branding"), dict):
+        username = persisted_data.get("system", {}).get("branding", {}).get("username")
+        if username is not None:
+            system["branding"]["username"] = username
+
+    return current
+
+
+class ConfigStore:
+    def __init__(self, preferred_path: str | Path | None = None) -> None:
+        self._preferred_path = preferred_path
+
+    def apply_patch(self, patch_dict: dict[str, Any], *, cfg: Any) -> ConfigPatchResult:
+        from lumina.config import Config
+
+        old_cfg = cfg.model_copy(deep=True)
+        data = read_mutable_config_data(self._preferred_path)
+        if not isinstance(data, dict):
+            data = {}
+
+        merged_data = _merge_patch_into_data(data, patch_dict)
+        _normalize_persisted_config_data(merged_data)
+
+        runtime_candidate = _build_runtime_candidate(cfg, patch_dict, merged_data)
+        new_cfg = Config.model_validate(runtime_candidate)
+
+        write_config_atomic(merged_data, self._preferred_path)
+        replace_runtime_config(cfg, new_cfg)
+
+        return ConfigPatchResult(
+            old_cfg=old_cfg,
+            new_cfg=new_cfg,
+            data=merged_data,
+            patch_dict=patch_dict,
+            restart_required=patch_requires_restart(old_cfg, new_cfg, patch_dict),
+        )
+
+
 def update_runtime_config(cfg: Any, data: dict, *, sections: set[str]) -> None:
     current = cfg.model_dump()
     for sec in sections:
+        if sec == "ui":
+            ui_data = data.get("ui")
+            if isinstance(ui_data, dict):
+                system = current.setdefault("system", {})
+                system["ui"] = deep_merge(system.get("ui", {}), ui_data)
+            continue
         actual_sec = "provider" if sec == "provider_sampling" else sec
         if actual_sec not in current:
             continue
-            
+
         sec_data = data.get(actual_sec)
         if not isinstance(sec_data, dict):
             continue
-            
+
         if sec == "provider_sampling":
             if "sampling" in sec_data:
                 current["provider"]["sampling"] = deep_merge(current["provider"]["sampling"], sec_data["sampling"])
         else:
             current[actual_sec] = deep_merge(current[actual_sec], sec_data)
-            if "prompts" in sec_data:
-                cfg.system_prompts.update(sec_data["prompts"])
 
     # Re-validate with deep merged dict
     from lumina.config import Config
     new_cfg = Config.model_validate(current)
-    
-    # Mutate in-place
-    for k in current.keys():
-        if hasattr(cfg, k):
-            setattr(cfg, k, getattr(new_cfg, k))
+
+    replace_runtime_config(cfg, new_cfg)

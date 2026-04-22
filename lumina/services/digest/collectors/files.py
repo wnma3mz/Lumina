@@ -6,6 +6,7 @@ lumina/digest/collectors/files.py — 本地文件数据源采集
 import logging
 import os
 import time
+import warnings
 from pathlib import Path
 
 from lumina.services.digest.config import get_cfg
@@ -20,19 +21,36 @@ _last_md_files: list[dict] = []
 _last_file_activities: list[dict] = []
 
 
+def _import_fitz():
+    """导入 PyMuPDF，并局部抑制其在 Python 3.12 下的 SWIG deprecation warning。"""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"builtin type SwigPyPacked has no __module__ attribute",
+            category=DeprecationWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=r"builtin type SwigPyObject has no __module__ attribute",
+            category=DeprecationWarning,
+        )
+        import fitz  # pymupdf
+
+    return fitz
+
+
 def _extract_file_snippet(path: Path, max_chars: int = 500) -> str:
     """提取文件片段（PDF 或文本）。"""
     if path.suffix.lower() == ".pdf":
         try:
-            import fitz  # pymupdf
-            doc = fitz.open(str(path))
-            text = ""
-            for page in doc:
-                text += page.get_text()
-                if len(text) >= max_chars:
-                    break
-            doc.close()
-            return text[:max_chars].strip()
+            fitz = _import_fitz()
+            with fitz.open(str(path)) as doc:
+                text = ""
+                for page in doc:
+                    text += page.get_text()
+                    if len(text) >= max_chars:
+                        break
+                return text[:max_chars].strip()
         except Exception:
             return ""
 

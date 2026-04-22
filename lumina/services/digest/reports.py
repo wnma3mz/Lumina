@@ -30,9 +30,9 @@ logger = logging.getLogger("lumina.services.digest")
 # ── 快照工具 ──────────────────────────────────────────────────────────────────
 
 def save_snapshot(content: str, ts: datetime) -> Path:
-    """保存活动摘要快照到 ~/.lumina/snapshots/YYYY-MM-DDTHH-MM.md。"""
+    """保存活动摘要快照到 ~/.lumina/snapshots/YYYY-MM-DDTHH-MM-SS.md。"""
     DIGEST_SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-    fname = ts.strftime("%Y-%m-%dT%H-%M") + ".md"
+    fname = ts.strftime("%Y-%m-%dT%H-%M-%S") + ".md"
     path = DIGEST_SNAPSHOTS_DIR / fname
     path.write_text(content, encoding="utf-8")
     return path

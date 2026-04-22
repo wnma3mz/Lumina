@@ -204,9 +204,9 @@ async def fragment_digest(request: Request):
             hero_text = re.sub(r"<[^>]+>", "", m.group(1)).strip()
 
     return templates.TemplateResponse(
+        request,
         "digest_content.html",
         {
-            "request": request,
             "generating": generating,
             "time_label": time_label,
             "sections": sections,
@@ -258,9 +258,9 @@ async def fragment_digest_sources(request: Request):
     top_sources = sorted(active_sources, key=lambda item: int(item.get("chars", 0) or 0), reverse=True)[:3]
 
     return templates.TemplateResponse(
+        request,
         "digest_sources.html",
         {
-            "request": request,
             "sources": sources,
             "active_count": len(active_sources),
             "total_count": len(sources),
@@ -291,9 +291,9 @@ async def fragment_pdf_status(job_id: str, request: Request):
         mono_url = f"/v1/pdf/download/{job_id}/mono"
         dual_url = f"/v1/pdf/download/{job_id}/dual"
         return templates.TemplateResponse(
+            request,
             "pdf_result.html",
             {
-                "request": request,
                 "job_id": job_id,
                 "mono_url": mono_url,
                 "dual_url": dual_url,
@@ -302,15 +302,16 @@ async def fragment_pdf_status(job_id: str, request: Request):
     elif status == "error":
         error_msg = job.get("error", "未知错误")
         return templates.TemplateResponse(
+            request,
             "pdf_error.html",
-            {"request": request, "error": error_msg},
+            {"error": error_msg},
         )
     else:
         # running / pending：返回带轮询的进度条
         return templates.TemplateResponse(
+            request,
             "pdf_progress.html",
             {
-                "request": request,
                 "job_id": job_id,
                 "progress": progress,
                 "status_text": "翻译中…" if status == "running" else "等待中…",
@@ -328,9 +329,9 @@ async def fragment_config(request: Request):
 
     cfg = get_config()
     return templates.TemplateResponse(
+        request,
         "config_form.html",
         {
-            "request": request,
             "cfg": cfg,
             "system_prompt_items": _system_prompt_items(getattr(cfg, "system_prompts", {})),
             "home_tab_defs": HOME_TAB_DEFS,
@@ -348,11 +349,9 @@ async def fragment_report(report_type: str, request: Request, key: str = "latest
         raise HTTPException(400, "Invalid report type")
     context = _load_report_fragment_context(report_type, key)
     return templates.TemplateResponse(
+        request,
         "report_content.html",
-        {
-            "request": request,
-            **context,
-        },
+        context,
     )
 
 

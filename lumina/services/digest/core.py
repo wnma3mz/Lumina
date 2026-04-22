@@ -159,26 +159,28 @@ _state = DigestState()
 class CollectorRunner:
     """封装 ThreadPoolExecutor + asyncio.wait_for 超时逻辑。
 
-    进程生命周期内复用线程池，避免超时后线程累积。
-    每个 collector 独立 30s 超时，超时视为异常，不 block 其他 collector。
+    不再使用长期单例的 ThreadPoolExecutor 以避免超时任务堆积导致资源耗尽。
+    每次采集单独创建一个 Executor，并在 finally 中进行 shutdown(wait=False)。
+    这样即使主任务超时，后台线程能够被正常孤立并在执行完后回收。
+    collector 的 history_hours 覆盖在工作线程内生效，避免与配置热重载竞争。
     """
 
     TIMEOUT = 30
 
-    def __init__(self) -> None:
-        self._executor = ThreadPoolExecutor(
-            max_workers=8, thread_name_prefix="lumina_collector"
-        )
-
     async def run_all(self, collectors: list, effective_hours: float) -> dict:
         """并发执行所有 collector，返回 {fn_name: result_or_Exception}。"""
         loop = asyncio.get_running_loop()
+        executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="lumina_collector")
+
+        def _run_with_effective_hours(fn):
+            with override_history_hours(effective_hours):
+                return fn()
 
         async def _run_one(fn):
             t0 = time.monotonic()
             try:
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(self._executor, fn),
+                    loop.run_in_executor(executor, _run_with_effective_hours, fn),
                     timeout=self.TIMEOUT,
                 )
                 logger.debug("Digest: collector %s done in %.2fs", fn.__name__, time.monotonic() - t0)
@@ -192,9 +194,12 @@ class CollectorRunner:
                 logger.warning("Digest: collector %s raised: %s", fn.__name__, e)
                 return e
 
-        with override_history_hours(effective_hours):
+        try:
             results = await asyncio.gather(*[_run_one(fn) for fn in collectors])
-        return {fn.__name__: r for fn, r in zip(collectors, results)}
+            return {fn.__name__: r for fn, r in zip(collectors, results)}
+        finally:
+            # 无论成功或超时，让 executor 在后台结束，不阻塞主协程
+            executor.shutdown(wait=False)
 
 
 # 模块级单例
@@ -489,7 +494,7 @@ def load_digest() -> Optional[str]:
 
 
 async def maybe_generate_digest(llm, force_full: bool = False) -> None:
-    """定时/启动时调用。用 asyncio.Lock 防并发。force_full 忽略不用。"""
+    """定时/启动时调用。用 asyncio.Lock 防并发。"""
     if not get_cfg().enabled:
         logger.info("Digest disabled, skipping generation")
         return
@@ -497,17 +502,18 @@ async def maybe_generate_digest(llm, force_full: bool = False) -> None:
 
     # 距上次生成不足 refresh_hours 则跳过，避免启动时重复采集
     cfg = get_cfg()
-    with _state._lock:
-        last_ts = _state.last_generated_ts
-    if last_ts is not None:
-        elapsed = time.time() - last_ts
-        cooldown = cfg.refresh_hours * 3600
-        if elapsed < cooldown:
-            logger.info(
-                "Digest: skipping, last generated %.0f min ago (cooldown %.0f min)",
-                elapsed / 60, cooldown / 60,
-            )
-            return
+    if not force_full:
+        with _state._lock:
+            last_ts = _state.last_generated_ts
+        if last_ts is not None:
+            elapsed = time.time() - last_ts
+            cooldown = cfg.refresh_hours * 3600
+            if elapsed < cooldown:
+                logger.info(
+                    "Digest: skipping, last generated %.0f min ago (cooldown %.0f min)",
+                    elapsed / 60, cooldown / 60,
+                )
+                return
 
     lock = _state.get_digest_lock()
     if lock.locked():

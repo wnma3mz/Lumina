@@ -148,14 +148,11 @@ async def pdf_job_status(job_id: str, raw: Request):
 @router.get("/v1/pdf/download/{job_id}/{variant}")
 async def pdf_download(job_id: str, variant: str, raw: Request):
     manager = raw.app.state.pdf_manager
-    job = manager.get_status(job_id)
-    if not job:
+    state, path = manager.resolve_download(job_id, variant)
+    if state == "missing":
         raise HTTPException(404, "Job not found")
-    if job["status"] != "done":
+    if state == "not_ready":
         raise HTTPException(409, "Job not ready")
-    path = manager.get_file(job_id, variant)
-    if not path:
-        raise HTTPException(404, "File not found")
     return FileResponse(path, media_type="application/pdf", filename=path.name)
 
 @router.post("/v1/pdf/upload_stream")

@@ -296,6 +296,14 @@ _recorder = RequestHistoryRecorder(REQUEST_HISTORY_DIR)
 
 
 def get_cfg() -> RequestHistoryConfig:
+    try:
+        from lumina.config import peek_config
+
+        cfg = peek_config()
+        if cfg is not None:
+            return cfg.request_history
+    except Exception:
+        pass
     return _cfg
 
 
@@ -307,21 +315,24 @@ def configure(data, *, run_startup_cleanup: bool = False) -> None:
     global _cfg
 
     if isinstance(data, RequestHistoryConfig):
-        _cfg = data
+        new_cfg = data
     else:
         node = data.get("request_history", {}) if isinstance(data, dict) else {}
         if not isinstance(node, dict):
             node = {}
-        _cfg = RequestHistoryConfig(
-            enabled=bool(node.get("enabled", True)),
-            capture_full_body=bool(node.get("capture_full_body", True)),
-            retention_days=max(0, int(node.get("retention_days", 14))),
-            max_total_mb=max(1, int(node.get("max_total_mb", 512))),
-            compress_after_days=max(0, int(node.get("compress_after_days", 1))),
-            cleanup_on_startup=bool(node.get("cleanup_on_startup", True)),
-        )
+        new_cfg = RequestHistoryConfig.model_validate(node)
 
-    _recorder.configure(_cfg, run_startup_cleanup=run_startup_cleanup)
+    _cfg = new_cfg
+    try:
+        from lumina.config import peek_config
+
+        cfg = peek_config()
+        if cfg is not None:
+            cfg.system.request_history = new_cfg
+    except Exception:
+        pass
+
+    _recorder.configure(new_cfg, run_startup_cleanup=run_startup_cleanup)
 
 
 def shutdown(flush_timeout: float = 5.0) -> None:

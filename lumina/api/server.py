@@ -34,14 +34,29 @@ _BUNDLE_STATIC = (
     if hasattr(_sys, "_MEIPASS")
     else Path(__file__).parent / "static"
 )
+_REQUIRED_STATIC_FILES = ("style.css", "logo.svg")
 
 
-def _static_dir() -> Path:
-    """优先使用 ~/.lumina/static/（由 sync_static() 在启动时同步），
-    fallback 到 bundle/源码内路径。动态求值，避免模块 import 时目录尚未创建。
-    """
+def _is_complete_static_dir(path: Path) -> bool:
+    return path.is_dir() and all((path / name).is_file() for name in _REQUIRED_STATIC_FILES)
+
+
+def _resolve_static_dir() -> Path:
+    """优先使用完整的 ~/.lumina/static/；缺文件时回退到 bundle/源码内路径。"""
     p = Path.home() / ".lumina" / "static"
-    return p if p.is_dir() else _BUNDLE_STATIC
+    return p if _is_complete_static_dir(p) else _BUNDLE_STATIC
+
+
+def _compute_asset_version(static_root: Path) -> int:
+    if not static_root.exists():
+        return 0
+    try:
+        return max(
+            (int(path.stat().st_mtime) for path in static_root.rglob("*") if path.is_file()),
+            default=0,
+        )
+    except Exception:
+        return 0
 
 
 @asynccontextmanager
@@ -92,6 +107,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     app.state.batch_manager = BatchJobManager(llm)
     app.state.digest_scheduler = None
     app.state.server_start_time = time.time()  # lifespan 会用精确值覆盖
+    app.state.static_root = _resolve_static_dir()
 
     app.add_middleware(
         CORSMiddleware,
@@ -111,7 +127,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     app.include_router(fragments_router.router)
 
     # ── 静态文件（CSS / SVG 等）─────────────────────────────────────────────────
-    app.mount("/static", StaticFiles(directory=str(_static_dir())), name="static")
+    app.mount("/static", StaticFiles(directory=str(app.state.static_root)), name="static")
 
     # ── PWA 前端 ──────────────────────────────────────────────────────────────
     _templates_dir = Path(__file__).parent / "templates"
@@ -119,13 +135,8 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
 
     @app.get("/")
     async def pwa_index(request: Request):
-        static_root = _static_dir()
-        asset_ver = 0
-        if static_root.exists():
-            asset_ver = max(
-                (int(path.stat().st_mtime) for path in static_root.rglob("*") if path.is_file()),
-                default=0,
-            )
+        static_root = app.state.static_root
+        asset_ver = _compute_asset_version(static_root)
 
         cfg = get_config()
         configured_username = ""
@@ -164,9 +175,9 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
         )
 
         return _tmpl.TemplateResponse(
+            request,
             "index.html",
             {
-                "request": request,
                 "asset_ver": asset_ver,
                 "username": username,
                 "slogan_candidates": slogan_candidates,
@@ -182,7 +193,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
 
     @app.get("/logo.svg")
     async def pwa_logo():
-        return FileResponse(_static_dir() / "logo.svg", media_type="image/svg+xml")
+        return FileResponse(app.state.static_root / "logo.svg", media_type="image/svg+xml")
 
     @app.get("/manifest.json")
     async def pwa_manifest():
@@ -225,6 +236,4 @@ async def raw_request_disconnected(request) -> bool:
     try:
         return await asyncio.wait_for(request.is_disconnected(), timeout=0.001)
     except asyncio.TimeoutError:
-        return False
-    except Exception:
         return False
