@@ -47,6 +47,7 @@ _PROCESS_STARTED_TS = time.time()
 
 def _save_collector_state(results: dict) -> None:
     """持久化最近一次 collector 采集快照，供重启后恢复 UI 状态。"""
+    import uuid
     try:
         _COLLECTOR_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -54,7 +55,7 @@ def _save_collector_state(results: dict) -> None:
             "process_started_ts": _PROCESS_STARTED_TS,
             "collectors": results,
         }
-        tmp = _COLLECTOR_STATE_PATH.with_suffix(".tmp")
+        tmp = _COLLECTOR_STATE_PATH.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
         tmp.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -62,6 +63,8 @@ def _save_collector_state(results: dict) -> None:
         tmp.replace(_COLLECTOR_STATE_PATH)
     except Exception as e:
         logger.debug("Digest: failed to save collector state: %s", e)
+        if "tmp" in locals():
+            tmp.unlink(missing_ok=True)
 
 
 def _load_collector_state() -> dict:

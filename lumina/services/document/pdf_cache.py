@@ -40,9 +40,10 @@ def put_cache(url: str, data: bytes) -> Path:
     将下载内容原子写入缓存，返回缓存文件路径。
     先写 .tmp 再 rename，避免并发写入产生损坏文件。
     """
+    import uuid
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest = _cache_path(url)
-    tmp = dest.with_suffix(".tmp")
+    tmp = dest.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
     try:
         tmp.write_bytes(data)
         tmp.rename(dest)
@@ -56,14 +57,22 @@ def put_cache(url: str, data: bytes) -> Path:
 def put_cache_file(url: str, src_path: Path) -> Path:
     """
     将已流式写入的临时文件原子移动到缓存，返回缓存文件路径。
-    优先 rename（同文件系统）；跨文件系统时 fallback 到 copy2 + unlink。
+    优先 rename（同文件系统）；跨文件系统时 fallback 到 copy2 到 tmp 再 rename。
     """
+    import uuid
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest = _cache_path(url)
     try:
         src_path.rename(dest)
     except OSError:
-        shutil.copy2(str(src_path), str(dest))
-        src_path.unlink(missing_ok=True)
+        tmp_dest = dest.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
+        try:
+            shutil.copy2(str(src_path), str(tmp_dest))
+            tmp_dest.rename(dest)
+        except Exception:
+            tmp_dest.unlink(missing_ok=True)
+            raise
+        finally:
+            src_path.unlink(missing_ok=True)
     logger.info("Cached PDF: %s", dest)
     return dest

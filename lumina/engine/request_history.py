@@ -230,7 +230,8 @@ class RequestHistoryRecorder:
             before_size = archive_path.stat().st_size if archive_path.exists() else 0
             
             # 临时写入 .tmp 文件，完成后重命名，保证原子性并避免 crash 导致数据损坏
-            tmp_archive_path = archive_path.with_suffix(".gz.tmp")
+            import uuid
+            tmp_archive_path = archive_path.with_suffix(f".{uuid.uuid4().hex[:8]}.gz.tmp")
             with path.open("rb") as src, gzip.open(tmp_archive_path, "wb") as dst:
                 shutil.copyfileobj(src, dst)
                 
