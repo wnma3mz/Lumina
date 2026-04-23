@@ -152,7 +152,7 @@ class RequestHistoryRecorder:
             try:
                 self._write_entry(item)
             except Exception as e:
-                logger.warning("Request history write failed: %s", e)
+                logger.warning("Request history write failed: %s", e, exc_info=True)
             finally:
                 self._queue.task_done()
 

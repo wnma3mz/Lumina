@@ -123,7 +123,14 @@ def sync_static() -> None:
             ss, ds = src_file.stat(), dst_file.stat()
             if ss.st_size == ds.st_size and ss.st_mtime <= ds.st_mtime:
                 continue
-        shutil.copy2(str(src_file), str(dst_file))
+        import uuid
+        tmp_dst = dst_file.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
+        try:
+            shutil.copy2(str(src_file), str(tmp_dst))
+            tmp_dst.replace(dst_file)
+        except Exception:
+            tmp_dst.unlink(missing_ok=True)
+            raise
         updated.append(str(rel_path))
 
     if updated:

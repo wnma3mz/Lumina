@@ -436,7 +436,7 @@ async def generate_digest(llm) -> str:
             from lumina.services.digest.reports import save_snapshot
             save_snapshot(entry, now)
         except Exception as e:
-            logger.warning("Digest: failed to save snapshot: %s", e)
+            logger.warning("Digest: failed to save snapshot: %s", e, exc_info=True)
         return entry
     finally:
         _state.set_generating(False)
@@ -543,7 +543,7 @@ async def maybe_generate_digest(llm, force_full: bool = False) -> None:
         try:
             await generate_digest(llm)
         except Exception as e:
-            logger.error("Digest generation failed: %s", e)
+            logger.error("Digest generation failed: %s", e, exc_info=True)
 
 
 def get_status() -> dict:
