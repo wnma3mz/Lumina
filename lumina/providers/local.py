@@ -305,7 +305,7 @@ class LocalProvider(BaseProvider):
             self._prefill_full_prompt_cache(suffix_tokens[:-1], prompt_cache)
 
         input_tokens = mx.array([[suffix_tokens[-1]]])
-        logits = self._extract_logits(self._model(input_tokens, cache=prompt_cache))[:, -1, :]
+        logits = self._extract_logits(self._forward_with_cache(input_tokens, prompt_cache))[:, -1, :]
         mx.eval(logits)
         next_token = int(mx.argmax(logits, axis=-1).item())
         eos_ids = self._eos_ids
@@ -313,7 +313,7 @@ class LocalProvider(BaseProvider):
         for _ in range(max(0, self.warmup_decode_steps - 1)):
             if next_token in eos_ids:
                 break
-            logits = self._extract_logits(self._model(mx.array([[next_token]]), cache=prompt_cache))[:, -1, :]
+            logits = self._extract_logits(self._forward_with_cache(mx.array([[next_token]]), prompt_cache))[:, -1, :]
             mx.eval(logits)
             next_token = int(mx.argmax(logits, axis=-1).item())
 
@@ -415,7 +415,7 @@ class LocalProvider(BaseProvider):
         prompt = mx.array(prompt_tokens)
         while len(prompt) > 0:
             n_to_process = min(2048, len(prompt))
-            self._model(prompt[:n_to_process][None], cache=prompt_cache)
+            self._forward_with_cache(prompt[:n_to_process][None], prompt_cache)
             self._eval_cache_state(prompt_cache)
             prompt = prompt[n_to_process:]
             mx.clear_cache()

@@ -23,9 +23,10 @@ async def stream_llm(
     origin: str = "unknown",
     client_model: str = None,
     request_id: str = None,
+    **kwargs,
 ) -> AsyncIterator[str]:
     """
-    驱动 llm.generate_stream(user_text, task=task)，yield SSE 数据行。
+    驱动 llm.generate_stream(user_text, task=task, **kwargs)，yield SSE 数据行。
 
     最后 yield "data: [DONE]\\n\\n"，异常时 yield error 事件。
     """
@@ -36,7 +37,7 @@ async def stream_llm(
             client_model=client_model,
             request_id=request_id,
         ):
-            async for token in llm.generate_stream(user_text, task=task):
+            async for token in llm.generate_stream(user_text, task=task, **kwargs):
                 yield f"data: {json.dumps({'text': token})}\n\n"
     except asyncio.CancelledError:
         raise
