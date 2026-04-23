@@ -2813,6 +2813,7 @@ body {
 #panel-document,
 #panel-image,
 #panel-audio,
+#panel-game,
 #panel-settings {
   display: none;
 }
@@ -2839,6 +2840,10 @@ body {
   min-height: 0;
 }
 
+#tab-game:checked ~ main #panel-game {
+  display: block;
+}
+
 #tab-settings:checked ~ main #panel-settings {
   display: block;
 }
@@ -2849,6 +2854,7 @@ body {
 #tab-document:checked ~ nav label[data-tab="document"],
 #tab-image:checked ~ nav label[data-tab="image"],
 #tab-audio:checked ~ nav label[data-tab="audio"],
+#tab-game:checked ~ nav label[data-tab="game"],
 #tab-settings:checked ~ nav label[data-tab="settings"] {
   --tw-bg-opacity: 1;
   background-color: rgb(99 102 241 / var(--tw-bg-opacity, 1));
@@ -2863,6 +2869,7 @@ body {
 #tab-document:not(:checked) ~ nav label[data-tab="document"],
 #tab-image:not(:checked) ~ nav label[data-tab="image"],
 #tab-audio:not(:checked) ~ nav label[data-tab="audio"],
+#tab-game:not(:checked) ~ nav label[data-tab="game"],
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"] {
   --tw-text-opacity: 1;
   color: rgb(161 161 170 / var(--tw-text-opacity, 1));
@@ -2871,6 +2878,7 @@ body {
 #tab-digest:not(:checked) ~ nav label[data-tab="digest"]:hover,
 #tab-document:not(:checked) ~ nav label[data-tab="document"]:hover,
 #tab-image:not(:checked) ~ nav label[data-tab="image"]:hover,
+#tab-game:not(:checked) ~ nav label[data-tab="game"]:hover,
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover {
   --tw-text-opacity: 1;
   color: rgb(24 24 27 / var(--tw-text-opacity, 1));
@@ -2879,6 +2887,7 @@ body {
 #tab-digest:not(:checked) ~ nav label[data-tab="digest"]:hover:is(.dark *),
 #tab-document:not(:checked) ~ nav label[data-tab="document"]:hover:is(.dark *),
 #tab-image:not(:checked) ~ nav label[data-tab="image"]:hover:is(.dark *),
+#tab-game:not(:checked) ~ nav label[data-tab="game"]:hover:is(.dark *),
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover:is(.dark *) {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity, 1));

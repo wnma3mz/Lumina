@@ -217,6 +217,12 @@ class DocumentConfig(BaseModel):
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
 
 
+class GameConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    prompts: Dict[str, str] = Field(default_factory=dict)
+    sampling: SamplingConfig = Field(default_factory=SamplingConfig)
+
+
 class LlamaCppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
     model_path: str = Field(default_factory=lambda: default_provider_model_path("llama_cpp"))
@@ -527,9 +533,10 @@ class Config(BaseModel):
     document: DocumentConfig = Field(default_factory=DocumentConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
-    
+    game: GameConfig = Field(default_factory=GameConfig)
+
     system_prompts: Dict[str, str] = Field(default_factory=dict)
-    
+
     def model_post_init(self, __context: Any) -> None:
         # 聚合所有的 system_prompts 以供底层 Engine 使用
         self.system_prompts.update(self.provider.prompts)
@@ -537,6 +544,7 @@ class Config(BaseModel):
         self.system_prompts.update(self.document.prompts)
         self.system_prompts.update(self.vision.prompts)
         self.system_prompts.update(self.audio.prompts)
+        self.system_prompts.update(self.game.prompts)
 
     @property
     def ui(self): return self.system.ui

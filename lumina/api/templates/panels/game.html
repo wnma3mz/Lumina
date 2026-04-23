@@ -1,0 +1,356 @@
+<div id="panel-game" class="p-4 md:p-6 max-w-5xl mx-auto w-full">
+  <div class="mb-4">
+    <h2 class="text-xl font-semibold text-zinc-800 dark:text-zinc-100">语言效果游戏</h2>
+    <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">用一句话说服 NPC，3 轮累计 10 分过关</p>
+  </div>
+
+  <div class="flex flex-col md:flex-row gap-4">
+    <!-- 左侧剧本列表 -->
+    <div class="md:w-72 shrink-0">
+      <div class="bento-card p-3">
+        <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2 uppercase tracking-wide">选择剧本</div>
+        <div id="scenario-list" class="space-y-1.5"></div>
+      </div>
+    </div>
+
+    <!-- 右侧游戏区 -->
+    <div class="flex-1 min-w-0">
+      <!-- 空闲状态 -->
+      <div id="game-idle" class="bento-card p-8 flex flex-col items-center justify-center text-center min-h-64">
+        <div class="text-4xl mb-3">🎭</div>
+        <div class="text-zinc-500 dark:text-zinc-400 text-sm">从左侧选择一个剧本开始</div>
+      </div>
+
+      <!-- 游戏中状态 -->
+      <div id="game-playing" class="hidden space-y-3">
+        <!-- 场景信息 -->
+        <div class="bento-card p-4">
+          <div class="flex items-start gap-3">
+            <div id="game-scene-emoji" class="text-2xl shrink-0">🎭</div>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-zinc-800 dark:text-zinc-100 text-sm" id="game-scene-title"></div>
+              <div class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5" id="game-scene-desc"></div>
+            </div>
+            <!-- 进度 -->
+            <div class="shrink-0 text-right">
+              <div class="text-xs text-zinc-400 dark:text-zinc-500">进度</div>
+              <div class="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                <span id="game-score-display">0</span><span class="text-xs font-normal text-zinc-400">/10</span>
+              </div>
+            </div>
+          </div>
+          <!-- 进度条 -->
+          <div class="mt-3 progress-bar-track">
+            <div id="game-progress-bar" class="progress-bar-fill" style="width:0%"></div>
+          </div>
+          <div class="flex justify-between text-xs text-zinc-400 mt-1">
+            <span>第 <span id="game-round-display">1</span> 轮 / 共 3 轮</span>
+            <span>目标：10 分</span>
+          </div>
+        </div>
+
+        <!-- 对话区 -->
+        <div class="bento-card p-4">
+          <div id="game-dialogue" class="space-y-2 max-h-64 overflow-y-auto mb-3"></div>
+
+          <!-- 输入区 -->
+          <div id="game-input-area">
+            <textarea
+              id="game-input"
+              rows="2"
+              placeholder="输入你的回应……"
+              class="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-sm px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            ></textarea>
+            <div class="flex justify-between items-center mt-2">
+              <div id="game-feedback-hint" class="text-xs text-zinc-400 dark:text-zinc-500 italic"></div>
+              <button
+                id="game-submit-btn"
+                onclick="gameSubmitTurn()"
+                class="px-4 py-1.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm rounded-lg font-medium transition-all"
+              >提交</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 结算状态 -->
+      <div id="game-over" class="hidden bento-card p-8 flex flex-col items-center justify-center text-center">
+        <div id="game-over-emoji" class="text-5xl mb-3">🏆</div>
+        <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100 mb-1">
+          总分 <span id="game-final-score" class="text-indigo-600 dark:text-indigo-400"></span> 分
+        </div>
+        <div id="game-final-title" class="text-base text-zinc-500 dark:text-zinc-400 mb-1 font-medium"></div>
+        <div id="game-final-desc" class="text-sm text-zinc-400 dark:text-zinc-500 mb-6"></div>
+        <button
+          onclick="gameReplay()"
+          class="px-5 py-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm rounded-lg font-medium transition-all"
+        >再玩一局</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const SCENARIOS = [
+    {
+      key: "landlord",
+      emoji: "🏠",
+      title: "向房东要回押金",
+      desc: "租房到期，房东以「墙上有划痕」为由扣押金",
+      scene: "租房到期，房东以「墙上有划痕」为由扣押金",
+      npc_personality: "抠门、爱找借口，但怕麻烦",
+      opening: "「墙上有划痕，押金我得扣一半。」"
+    },
+    {
+      key: "boss",
+      emoji: "💼",
+      title: "哄老板批假",
+      desc: "临时需要请假，老板正在为项目进度焦虑",
+      scene: "临时需要请假，老板正在为项目进度焦虑",
+      npc_personality: "严格但讲道理，重视团队责任感",
+      opening: "「这个节骨眼上请假？项目怎么办？」"
+    },
+    {
+      key: "cat",
+      emoji: "🐱",
+      title: "说服猫去洗澡",
+      desc: "猫已经三周没洗澡，你需要把它骗进浴室",
+      scene: "猫已经三周没洗澡，你需要把它骗进浴室",
+      npc_personality: "高冷、多疑、极度自尊",
+      opening: "「喵～（眯着眼睛看你，纹丝不动）」"
+    },
+    {
+      key: "suspect",
+      emoji: "🔍",
+      title: "审讯嫌疑人",
+      desc: "银行失窃，嫌疑人声称自己当天在家",
+      scene: "银行失窃，嫌疑人坐在审讯室，声称自己当天在家",
+      npc_personality: "狡猾、镇定，但有一个破绽（细节说不清楚）",
+      opening: "「我说了，我当天根本不在现场。」"
+    },
+    {
+      key: "alien",
+      emoji: "👽",
+      title: "和外星人谈判",
+      desc: "外星人要求地球交出所有的猫",
+      scene: "外星人飞船停在广场，要求地球交出所有的猫",
+      npc_personality: "傲慢、逻辑严密，但对地球文化一无所知",
+      opening: "「地球人，你们的猫已经被我们锁定。交出来，或者我们自己取。」"
+    },
+    {
+      key: "concert",
+      emoji: "🎵",
+      title: "说服朋友退票",
+      desc: "朋友花大价钱买了周五的票，但那天有重要约定",
+      scene: "朋友花了大价钱买了周五的演唱会票，但那天你们有重要约定",
+      npc_personality: "念旧但固执，对钱看得重",
+      opening: "「那票我抢了两个小时，你让我退？」"
+    }
+  ];
+
+  const FINAL_RATINGS = [
+    { min: 13, emoji: "🏆", title: "语言大师，一击即中", desc: "你的说服力令人叹服，对手根本没有招架之力。" },
+    { min: 10, emoji: "✅", title: "过关，费了点力气", desc: "最终说服了对方，虽然过程有些曲折。" },
+    { min: 7,  emoji: "😅", title: "差一点，对手没被说服", desc: "你的话有些道理，但还不够有力。" },
+    { min: 0,  emoji: "💀", title: "惨败，建议回去练练嘴皮子", desc: "对手对你的说辞完全不买账。" },
+  ];
+
+  // 游戏状态
+  let state = {
+    scenario: null,
+    round: 0,
+    totalScore: 0,
+    loading: false,
+    over: false,
+  };
+
+  function init() {
+    const list = document.getElementById('scenario-list');
+    list.innerHTML = '';
+    SCENARIOS.forEach((s, idx) => {
+      const btn = document.createElement('button');
+      btn.id = 'scenario-btn-' + idx;
+      btn.className = 'w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors flex items-center gap-2 text-zinc-700 dark:text-zinc-300';
+      btn.innerHTML = `<span class="text-base">${s.emoji}</span><span class="truncate">${s.title}</span>`;
+      btn.addEventListener('click', () => startGame(idx));
+      list.appendChild(btn);
+    });
+  }
+
+  function startGame(idx) {
+    const s = SCENARIOS[idx];
+    state = { scenario: s, round: 1, totalScore: 0, loading: false, over: false };
+
+    // 高亮选中剧本
+    SCENARIOS.forEach((_, i) => {
+      const b = document.getElementById('scenario-btn-' + i);
+      if (b) b.className = 'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ' +
+        (i === idx
+          ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium'
+          : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-zinc-700 dark:text-zinc-300');
+    });
+
+    // 更新场景信息
+    document.getElementById('game-scene-emoji').textContent = s.emoji;
+    document.getElementById('game-scene-title').textContent = s.title;
+    document.getElementById('game-scene-desc').textContent = s.npc_personality;
+    updateProgress();
+
+    // 清空对话，加入开场白
+    const dialogue = document.getElementById('game-dialogue');
+    dialogue.innerHTML = '';
+    appendDialogue('npc', s.opening);
+
+    // 清空反馈、输入框
+    document.getElementById('game-feedback-hint').textContent = '';
+    document.getElementById('game-input').value = '';
+    document.getElementById('game-input-area').style.display = '';
+
+    // 切换面板
+    document.getElementById('game-idle').classList.add('hidden');
+    document.getElementById('game-over').classList.add('hidden');
+    document.getElementById('game-playing').classList.remove('hidden');
+
+    document.getElementById('game-input').focus();
+  }
+
+  function updateProgress() {
+    const score = state.totalScore;
+    const pct = Math.min(100, Math.round(score / 10 * 100));
+    document.getElementById('game-score-display').textContent = score;
+    document.getElementById('game-round-display').textContent = state.round;
+    document.getElementById('game-progress-bar').style.width = pct + '%';
+  }
+
+  function appendDialogue(who, text) {
+    const dialogue = document.getElementById('game-dialogue');
+    const div = document.createElement('div');
+    div.className = who === 'npc'
+      ? 'flex gap-2 items-start'
+      : 'flex gap-2 items-start flex-row-reverse';
+    const bubble = document.createElement('div');
+    bubble.className = who === 'npc'
+      ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl rounded-tl-none px-3 py-2 text-sm max-w-xs'
+      : 'bg-indigo-500 text-white rounded-xl rounded-tr-none px-3 py-2 text-sm max-w-xs';
+    bubble.textContent = text;
+    div.appendChild(bubble);
+    dialogue.appendChild(div);
+    dialogue.scrollTop = dialogue.scrollHeight;
+  }
+
+  function appendFeedbackRow(score, feedback) {
+    const dialogue = document.getElementById('game-dialogue');
+    const div = document.createElement('div');
+    div.className = 'flex justify-center';
+    const stars = '★'.repeat(score) + '☆'.repeat(5 - score);
+    div.innerHTML = `<span class="text-xs text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full px-3 py-0.5">${stars} ${feedback}</span>`;
+    dialogue.appendChild(div);
+    dialogue.scrollTop = dialogue.scrollHeight;
+  }
+
+  async function gameSubmitTurn() {
+    if (state.loading || state.over) return;
+    const input = document.getElementById('game-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    state.loading = true;
+    const btn = document.getElementById('game-submit-btn');
+    btn.disabled = true;
+    btn.textContent = '评估中…';
+    document.getElementById('game-feedback-hint').textContent = '';
+
+    appendDialogue('player', text);
+    input.value = '';
+
+    try {
+      const res = await fetch('/v1/game/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scene: state.scenario.scene,
+          npc_personality: state.scenario.npc_personality,
+          current_score: state.totalScore,
+          player_input: text
+        })
+      });
+
+      if (!res.ok) throw new Error('请求失败 ' + res.status);
+      const data = await res.json();
+      const { score, feedback } = data;
+
+      state.totalScore += score;
+      if (state.totalScore > 15) state.totalScore = 15;
+
+      // 展示 NPC 反应
+      appendDialogue('npc', feedback);
+      appendFeedbackRow(score, `+${score} 分`);
+      updateProgress();
+
+      // 5 分直接胜利 或 累计达标
+      if (score === 5 || state.totalScore >= 10) {
+        endGame();
+        return;
+      }
+
+      state.round += 1;
+      if (state.round > 3) {
+        endGame();
+        return;
+      }
+
+      updateProgress();
+      document.getElementById('game-feedback-hint').textContent = `还剩 ${3 - state.round + 1} 轮，继续加油！`;
+    } catch (e) {
+      document.getElementById('game-feedback-hint').textContent = '请求失败，请检查服务是否运行中。';
+    } finally {
+      state.loading = false;
+      btn.disabled = false;
+      btn.textContent = '提交';
+      input.focus();
+    }
+  }
+
+  function endGame() {
+    state.over = true;
+    document.getElementById('game-input-area').style.display = 'none';
+
+    const total = state.totalScore;
+    const rating = FINAL_RATINGS.find(r => total >= r.min) || FINAL_RATINGS[FINAL_RATINGS.length - 1];
+
+    document.getElementById('game-over-emoji').textContent = rating.emoji;
+    document.getElementById('game-final-score').textContent = total;
+    document.getElementById('game-final-title').textContent = rating.title;
+    document.getElementById('game-final-desc').textContent = rating.desc;
+
+    document.getElementById('game-playing').classList.add('hidden');
+    document.getElementById('game-over').classList.remove('hidden');
+  }
+
+  function gameReplay() {
+    document.getElementById('game-over').classList.add('hidden');
+    document.getElementById('game-idle').classList.remove('hidden');
+    state = { scenario: null, round: 0, totalScore: 0, loading: false, over: false };
+    // 取消剧本高亮
+    SCENARIOS.forEach((_, i) => {
+      const b = document.getElementById('scenario-btn-' + i);
+      if (b) b.className = 'w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors flex items-center gap-2 text-zinc-700 dark:text-zinc-300';
+    });
+  }
+
+  // 把函数暴露到全局，供 onclick 使用
+  window.gameSubmitTurn = gameSubmitTurn;
+  window.gameReplay = gameReplay;
+
+  // Enter 键提交
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey && document.activeElement && document.activeElement.id === 'game-input') {
+      e.preventDefault();
+      gameSubmitTurn();
+    }
+  });
+
+  init();
+})();
+</script>

@@ -94,6 +94,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     from lumina.api.routers import document as document_router
     from lumina.api.routers import vision as vision_router
     from lumina.api.routers import audio as audio_router
+    from lumina.api.routers import game as game_router
     from lumina.api.routers import fragments as fragments_router
     from lumina.config import get_config
 
@@ -124,6 +125,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     app.include_router(document_router.router)
     app.include_router(vision_router.router)
     app.include_router(audio_router.router)
+    app.include_router(game_router.router)
     app.include_router(fragments_router.router)
 
     # ── 静态文件（CSS / SVG 等）─────────────────────────────────────────────────
