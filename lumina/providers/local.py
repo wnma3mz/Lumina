@@ -224,6 +224,21 @@ class LocalProvider(BaseProvider):
             current_loop = asyncio.get_running_loop()
             # asyncio.run() 每次创建新 loop；Queue/Event 绑定旧 loop 时必须重建
             if self._prefill_queue is None or self._loop is not current_loop:
+                # 通知旧队列里等待中的 slot，避免其 token_queue.get() 永久阻塞
+                old_queue = self._prefill_queue
+                if old_queue is not None:
+                    err = RuntimeError("Event loop changed; request dropped")
+                    while True:
+                        try:
+                            slot = old_queue.get_nowait()
+                            if not slot.done:
+                                slot.done = True
+                                try:
+                                    slot.token_queue.put_nowait(err)
+                                except Exception:
+                                    pass
+                        except asyncio.QueueEmpty:
+                            break
                 self._prefill_queue = asyncio.Queue()
                 self._not_empty = asyncio.Event()
             if self._worker_task is None or self._worker_task.done():

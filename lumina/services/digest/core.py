@@ -90,6 +90,7 @@ class DigestState:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._digest_lock: Optional[asyncio.Lock] = None
+        self._report_locks: dict = {}  # (report_type, key) -> asyncio.Lock
         self.generating: bool = False
         self.generated_at: Optional[str] = None
         self.last_generated_ts: Optional[float] = None
@@ -100,6 +101,13 @@ class DigestState:
         if self._digest_lock is None:
             self._digest_lock = asyncio.Lock()
         return self._digest_lock
+
+    def get_report_lock(self, report_type: str, key: str) -> asyncio.Lock:
+        """为每个 (report_type, key) 组合懒初始化独立的 asyncio.Lock。"""
+        lock_key = (report_type, key)
+        if lock_key not in self._report_locks:
+            self._report_locks[lock_key] = asyncio.Lock()
+        return self._report_locks[lock_key]
 
     def set_generating(self, val: bool) -> None:
         with self._lock:
@@ -436,6 +444,8 @@ async def generate_report(llm, report_type: str, key: str) -> Optional[str]:
 
     report_type: "daily" | "weekly" | "monthly"
     key:         对应格式的日期键（日报: YYYY-MM-DD，周报: YYYY-Www，月报: YYYY-MM）
+
+    用 per-(type, key) asyncio.Lock 防止同一报告被并发重复生成。
     """
     from datetime import date
     from lumina.services.digest.reports import (
@@ -459,30 +469,36 @@ async def generate_report(llm, report_type: str, key: str) -> Optional[str]:
     if report_type not in task_names:
         raise ValueError(f"Unknown report_type: {report_type!r}")
 
-    input_text = builders[report_type]()
-    if not input_text:
-        logger.warning("Report(%s/%s): no input data available", report_type, key)
+    lock = _state.get_report_lock(report_type, key)
+    if lock.locked():
+        logger.debug("Report(%s/%s): already generating, skipping", report_type, key)
         return None
 
-    logger.info("Report(%s/%s): generating...", report_type, key)
-    with request_context(origin="digest", stream=False):
-        from lumina.config import get_config
-        import dataclasses
-        kwargs = {"max_tokens": max_tokens_map[report_type]}
-        sampling = getattr(get_config().digest, "sampling", {})
-        if sampling:
-            s_dict = dataclasses.asdict(sampling) if dataclasses.is_dataclass(sampling) else dict(sampling)
-            kwargs.update({k: v for k, v in s_dict.items() if v is not None})
-        content = await llm.generate(
-            input_text, task=task_names[report_type],
-            **kwargs
-        )
+    async with lock:
+        input_text = builders[report_type]()
+        if not input_text:
+            logger.warning("Report(%s/%s): no input data available", report_type, key)
+            return None
 
-    header = f"<!-- generated: {datetime.now().astimezone().isoformat()} -->\n"
-    full_content = header + content.strip() + "\n"
-    save_report(report_type, key, full_content)
-    logger.info("Report(%s/%s): saved", report_type, key)
-    return full_content
+        logger.info("Report(%s/%s): generating...", report_type, key)
+        with request_context(origin="digest", stream=False):
+            from lumina.config import get_config
+            import dataclasses
+            kwargs = {"max_tokens": max_tokens_map[report_type]}
+            sampling = getattr(get_config().digest, "sampling", {})
+            if sampling:
+                s_dict = dataclasses.asdict(sampling) if dataclasses.is_dataclass(sampling) else dict(sampling)
+                kwargs.update({k: v for k, v in s_dict.items() if v is not None})
+            content = await llm.generate(
+                input_text, task=task_names[report_type],
+                **kwargs
+            )
+
+        header = f"<!-- generated: {datetime.now().astimezone().isoformat()} -->\n"
+        full_content = header + content.strip() + "\n"
+        save_report(report_type, key, full_content)
+        logger.info("Report(%s/%s): saved", report_type, key)
+        return full_content
 
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────

@@ -93,7 +93,7 @@ class MlxModelLoader:
         # 优先返回最近访问/修改的快照目录。
         candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         for snapshot_dir in candidates:
-            if any(snapshot_dir.glob("*.safetensors")):
+            if any(snapshot_dir.glob("*.safetensors")) or any(snapshot_dir.glob("*.npz")):
                 return str(snapshot_dir)
         return None
 
@@ -216,7 +216,7 @@ class MlxModelLoader:
         is_vlm = self._detect_vlm_target(load_target)
 
         if is_vlm:
-            logger.info(f"Multimodal detected. Loading with mlx_vlm: {load_target}")
+            logger.info("Multimodal detected. Loading with mlx_vlm: %s", load_target)
             model, tokenizer = vlm_load(load_target)
             self.loaded_as_vlm = True
 
@@ -260,7 +260,7 @@ class MlxModelLoader:
             model = VLMModelWrapper(model)
 
         else:
-            logger.info(f"Text model detected. Loading with mlx_lm: {load_target}")
+            logger.info("Text model detected. Loading with mlx_lm: %s", load_target)
             model, tokenizer = mlx_load(load_target)
             self.loaded_as_vlm = False
         # ────────────────────────────────────────────────────────────────────────
@@ -274,7 +274,7 @@ class MlxModelLoader:
         )
 
         if offload_keywords:
-            logger.info(f"Hybrid loading: eager-loading backbone, offloading {offload_keywords}...")
+            logger.info("Hybrid loading: eager-loading backbone, offloading %s...", offload_keywords)
             all_params = mx_utils.tree_flatten(model.parameters())
             to_eval = [
                 param

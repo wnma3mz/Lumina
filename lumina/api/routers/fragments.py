@@ -230,8 +230,7 @@ async def fragment_digest_storage(request: Request):
     from lumina.engine import request_history
     
     recorder = request_history.get_recorder()
-    with recorder._lock:
-        total_bytes = recorder._total_bytes_locked()
+    total_bytes = recorder.total_bytes()
         
     cfg = get_config()
     max_mb = cfg.request_history.max_total_mb

@@ -290,6 +290,12 @@ class RequestHistoryRecorder:
                 pass
         return total
 
+    def total_bytes(self) -> int:
+        """返回当前已使用的磁盘字节数（current + archive）。"""
+        with self._lock:
+            self._ensure_dirs_locked()
+            return self._total_bytes_locked()
+
 
 _cfg = RequestHistoryConfig()
 _recorder = RequestHistoryRecorder(REQUEST_HISTORY_DIR)
