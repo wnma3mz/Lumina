@@ -2878,6 +2878,7 @@ body {
 #tab-digest:not(:checked) ~ nav label[data-tab="digest"]:hover,
 #tab-document:not(:checked) ~ nav label[data-tab="document"]:hover,
 #tab-image:not(:checked) ~ nav label[data-tab="image"]:hover,
+#tab-audio:not(:checked) ~ nav label[data-tab="audio"]:hover,
 #tab-game:not(:checked) ~ nav label[data-tab="game"]:hover,
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover {
   --tw-text-opacity: 1;
@@ -2887,6 +2888,7 @@ body {
 #tab-digest:not(:checked) ~ nav label[data-tab="digest"]:hover:is(.dark *),
 #tab-document:not(:checked) ~ nav label[data-tab="document"]:hover:is(.dark *),
 #tab-image:not(:checked) ~ nav label[data-tab="image"]:hover:is(.dark *),
+#tab-audio:not(:checked) ~ nav label[data-tab="audio"]:hover:is(.dark *),
 #tab-game:not(:checked) ~ nav label[data-tab="game"]:hover:is(.dark *),
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover:is(.dark *) {
   --tw-text-opacity: 1;
