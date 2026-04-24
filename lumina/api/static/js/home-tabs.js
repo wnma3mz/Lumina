@@ -115,11 +115,11 @@ function getLocalHomeTabs() {
     var parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
     
-    // Version 3 Migration: Force add new core tabs
+    // Version 4 Migration: Force add new core tabs
     var version = localStorage.getItem(_homeTabsVersionKey);
-    if (version !== '3') {
-      var allDefs = _allHomeTabs.length ? _allHomeTabs : ['digest', 'document', 'image', 'audio', 'settings'];
-      ['image', 'audio'].forEach(function(tab) {
+    if (version !== '4') {
+      var allDefs = _allHomeTabs.length ? _allHomeTabs : ['digest', 'document', 'image', 'audio', 'game', 'settings'];
+      ['image', 'audio', 'game'].forEach(function(tab) {
         if (!parsed.includes(tab) && allDefs.includes(tab)) {
           var settingsIdx = parsed.indexOf('settings');
           if (settingsIdx >= 0) parsed.splice(settingsIdx, 0, tab);
@@ -127,7 +127,7 @@ function getLocalHomeTabs() {
         }
       });
       localStorage.setItem('lumina.homeTabs', JSON.stringify(parsed));
-      localStorage.setItem(_homeTabsVersionKey, '3');
+      localStorage.setItem(_homeTabsVersionKey, '4');
     }
     
     // Check missing enabled tabs dynamically:

@@ -171,6 +171,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
         }
         from lumina.api.ui_meta import (
             AUDIO_TASK_DEFS,
+            GAME_SCENARIO_DEFS,
             HOME_TAB_DEFS,
             IMAGE_TASK_DEFS,
             LEGACY_HOME_TAB_MAP,
@@ -188,6 +189,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
                 "home_tab_defs": HOME_TAB_DEFS,
                 "image_task_defs": IMAGE_TASK_DEFS,
                 "audio_task_defs": AUDIO_TASK_DEFS,
+                "game_scenario_defs": GAME_SCENARIO_DEFS,
                 "legacy_home_tab_map": LEGACY_HOME_TAB_MAP,
             },
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},

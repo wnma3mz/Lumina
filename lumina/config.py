@@ -167,6 +167,13 @@ class UIHomeConfig(BaseModel):
     
     def model_post_init(self, __context: Any) -> None:
         self.enabled_tabs = normalize_home_tabs(self.enabled_tabs) or list(_DEFAULT_HOME_TABS)
+        # Auto-append new tabs that exist in defaults but not in stored config.
+        # Beta tabs are opt-in only — never auto-inserted.
+        _BETA_TABS = {"game"}
+        for tab in _DEFAULT_HOME_TABS:
+            if tab not in self.enabled_tabs and tab not in _BETA_TABS:
+                idx = self.enabled_tabs.index("settings") if "settings" in self.enabled_tabs else len(self.enabled_tabs)
+                self.enabled_tabs.insert(idx, tab)
 
 
 class UIConfig(BaseModel):

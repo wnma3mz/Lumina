@@ -61,6 +61,63 @@ AUDIO_TASK_DEFS: list[dict[str, Any]] = [
 ]
 AUDIO_TASK_KEYS = tuple(item["key"] for item in AUDIO_TASK_DEFS)
 
+GAME_SCENARIO_DEFS: list[dict[str, Any]] = [
+    {
+        "key": "landlord",
+        "emoji": "🏠",
+        "title": "向房东要回押金",
+        "desc": "租房到期，房东以「墙上有划痕」为由扣押金",
+        "scene": "租房到期，房东以「墙上有划痕」为由扣押金",
+        "npc_name": "房东",
+        "npc_personality": "抠门、爱找借口，但怕麻烦",
+    },
+    {
+        "key": "boss",
+        "emoji": "💼",
+        "title": "哄老板批假",
+        "desc": "临时需要请假，老板正在为项目进度焦虑",
+        "scene": "临时需要请假，老板正在为项目进度焦虑",
+        "npc_name": "老板",
+        "npc_personality": "严格但讲道理，重视团队责任感",
+    },
+    {
+        "key": "cat",
+        "emoji": "🐱",
+        "title": "说服猫去洗澡",
+        "desc": "猫已经三周没洗澡，你需要把它骗进浴室",
+        "scene": "猫已经三周没洗澡，你需要把它骗进浴室",
+        "npc_name": "猫猫",
+        "npc_personality": "高冷、多疑、极度自尊",
+    },
+    {
+        "key": "suspect",
+        "emoji": "🔍",
+        "title": "审讯嫌疑人",
+        "desc": "银行失窃，嫌疑人声称自己当天在家",
+        "scene": "银行失窃，嫌疑人坐在审讯室，声称自己当天在家",
+        "npc_name": "嫌疑人",
+        "npc_personality": "狡猾、镇定，但有一个破绽（细节说不清楚）",
+    },
+    {
+        "key": "alien",
+        "emoji": "👽",
+        "title": "和外星人谈判",
+        "desc": "外星人要求地球交出所有的猫",
+        "scene": "外星人飞船停在广场，要求地球交出所有的猫",
+        "npc_name": "外星使者",
+        "npc_personality": "傲慢、逻辑严密，但对地球文化一无所知",
+    },
+    {
+        "key": "concert",
+        "emoji": "🎵",
+        "title": "说服朋友退票",
+        "desc": "朋友花大价钱买了周五的票，但那天有重要约定",
+        "scene": "朋友花了大价钱买了周五的演唱会票，但那天你们有重要约定",
+        "npc_name": "朋友",
+        "npc_personality": "念旧但固执，对钱看得重",
+    },
+]
+
 SYSTEM_PROMPT_DEFS: list[dict[str, str]] = [
     {"key": "translate_to_zh", "label": "翻译为中文"},
     {"key": "translate_to_en", "label": "翻译为英文"},
