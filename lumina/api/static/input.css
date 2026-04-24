@@ -48,6 +48,7 @@
 #panel-document,
 #panel-image,
 #panel-audio,
+#panel-game,
 #panel-settings {
   display: none;
 }
@@ -57,6 +58,7 @@
 #tab-document:checked ~ main #panel-document { display: grid; }
 #tab-image:checked ~ main #panel-image { display: grid; }
 #tab-audio:checked ~ main #panel-audio { display: grid; }
+#tab-game:checked ~ main #panel-game { display: block; }
 #tab-settings:checked ~ main #panel-settings { display: block; }
 
 /* 导航栏高亮 */
@@ -64,6 +66,7 @@
 #tab-document:checked ~ nav label[data-tab="document"],
 #tab-image:checked ~ nav label[data-tab="image"],
 #tab-audio:checked ~ nav label[data-tab="audio"],
+#tab-game:checked ~ nav label[data-tab="game"],
 #tab-settings:checked ~ nav label[data-tab="settings"] {
   @apply nav-active;
 }
@@ -72,14 +75,52 @@
 #tab-document:not(:checked) ~ nav label[data-tab="document"],
 #tab-image:not(:checked) ~ nav label[data-tab="image"],
 #tab-audio:not(:checked) ~ nav label[data-tab="audio"],
+#tab-game:not(:checked) ~ nav label[data-tab="game"],
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"] {
-  @apply text-zinc-400 hover:text-zinc-900 dark:hover:text-white;
+  color: rgb(161 161 170);  /* zinc-400 */
+}
+
+#tab-digest:not(:checked) ~ nav label[data-tab="digest"]:hover,
+#tab-document:not(:checked) ~ nav label[data-tab="document"]:hover,
+#tab-image:not(:checked) ~ nav label[data-tab="image"]:hover,
+#tab-audio:not(:checked) ~ nav label[data-tab="audio"]:hover,
+#tab-game:not(:checked) ~ nav label[data-tab="game"]:hover,
+#tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover {
+  color: rgb(24 24 27);  /* zinc-900 */
+}
+
+#tab-digest:not(:checked) ~ nav label[data-tab="digest"]:hover:is(.dark *),
+#tab-document:not(:checked) ~ nav label[data-tab="document"]:hover:is(.dark *),
+#tab-image:not(:checked) ~ nav label[data-tab="image"]:hover:is(.dark *),
+#tab-audio:not(:checked) ~ nav label[data-tab="audio"]:hover:is(.dark *),
+#tab-game:not(:checked) ~ nav label[data-tab="game"]:hover:is(.dark *),
+#tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover:is(.dark *) {
+  color: rgb(255 255 255);  /* white */
 }
 
 /* 旧版需要通过 radio 控制的 save-bar，在设置里也有体现 */
 #save-bar { display: none; }
 #tab-settings:checked ~ #save-bar { display: flex; }
 #tab-settings:checked ~ main:focus-within ~ #save-bar { display: none; }
+
+/* 宠物气泡：放在宠物右侧 */
+.buddy-speech-right {
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+.buddy-speech-right::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: rgb(24 24 27);  /* zinc-900，与气泡背景一致 */
+}
+.dark .buddy-speech-right::before {
+  border-right-color: rgb(244 244 245);  /* zinc-100 */
+}
 
 /* ── 遗留的一些基础动画或HTMX等 ── */
 .progress-bar-track { height: 6px; border-radius: 3px; background: rgba(60,60,67,.12); overflow: hidden; margin-bottom: 6px; }

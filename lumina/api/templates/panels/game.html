@@ -1,0 +1,407 @@
+<div id="panel-game" class="p-4 md:p-6 max-w-5xl mx-auto w-full">
+  <div class="mb-4">
+    <h2 class="text-xl font-semibold text-zinc-800 dark:text-zinc-100">语言效果游戏</h2>
+    <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">用一句话说服 NPC，3 轮累计 10 分过关</p>
+  </div>
+
+  <div class="flex flex-col md:flex-row gap-4">
+    <!-- 左侧剧本列表 -->
+    <div class="md:w-72 shrink-0">
+      <div class="bento-card p-3">
+        <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2 uppercase tracking-wide">选择剧本</div>
+        <div id="scenario-list" class="space-y-1.5"></div>
+        <!-- 自定义剧本入口 -->
+        <div class="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+          <button
+            id="custom-scenario-btn"
+            onclick="toggleCustomForm()"
+            class="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors flex items-center gap-2 text-zinc-500 dark:text-zinc-400"
+          >
+            <span class="text-base">✏️</span><span class="truncate">自定义剧本</span>
+          </button>
+          <!-- 自定义表单 -->
+          <div id="custom-scenario-form" class="hidden mt-2 space-y-2">
+            <textarea
+              id="custom-scene"
+              rows="2"
+              placeholder="场景描述（如：你要向室友借钱还房租）"
+              class="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-xs px-2.5 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            ></textarea>
+            <input
+              id="custom-npc-name"
+              type="text"
+              placeholder="NPC 名字（如：室友）"
+              class="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-xs px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+            <input
+              id="custom-npc-personality"
+              type="text"
+              placeholder="NPC 性格（如：小气、爱计较）"
+              class="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-xs px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+            <button
+              onclick="startCustomGame()"
+              class="w-full px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-xs rounded-lg font-medium transition-all"
+            >开始自定义剧本</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧游戏区 -->
+    <div class="flex-1 min-w-0">
+      <!-- 空闲状态 -->
+      <div id="game-idle" class="bento-card p-8 flex flex-col items-center justify-center text-center min-h-64">
+        <div class="text-4xl mb-3">🎭</div>
+        <div class="text-zinc-500 dark:text-zinc-400 text-sm">从左侧选择一个剧本开始</div>
+      </div>
+
+      <!-- 游戏中状态 -->
+      <div id="game-playing" class="hidden space-y-3">
+        <!-- 场景信息 -->
+        <div class="bento-card p-4">
+          <div class="flex items-start gap-3">
+            <div id="game-scene-emoji" class="text-2xl shrink-0">🎭</div>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-zinc-800 dark:text-zinc-100 text-sm" id="game-scene-title"></div>
+              <div class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5" id="game-scene-desc"></div>
+            </div>
+            <!-- 进度 -->
+            <div class="shrink-0 text-right">
+              <div class="text-xs text-zinc-400 dark:text-zinc-500">进度</div>
+              <div class="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                <span id="game-score-display">0</span><span class="text-xs font-normal text-zinc-400">/10</span>
+              </div>
+            </div>
+          </div>
+          <!-- 进度条 -->
+          <div class="mt-3 progress-bar-track">
+            <div id="game-progress-bar" class="progress-bar-fill" style="width:0%"></div>
+          </div>
+          <div class="flex justify-between text-xs text-zinc-400 mt-1">
+            <span>第 <span id="game-round-display">1</span> 轮 / 共 3 轮</span>
+            <span>目标：10 分</span>
+          </div>
+        </div>
+
+        <!-- 对话区 -->
+        <div class="bento-card p-4">
+          <div id="game-dialogue" class="space-y-2 max-h-64 overflow-y-auto mb-3"></div>
+
+          <!-- 输入区 -->
+          <div id="game-input-area">
+            <textarea
+              id="game-input"
+              rows="2"
+              placeholder="输入你的回应……"
+              class="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-sm px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            ></textarea>
+            <div class="flex justify-between items-center mt-2">
+              <div id="game-feedback-hint" class="text-xs text-zinc-400 dark:text-zinc-500 italic"></div>
+              <button
+                id="game-submit-btn"
+                onclick="gameSubmitTurn()"
+                class="px-4 py-1.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm rounded-lg font-medium transition-all"
+              >提交</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 结算状态 -->
+      <div id="game-over" class="hidden bento-card p-8 flex flex-col items-center justify-center text-center">
+        <div id="game-over-emoji" class="text-5xl mb-3">🏆</div>
+        <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100 mb-1">
+          总分 <span id="game-final-score" class="text-indigo-600 dark:text-indigo-400"></span> 分
+        </div>
+        <div id="game-final-title" class="text-base text-zinc-500 dark:text-zinc-400 mb-1 font-medium"></div>
+        <div id="game-final-desc" class="text-sm text-zinc-400 dark:text-zinc-500 mb-6"></div>
+        <button
+          onclick="gameReplay()"
+          class="px-5 py-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm rounded-lg font-medium transition-all"
+        >再玩一局</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // 剧本延迟读取（home-tabs.js 在 body 末尾加载，此时 getAppDataJson 已就绪）
+  let SCENARIOS = [];
+
+  const FINAL_RATINGS = [
+    { min: 13, emoji: "🏆", title: "语言大师，一击即中", desc: "你的说服力令人叹服，对手根本没有招架之力。" },
+    { min: 10, emoji: "✅", title: "过关，费了点力气", desc: "最终说服了对方，虽然过程有些曲折。" },
+    { min: 7,  emoji: "😅", title: "差一点，对手没被说服", desc: "你的话有些道理，但还不够有力。" },
+    { min: 0,  emoji: "💀", title: "惨败，建议回去练练嘴皮子", desc: "对手对你的说辞完全不买账。" },
+  ];
+
+  let state = {
+    scenario: null,
+    round: 0,
+    totalScore: 0,
+    loading: false,
+    over: false,
+  };
+
+  function init() {
+    // 在此时读取，home-tabs.js 已加载完毕
+    SCENARIOS = (typeof getAppDataJson === 'function') ? getAppDataJson('gameScenarioDefs', []) : [];
+    const list = document.getElementById('scenario-list');
+    list.innerHTML = '';
+    SCENARIOS.forEach((s, idx) => {
+      const btn = document.createElement('button');
+      btn.id = 'scenario-btn-' + idx;
+      btn.className = 'w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors flex items-center gap-2 text-zinc-700 dark:text-zinc-300';
+      btn.innerHTML = `<span class="text-base">${s.emoji}</span><span class="truncate">${s.title}</span>`;
+      btn.addEventListener('click', () => startGame(idx));
+      list.appendChild(btn);
+    });
+  }
+
+  function highlightScenario(idx) {
+    SCENARIOS.forEach((_, i) => {
+      const b = document.getElementById('scenario-btn-' + i);
+      if (b) b.className = 'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ' +
+        (i === idx
+          ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium'
+          : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-zinc-700 dark:text-zinc-300');
+    });
+  }
+
+  async function startGame(idx) {
+    const s = SCENARIOS[idx];
+    highlightScenario(idx);
+    await _beginGame(s);
+  }
+
+  async function startCustomGame() {
+    const scene = document.getElementById('custom-scene').value.trim();
+    const npcName = document.getElementById('custom-npc-name').value.trim();
+    const npcPersonality = document.getElementById('custom-npc-personality').value.trim();
+    if (!scene || !npcName) {
+      document.getElementById('custom-npc-name').focus();
+      return;
+    }
+    // 取消所有剧本高亮
+    SCENARIOS.forEach((_, i) => {
+      const b = document.getElementById('scenario-btn-' + i);
+      if (b) b.className = 'w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors flex items-center gap-2 text-zinc-700 dark:text-zinc-300';
+    });
+    // 折叠表单
+    document.getElementById('custom-scenario-form').classList.add('hidden');
+
+    const s = {
+      key: 'custom',
+      emoji: '✏️',
+      title: `说服${npcName}`,
+      desc: scene,
+      scene,
+      npc_name: npcName,
+      npc_personality: npcPersonality || '普通人',
+    };
+    await _beginGame(s);
+  }
+
+  async function _beginGame(s) {
+    state = { scenario: s, round: 1, totalScore: 0, loading: true, over: false };
+
+    // 更新场景信息
+    document.getElementById('game-scene-emoji').textContent = s.emoji;
+    document.getElementById('game-scene-title').textContent = s.title;
+    document.getElementById('game-scene-desc').textContent = s.npc_personality || s.npc_name;
+    updateProgress();
+
+    // 清空对话，显示加载占位
+    const dialogue = document.getElementById('game-dialogue');
+    dialogue.innerHTML = '';
+    appendDialogue('npc', '…');
+
+    // 清空输入
+    document.getElementById('game-feedback-hint').textContent = '';
+    document.getElementById('game-input').value = '';
+    document.getElementById('game-input-area').style.display = '';
+
+    const submitBtn = document.getElementById('game-submit-btn');
+    submitBtn.disabled = true;
+
+    // 切换到游戏面板
+    document.getElementById('game-idle').classList.add('hidden');
+    document.getElementById('game-over').classList.add('hidden');
+    document.getElementById('game-playing').classList.remove('hidden');
+
+    // 请求动态开场白
+    try {
+      const res = await fetch('/v1/game/opening', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scene: s.scene,
+          npc_name: s.npc_name,
+          npc_personality: s.npc_personality,
+        })
+      });
+      const data = res.ok ? await res.json() : null;
+      dialogue.innerHTML = '';
+      appendDialogue('npc', data?.opening || `（${s.npc_name}看向你）`);
+    } catch (_) {
+      dialogue.innerHTML = '';
+      appendDialogue('npc', `（${s.npc_name}看向你）`);
+    }
+
+    state.loading = false;
+    submitBtn.disabled = false;
+    document.getElementById('game-input').focus();
+  }
+
+  function toggleCustomForm() {
+    const form = document.getElementById('custom-scenario-form');
+    form.classList.toggle('hidden');
+    if (!form.classList.contains('hidden')) {
+      document.getElementById('custom-scene').focus();
+    }
+  }
+
+  function updateProgress() {
+    const score = state.totalScore;
+    const pct = Math.min(100, Math.round(score / 10 * 100));
+    document.getElementById('game-score-display').textContent = score;
+    document.getElementById('game-round-display').textContent = state.round;
+    document.getElementById('game-progress-bar').style.width = pct + '%';
+  }
+
+  function appendDialogue(who, text) {
+    const dialogue = document.getElementById('game-dialogue');
+    const div = document.createElement('div');
+    div.className = who === 'npc'
+      ? 'flex gap-2 items-start'
+      : 'flex gap-2 items-start flex-row-reverse';
+    const bubble = document.createElement('div');
+    bubble.className = who === 'npc'
+      ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl rounded-tl-none px-3 py-2 text-sm max-w-xs'
+      : 'bg-indigo-500 text-white rounded-xl rounded-tr-none px-3 py-2 text-sm max-w-xs';
+    bubble.textContent = text;
+    div.appendChild(bubble);
+    dialogue.appendChild(div);
+    dialogue.scrollTop = dialogue.scrollHeight;
+  }
+
+  function appendFeedbackRow(score, feedback) {
+    const dialogue = document.getElementById('game-dialogue');
+    const div = document.createElement('div');
+    div.className = 'flex justify-center';
+    const stars = '★'.repeat(score) + '☆'.repeat(5 - score);
+    div.innerHTML = `<span class="text-xs text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full px-3 py-0.5">${stars} ${feedback}</span>`;
+    dialogue.appendChild(div);
+    dialogue.scrollTop = dialogue.scrollHeight;
+  }
+
+  async function gameSubmitTurn() {
+    if (state.loading || state.over) return;
+    const input = document.getElementById('game-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    state.loading = true;
+    const btn = document.getElementById('game-submit-btn');
+    btn.disabled = true;
+    btn.textContent = '评估中…';
+    document.getElementById('game-feedback-hint').textContent = '';
+
+    appendDialogue('player', text);
+    input.value = '';
+
+    try {
+      const res = await fetch('/v1/game/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scene: state.scenario.scene,
+          npc_name: state.scenario.npc_name,
+          npc_personality: state.scenario.npc_personality,
+          current_score: state.totalScore,
+          player_input: text
+        })
+      });
+
+      if (!res.ok) throw new Error('请求失败 ' + res.status);
+      const data = await res.json();
+      const { score, feedback } = data;
+
+      state.totalScore += score;
+      if (state.totalScore > 15) state.totalScore = 15;
+
+      appendDialogue('npc', feedback);
+      appendFeedbackRow(score, `+${score} 分`);
+      updateProgress();
+
+      if (score === 5 || state.totalScore >= 10) {
+        endGame();
+        return;
+      }
+
+      state.round += 1;
+      if (state.round > 3) {
+        endGame();
+        return;
+      }
+
+      updateProgress();
+      document.getElementById('game-feedback-hint').textContent = `还剩 ${3 - state.round + 1} 轮，继续加油！`;
+    } catch (e) {
+      document.getElementById('game-feedback-hint').textContent = '请求失败，请检查服务是否运行中。';
+    } finally {
+      state.loading = false;
+      btn.disabled = false;
+      btn.textContent = '提交';
+      input.focus();
+    }
+  }
+
+  function endGame() {
+    state.over = true;
+    document.getElementById('game-input-area').style.display = 'none';
+
+    const total = state.totalScore;
+    const rating = FINAL_RATINGS.find(r => total >= r.min) || FINAL_RATINGS[FINAL_RATINGS.length - 1];
+
+    document.getElementById('game-over-emoji').textContent = rating.emoji;
+    document.getElementById('game-final-score').textContent = total;
+    document.getElementById('game-final-title').textContent = rating.title;
+    document.getElementById('game-final-desc').textContent = rating.desc;
+
+    document.getElementById('game-playing').classList.add('hidden');
+    document.getElementById('game-over').classList.remove('hidden');
+  }
+
+  function gameReplay() {
+    document.getElementById('game-over').classList.add('hidden');
+    document.getElementById('game-idle').classList.remove('hidden');
+    state = { scenario: null, round: 0, totalScore: 0, loading: false, over: false };
+    SCENARIOS.forEach((_, i) => {
+      const b = document.getElementById('scenario-btn-' + i);
+      if (b) b.className = 'w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors flex items-center gap-2 text-zinc-700 dark:text-zinc-300';
+    });
+  }
+
+  window.gameSubmitTurn = gameSubmitTurn;
+  window.gameReplay = gameReplay;
+  window.toggleCustomForm = toggleCustomForm;
+  window.startCustomGame = startCustomGame;
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey && document.activeElement && document.activeElement.id === 'game-input') {
+      e.preventDefault();
+      gameSubmitTurn();
+    }
+  });
+
+  // home-tabs.js 在 body 末尾加载，DOMContentLoaded 时已就绪
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>

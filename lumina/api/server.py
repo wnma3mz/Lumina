@@ -94,6 +94,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     from lumina.api.routers import document as document_router
     from lumina.api.routers import vision as vision_router
     from lumina.api.routers import audio as audio_router
+    from lumina.api.routers import game as game_router
     from lumina.api.routers import fragments as fragments_router
     from lumina.config import get_config
 
@@ -124,6 +125,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
     app.include_router(document_router.router)
     app.include_router(vision_router.router)
     app.include_router(audio_router.router)
+    app.include_router(game_router.router)
     app.include_router(fragments_router.router)
 
     # ── 静态文件（CSS / SVG 等）─────────────────────────────────────────────────
@@ -169,6 +171,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
         }
         from lumina.api.ui_meta import (
             AUDIO_TASK_DEFS,
+            GAME_SCENARIO_DEFS,
             HOME_TAB_DEFS,
             IMAGE_TASK_DEFS,
             LEGACY_HOME_TAB_MAP,
@@ -186,6 +189,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
                 "home_tab_defs": HOME_TAB_DEFS,
                 "image_task_defs": IMAGE_TASK_DEFS,
                 "audio_task_defs": AUDIO_TASK_DEFS,
+                "game_scenario_defs": GAME_SCENARIO_DEFS,
                 "legacy_home_tab_map": LEGACY_HOME_TAB_MAP,
             },
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},

@@ -167,6 +167,13 @@ class UIHomeConfig(BaseModel):
     
     def model_post_init(self, __context: Any) -> None:
         self.enabled_tabs = normalize_home_tabs(self.enabled_tabs) or list(_DEFAULT_HOME_TABS)
+        # Auto-append new tabs that exist in defaults but not in stored config.
+        # Beta tabs are opt-in only — never auto-inserted.
+        _BETA_TABS = {"game"}
+        for tab in _DEFAULT_HOME_TABS:
+            if tab not in self.enabled_tabs and tab not in _BETA_TABS:
+                idx = self.enabled_tabs.index("settings") if "settings" in self.enabled_tabs else len(self.enabled_tabs)
+                self.enabled_tabs.insert(idx, tab)
 
 
 class UIConfig(BaseModel):
@@ -213,6 +220,12 @@ class DocumentConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
     enabled: bool = True
     pdf_translation_threads: int = 8
+    prompts: Dict[str, str] = Field(default_factory=dict)
+    sampling: SamplingConfig = Field(default_factory=SamplingConfig)
+
+
+class GameConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     prompts: Dict[str, str] = Field(default_factory=dict)
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
 
@@ -527,9 +540,10 @@ class Config(BaseModel):
     document: DocumentConfig = Field(default_factory=DocumentConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
-    
+    game: GameConfig = Field(default_factory=GameConfig)
+
     system_prompts: Dict[str, str] = Field(default_factory=dict)
-    
+
     def model_post_init(self, __context: Any) -> None:
         # 聚合所有的 system_prompts 以供底层 Engine 使用
         self.system_prompts.update(self.provider.prompts)
@@ -537,6 +551,7 @@ class Config(BaseModel):
         self.system_prompts.update(self.document.prompts)
         self.system_prompts.update(self.vision.prompts)
         self.system_prompts.update(self.audio.prompts)
+        self.system_prompts.update(self.game.prompts)
 
     @property
     def ui(self): return self.system.ui
