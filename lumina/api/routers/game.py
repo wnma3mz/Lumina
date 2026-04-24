@@ -1,7 +1,7 @@
 import re
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from lumina.engine.request_context import request_context
 
@@ -22,8 +22,8 @@ class ScoreRequest(BaseModel):
     scene: str
     npc_name: str
     npc_personality: str
-    current_score: int
-    player_input: str
+    current_score: int = Field(ge=0, le=15)
+    player_input: str = Field(max_length=500)
 
 
 class ScoreResponse(BaseModel):
@@ -69,7 +69,7 @@ async def game_score(req: ScoreRequest, raw: Request) -> ScoreResponse:
         f"你是：{req.npc_name}，性格：{req.npc_personality}\n"
         f"当前累计进度：{req.current_score}/10\n"
         f"对方说：\"{req.player_input}\"\n"
-        "请以你的身份和语气回应，严格按格式输出：\n分数: [1-5整数]\n反馈: [你说的一句话，符合你的性格，15字以内]"
+        "请以你的身份和语气回应，严格按格式输出：\n分数: [1-5整数]\n反馈: [你说的一句话，符合你的性格，30字以内]"
     )
 
     with request_context(origin="game_score", stream=False):

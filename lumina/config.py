@@ -71,6 +71,8 @@ _VALID_HOME_TABS = HOME_TAB_KEYS
 _DEFAULT_HOME_TABS = list(HOME_TAB_KEYS)
 _VALID_IMAGE_MODULES = IMAGE_TASK_KEYS
 _DEFAULT_IMAGE_MODULES = list(IMAGE_TASK_KEYS)
+# Tabs that are opt-in only; never auto-inserted into existing stored configs.
+_BETA_HOME_TABS: frozenset[str] = frozenset({"game"})
 
 
 def normalize_home_tabs(tabs: Optional[list[str]]) -> list[str]:
@@ -169,9 +171,8 @@ class UIHomeConfig(BaseModel):
         self.enabled_tabs = normalize_home_tabs(self.enabled_tabs) or list(_DEFAULT_HOME_TABS)
         # Auto-append new tabs that exist in defaults but not in stored config.
         # Beta tabs are opt-in only — never auto-inserted.
-        _BETA_TABS = {"game"}
         for tab in _DEFAULT_HOME_TABS:
-            if tab not in self.enabled_tabs and tab not in _BETA_TABS:
+            if tab not in self.enabled_tabs and tab not in _BETA_HOME_TABS:
                 idx = self.enabled_tabs.index("settings") if "settings" in self.enabled_tabs else len(self.enabled_tabs)
                 self.enabled_tabs.insert(idx, tab)
 
