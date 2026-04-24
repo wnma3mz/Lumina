@@ -2922,6 +2922,30 @@ body {
   display: none;
 }
 
+/* 宠物气泡：放在宠物右侧 */
+
+.buddy-speech-right {
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.buddy-speech-right::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: rgb(24 24 27);
+  /* zinc-900，与气泡背景一致 */
+}
+
+.dark .buddy-speech-right::before {
+  border-right-color: rgb(244 244 245);
+  /* zinc-100 */
+}
+
 /* ── 遗留的一些基础动画或HTMX等 ── */
 
 .progress-bar-track {
