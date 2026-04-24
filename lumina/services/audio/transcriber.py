@@ -82,7 +82,12 @@ def _get_faster_whisper_model(model_id: str):
 class Transcriber:
     def __init__(self, model: Optional[str] = None):
         self.model = model or _DEFAULT_WHISPER_MODEL
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     def transcribe_audio_sync(self, audio: np.ndarray, language: Optional[str] = None) -> str:
         """同步转写 Numpy 数组。"""
@@ -114,7 +119,7 @@ class Transcriber:
         if audio is None or len(audio) == 0:
             return ""
         loop = asyncio.get_running_loop()
-        async with self._lock:
+        async with self._get_lock():
             return await loop.run_in_executor(
                 None, self.transcribe_audio_sync, audio, language
             )
@@ -152,7 +157,7 @@ class Transcriber:
         if not wav_bytes:
             return ""
         loop = asyncio.get_running_loop()
-        async with self._lock:
+        async with self._get_lock():
             return await loop.run_in_executor(
                 None, self.transcribe_sync, wav_bytes, language
             )

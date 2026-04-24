@@ -31,10 +31,17 @@ logger = logging.getLogger("lumina.services.digest")
 
 def save_snapshot(content: str, ts: datetime) -> Path:
     """保存活动摘要快照到 ~/.lumina/snapshots/YYYY-MM-DDTHH-MM-SS.md。"""
+    import uuid
     DIGEST_SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     fname = ts.strftime("%Y-%m-%dT%H-%M-%S") + ".md"
     path = DIGEST_SNAPSHOTS_DIR / fname
-    path.write_text(content, encoding="utf-8")
+    tmp = path.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
+    try:
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
     return path
 
 
@@ -68,9 +75,16 @@ def _report_path(report_type: str, key: str) -> Path:
 
 
 def save_report(report_type: str, key: str, content: str) -> Path:
+    import uuid
     path = _report_path(report_type, key)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    tmp = path.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
+    try:
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
     return path
 
 

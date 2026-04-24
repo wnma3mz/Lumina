@@ -152,7 +152,7 @@ class RequestHistoryRecorder:
             try:
                 self._write_entry(item)
             except Exception as e:
-                logger.warning("Request history write failed: %s", e)
+                logger.warning("Request history write failed: %s", e, exc_info=True)
             finally:
                 self._queue.task_done()
 
@@ -228,12 +228,19 @@ class RequestHistoryRecorder:
             archive_path = self._archive_dir / f"{path.stem}.jsonl.gz"
             source_size = path.stat().st_size
             before_size = archive_path.stat().st_size if archive_path.exists() else 0
-            with path.open("rb") as src, gzip.open(archive_path, "ab") as dst:
+            
+            # 临时写入 .tmp 文件，完成后重命名，保证原子性并避免 crash 导致数据损坏
+            import uuid
+            tmp_archive_path = archive_path.with_suffix(f".{uuid.uuid4().hex[:8]}.gz.tmp")
+            with path.open("rb") as src, gzip.open(tmp_archive_path, "wb") as dst:
                 shutil.copyfileobj(src, dst)
-            after_size = archive_path.stat().st_size if archive_path.exists() else before_size
+                
+            tmp_archive_path.replace(archive_path)
+            after_size = archive_path.stat().st_size
+            
             path.unlink(missing_ok=True)
             stats["compressed"] += 1
-            stats["freed_bytes"] += max(0, source_size - max(0, after_size - before_size))
+            stats["freed_bytes"] += max(0, source_size + before_size - after_size)
         return stats
 
     def _prune_locked(self, stats: Dict[str, int]) -> Dict[str, int]:
@@ -289,6 +296,12 @@ class RequestHistoryRecorder:
             except FileNotFoundError:
                 pass
         return total
+
+    def total_bytes(self) -> int:
+        """返回当前已使用的磁盘字节数（current + archive）。"""
+        with self._lock:
+            self._ensure_dirs_locked()
+            return self._total_bytes_locked()
 
 
 _cfg = RequestHistoryConfig()

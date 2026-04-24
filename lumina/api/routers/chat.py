@@ -208,7 +208,7 @@ async def _stream_chat(
     except asyncio.CancelledError:
         raise
     except Exception as e:
-        logger.error("stream_chat error: %s", e)
+        logger.error("stream_chat error: %s", e, exc_info=True)
         finish_reason = "error"
     end_chunk = ChatCompletionStreamResponse(
         id=req_id,

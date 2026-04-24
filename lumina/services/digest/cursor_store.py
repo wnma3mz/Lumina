@@ -47,10 +47,13 @@ def load_md_hashes() -> Dict[str, str]:
 
 def save_md_hashes(hashes: Dict[str, str]) -> None:
     """Persist path→md5 map atomically."""
+    import uuid
     try:
         MD_HASHES_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = MD_HASHES_PATH.with_suffix(".tmp")
+        tmp = MD_HASHES_PATH.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
         tmp.write_text(json.dumps(hashes, indent=2, ensure_ascii=False), encoding="utf-8")
         tmp.replace(MD_HASHES_PATH)
     except Exception as e:
         logger.warning("md_hashes save error: %s", e)
+        if "tmp" in locals():
+            tmp.unlink(missing_ok=True)

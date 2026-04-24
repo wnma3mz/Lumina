@@ -89,8 +89,6 @@ def configure(data: dict) -> None:
     global _cfg
     if isinstance(data, DigestConfig):
         d = data
-    elif hasattr(data, "model_dump") and isinstance(data, DigestConfig):
-        d = data
     elif isinstance(data, dict):
         d = data.get("digest", {})
     else:
