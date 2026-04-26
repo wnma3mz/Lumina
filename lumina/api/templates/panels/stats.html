@@ -52,12 +52,17 @@
     const avgMs = s.avg_ms_7d || 0;
 
     let totalUserChars = 0, totalRespChars = 0, totalErrors = 0;
+    let totalPromptTokens = 0, totalCompletionTokens = 0, tokenCount = 0;
     for (const b of Object.values(origins7d)) {
       totalUserChars += b.user_chars || 0;
       totalRespChars += b.resp_chars || 0;
       totalErrors += b.error || 0;
+      totalPromptTokens += b.prompt_tokens || 0;
+      totalCompletionTokens += b.completion_tokens || 0;
+      tokenCount += b.token_count || 0;
     }
     const errPct = total7d ? Math.round(totalErrors / total7d * 100) : 0;
+    const hasTokens = tokenCount > 0;
 
     let html = '';
 
@@ -78,17 +83,23 @@
     }
     html += '</div>';
 
-    // 输入/输出字符量
+    // Token / 字符量
+    const inputLabel = hasTokens ? '输入 Token' : '输入字符';
+    const outputLabel = hasTokens ? '输出 Token' : '输出字符';
+    const inputVal = hasTokens ? fmtNum(totalPromptTokens) : fmtNum(totalUserChars);
+    const outputVal = hasTokens ? fmtNum(totalCompletionTokens) : fmtNum(totalRespChars);
+    const inputSub = hasTokens ? `覆盖 ${tokenCount} 条记录` : '字符数（无 token 数据）';
     html += `<div class="bento-card p-4 mb-5">
-      <div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">字符量（7 天）</div>
+      <div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">用量（7 天）</div>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(totalUserChars)}</div>
-          <div class="text-xs text-zinc-500">输入字符</div>
+          <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${inputVal}</div>
+          <div class="text-xs text-zinc-500">${inputLabel}</div>
+          <div class="text-[10px] text-zinc-400 mt-0.5">${inputSub}</div>
         </div>
         <div>
-          <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(totalRespChars)}</div>
-          <div class="text-xs text-zinc-500">输出字符</div>
+          <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${outputVal}</div>
+          <div class="text-xs text-zinc-500">${outputLabel}</div>
         </div>
       </div>
     </div>`;

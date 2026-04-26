@@ -20,6 +20,7 @@ from lumina.providers.message_parts import to_history_text
 from lumina.engine.request_context import get_request_context
 from lumina.engine import request_history
 from lumina.engine.sampling import resolve_sampling
+from lumina.engine.token_counter import get_token_counts, reset_token_counts
 
 
 class LLMEngine:
@@ -82,6 +83,8 @@ class LLMEngine:
         started_at: datetime,
         duration_ms: int,
         error: Optional[BaseException] = None,
+        prompt_tokens: Optional[int] = None,
+        completion_tokens: Optional[int] = None,
     ) -> dict:
         ctx = get_request_context()
         ended_at = datetime.now()
@@ -102,6 +105,8 @@ class LLMEngine:
             "min_p": None,
             "presence_penalty": None,
             "repetition_penalty": None,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
             "system_text": system_prompt,
             "user_text": user_text,
             "response_text": response_text,
@@ -193,6 +198,8 @@ class LLMEngine:
             error = e
             raise
         finally:
+            _tc = get_token_counts()
+            reset_token_counts()
             entry = self._history_entry(
                 request_id=request_id,
                 task=task,
@@ -204,6 +211,8 @@ class LLMEngine:
                 started_at=started_at,
                 duration_ms=int((time.perf_counter() - started_perf) * 1000),
                 error=error,
+                prompt_tokens=_tc[0] if _tc else None,
+                completion_tokens=_tc[1] if _tc else None,
             )
             entry.update(params)
             request_history.record(entry)
@@ -252,6 +261,8 @@ class LLMEngine:
             error = e
             raise
         finally:
+            _tc = get_token_counts()
+            reset_token_counts()
             entry = self._history_entry(
                 request_id=request_id,
                 task=task,
@@ -263,6 +274,8 @@ class LLMEngine:
                 started_at=started_at,
                 duration_ms=int((time.perf_counter() - started_perf) * 1000),
                 error=error,
+                prompt_tokens=_tc[0] if _tc else None,
+                completion_tokens=_tc[1] if _tc else None,
             )
             entry.update(params)
             request_history.record(entry)
@@ -313,6 +326,8 @@ class LLMEngine:
             error = e
             raise
         finally:
+            _tc = get_token_counts()
+            reset_token_counts()
             entry = self._history_entry(
                 request_id=request_id,
                 task=task,
@@ -324,6 +339,8 @@ class LLMEngine:
                 started_at=started_at,
                 duration_ms=int((time.perf_counter() - started_perf) * 1000),
                 error=error,
+                prompt_tokens=_tc[0] if _tc else None,
+                completion_tokens=_tc[1] if _tc else None,
             )
             entry.update(params)
             request_history.record(entry)
@@ -373,6 +390,8 @@ class LLMEngine:
             error = e
             raise
         finally:
+            _tc = get_token_counts()
+            reset_token_counts()
             entry = self._history_entry(
                 request_id=request_id,
                 task=task,
@@ -384,6 +403,8 @@ class LLMEngine:
                 started_at=started_at,
                 duration_ms=int((time.perf_counter() - started_perf) * 1000),
                 error=error,
+                prompt_tokens=_tc[0] if _tc else None,
+                completion_tokens=_tc[1] if _tc else None,
             )
             entry.update(params)
             request_history.record(entry)

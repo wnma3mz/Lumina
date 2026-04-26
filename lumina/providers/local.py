@@ -918,6 +918,12 @@ class LocalProvider(BaseProvider):
                 yield item
         finally:
             slot.done = True
+            try:
+                from lumina.engine.token_counter import set_token_counts
+                prompt_len = len(slot.prompt_tokens) if slot.prompt_tokens is not None else 0
+                set_token_counts(int(prompt_len), int(slot.n_tokens))
+            except Exception:
+                pass
 
     async def generate_messages_stream(
         self,

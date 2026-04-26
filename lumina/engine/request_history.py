@@ -430,6 +430,8 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
         duration_ms = entry.get("duration_ms") or 0
         user_chars = entry.get("user_chars") or 0
         resp_chars = entry.get("response_chars") or 0
+        prompt_tokens = entry.get("prompt_tokens")
+        completion_tokens = entry.get("completion_tokens")
 
         for window, flag in [("7d", True), ("24h", in_24h)]:
             if not flag:
@@ -442,6 +444,9 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
                     "total_ms": 0,
                     "user_chars": 0,
                     "resp_chars": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "token_count": 0,
                     "avg_ms": 0,
                 }
             b = buckets[window][origin]
@@ -453,6 +458,11 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
             b["total_ms"] += duration_ms
             b["user_chars"] += user_chars
             b["resp_chars"] += resp_chars
+            if prompt_tokens is not None:
+                b["prompt_tokens"] += int(prompt_tokens)
+                b["token_count"] += 1
+            if completion_tokens is not None:
+                b["completion_tokens"] += int(completion_tokens)
 
     for window in buckets:
         for b in buckets[window].values():

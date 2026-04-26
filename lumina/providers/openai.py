@@ -188,6 +188,15 @@ class OpenAIProvider(BaseProvider):
             async with session.post(url, headers=self._headers(), json=payload) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
+                try:
+                    usage = data.get("usage") or {}
+                    pt = int(usage.get("prompt_tokens") or 0)
+                    ct = int(usage.get("completion_tokens") or 0)
+                    if pt or ct:
+                        from lumina.engine.token_counter import set_token_counts
+                        set_token_counts(pt, ct)
+                except Exception:
+                    pass
                 return data["choices"][0]["message"]["content"]
 
     async def generate_messages_stream(
@@ -271,4 +280,13 @@ class OpenAIProvider(BaseProvider):
             async with session.post(url, headers=self._headers(), json=payload) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
+                try:
+                    usage = data.get("usage") or {}
+                    pt = int(usage.get("prompt_tokens") or 0)
+                    ct = int(usage.get("completion_tokens") or 0)
+                    if pt or ct:
+                        from lumina.engine.token_counter import set_token_counts
+                        set_token_counts(pt, ct)
+                except Exception:
+                    pass
                 return data["choices"][0]["message"]["content"]
