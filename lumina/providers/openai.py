@@ -33,11 +33,15 @@ class OpenAIProvider(BaseProvider):
         api_key: str = "lumina",
         model: str = "lumina",
         timeout: int = 120,
+        strict_openai: bool = False,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
         self.timeout = aiohttp.ClientTimeout(total=timeout)
+        # strict_openai=True 时不发送 top_k/min_p/repetition_penalty 等 mlx 专有字段，
+        # 用于对接标准 OpenAI / Azure OpenAI，避免 400 "Unrecognized field"
+        self.strict_openai = strict_openai
 
     def _headers(self) -> dict:
         return {
@@ -63,18 +67,20 @@ class OpenAIProvider(BaseProvider):
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": user_text})
-        return {
+        payload: dict = {
             "model": self.model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "top_p": top_p,
-            "top_k": top_k,
-            "min_p": min_p,
             "presence_penalty": presence_penalty,
-            "repetition_penalty": repetition_penalty,
             "stream": stream,
         }
+        if not self.strict_openai:
+            payload["top_k"] = top_k
+            payload["min_p"] = min_p
+            payload["repetition_penalty"] = repetition_penalty
+        return payload
 
     def _payload_messages(
         self,
@@ -94,18 +100,20 @@ class OpenAIProvider(BaseProvider):
         if system:
             merged_messages.append({"role": "system", "content": system})
         merged_messages.extend(messages)
-        return {
+        payload: dict = {
             "model": self.model,
             "messages": merged_messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "top_p": top_p,
-            "top_k": top_k,
-            "min_p": min_p,
             "presence_penalty": presence_penalty,
-            "repetition_penalty": repetition_penalty,
             "stream": stream,
         }
+        if not self.strict_openai:
+            payload["top_k"] = top_k
+            payload["min_p"] = min_p
+            payload["repetition_penalty"] = repetition_penalty
+        return payload
 
     async def generate_stream(
         self,
@@ -197,7 +205,7 @@ class OpenAIProvider(BaseProvider):
                         set_token_counts(pt, ct)
                 except Exception:
                     pass
-                return data["choices"][0]["message"]["content"]
+                return data["choices"][0]["message"]["content"] or ""
 
     async def generate_messages_stream(
         self,
@@ -289,4 +297,4 @@ class OpenAIProvider(BaseProvider):
                         set_token_counts(pt, ct)
                 except Exception:
                     pass
-                return data["choices"][0]["message"]["content"]
+                return data["choices"][0]["message"]["content"] or ""

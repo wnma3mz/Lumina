@@ -61,6 +61,15 @@
   let _timer    = null;
 
   /* ── 工具 ── */
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function fmtMs(ms) {
     if (!ms) return '—';
     return ms >= 1000 ? (ms/1000).toFixed(1)+'s' : ms+'ms';
@@ -89,10 +98,9 @@
 
   /* ── Tooltip ── */
   const _tip = document.getElementById('spark-tooltip');
-  function showTip(x, y, html) {
-    _tip.innerHTML = html;
+  function showTip(x, y, text) {
+    _tip.textContent = text;  // textContent 不解析 HTML，无 XSS 风险
     _tip.style.display = 'block';
-    // 防止超出右边
     const tw = _tip.offsetWidth;
     _tip.style.left = (x + 12 + tw > window.innerWidth ? x - tw - 8 : x + 12) + 'px';
     _tip.style.top  = (y - 28) + 'px';
@@ -170,7 +178,7 @@
   /* 感应矩形回调（挂在 window 上供内联 onmouseenter 调用） */
   window._sparkTipShow = function(e, el) {
     const lbl = el.dataset.lbl, cnt = el.dataset.cnt;
-    showTip(e.clientX, e.clientY, `<span class="font-medium">${lbl}</span> &nbsp;${cnt} 次`);
+    showTip(e.clientX, e.clientY, lbl + '  ' + cnt + ' 次');
   };
   window._sparkTipHide = hideTip;
 
@@ -189,7 +197,7 @@
       const short = model.length > 32 ? model.slice(0,30)+'…' : model;
       html += `<div>
         <div class="flex items-center justify-between mb-1">
-          <span class="text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[60%]" title="${model}">${short}</span>
+          <span class="text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[60%]" title="${escHtml(model)}">${escHtml(short)}</span>
           <span class="text-xs text-zinc-400">${tPct}% · ${fmtNum(cnt)} 次</span>
         </div>
         <div class="h-1 bg-zinc-100 dark:bg-zinc-700 rounded-full overflow-hidden">
@@ -323,7 +331,7 @@
       const maxCount = sorted[0][1].count;
       html += '<div class="space-y-3">';
       for (const [origin, b] of sorted) {
-        const label     = ORIGIN_LABELS[origin] || origin;
+        const label     = escHtml(ORIGIN_LABELS[origin] || origin);
         const pct       = maxCount ? Math.max(Math.round(b.count/maxCount*100), 4) : 4;
         const avgMsOrig = b.avg_ms  || 0;
         const p95Ms     = b.p95_ms  || 0;
@@ -379,15 +387,20 @@
   }
 
   /* ── 时间维度切换 ── */
+  const _TOGGLE_ON  = ['bg-indigo-500', 'text-white'];
+  const _TOGGLE_OFF = ['bg-zinc-100', 'dark:bg-zinc-800', 'text-zinc-600', 'dark:text-zinc-400',
+                       'hover:bg-zinc-200', 'dark:hover:bg-zinc-700'];
+  function _applyToggle(btn, active) {
+    (active ? _TOGGLE_OFF : _TOGGLE_ON).forEach(c => btn.classList.remove(c));
+    (active ? _TOGGLE_ON  : _TOGGLE_OFF).forEach(c => btn.classList.add(c));
+  }
   window.setStatsWindow = function(w) {
     _window = w;
     const b24 = document.getElementById('stats-toggle-24h');
     const b7d = document.getElementById('stats-toggle-7d');
     if (!b24 || !b7d) return;
-    const on  = 'bg-indigo-500 text-white';
-    const off = 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700';
-    b24.className = b24.className.split(' ').filter(c => !c.match(/^(bg-|text-|hover:)/)).concat((w==='24h'?on:off).split(' ')).join(' ');
-    b7d.className = b7d.className.split(' ').filter(c => !c.match(/^(bg-|text-|hover:)/)).concat((w==='7d'?on:off).split(' ')).join(' ');
+    _applyToggle(b24, w === '24h');
+    _applyToggle(b7d, w === '7d');
     if (_data) {
       const el = document.getElementById('stats-body');
       if (el) renderStats(el, _data);

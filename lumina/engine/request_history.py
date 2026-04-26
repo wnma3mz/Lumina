@@ -13,6 +13,7 @@ import queue
 import shutil
 import threading
 import time
+import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -230,7 +231,6 @@ class RequestHistoryRecorder:
             before_size = archive_path.stat().st_size if archive_path.exists() else 0
             
             # 临时写入 .tmp 文件，完成后重命名，保证原子性并避免 crash 导致数据损坏
-            import uuid
             tmp_archive_path = archive_path.with_suffix(f".{uuid.uuid4().hex[:8]}.gz.tmp")
             with path.open("rb") as src, gzip.open(tmp_archive_path, "wb") as dst:
                 shutil.copyfileobj(src, dst)
@@ -489,10 +489,10 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
             model_dist[model] = model_dist.get(model, 0) + 1
 
         # 每小时请求量（仅 24h 窗口）
+        # key 精确到"日期+小时"，避免跨天同一小时数值叠加（如昨日14时与今日14时被合并）
         if in_24h:
-            # 转换为本地时间取小时
             local_ts = ts.astimezone()
-            hour_key = local_ts.strftime("%H")
+            hour_key = local_ts.strftime("%Y-%m-%d %H")
             hourly_counts[hour_key] = hourly_counts.get(hour_key, 0) + 1
 
         windows = []
@@ -536,12 +536,12 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
         day = (now - timedelta(days=i)).date().isoformat()
         daily_series.append({"date": day, "count": daily_counts.get(day, 0)})
 
-    # 补全过去 24 小时的每小时数据（本地时间，0-23 时，从最早到最新）
+    # 补全过去 24 小时的每小时数据（本地时间，从最早到最新）
     local_now = now.astimezone()
     hourly_series = []
     for i in range(23, -1, -1):
         h = (local_now - timedelta(hours=i))
-        hour_key = h.strftime("%H")
+        hour_key = h.strftime("%Y-%m-%d %H")
         label = h.strftime("%H:00")
         hourly_series.append({"hour": label, "count": hourly_counts.get(hour_key, 0)})
 

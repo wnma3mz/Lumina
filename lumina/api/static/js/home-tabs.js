@@ -3,6 +3,7 @@ var _allHomeTabs = [];
 var _legacyHomeTabMap = {};
 var _imageTaskDefs = [];
 var _homeTabsVersionKey = 'lumina.homeTabs.version';
+var _homeTabsCurrentVersion = '5'; // 迁移版本号，与 getLocalHomeTabs 迁移逻辑保持一致
 var _homeUi = {};
 var _imagePrompts = {};
 
@@ -124,7 +125,7 @@ function getLocalHomeTabs() {
     
     // Version 5 Migration: Remove game from core auto-insert (now opt-in via game.enabled)
     var version = localStorage.getItem(_homeTabsVersionKey);
-    if (version !== '5') {
+    if (version !== _homeTabsCurrentVersion) {
       var allDefs = _allHomeTabs.length ? _allHomeTabs : ['digest', 'document', 'image', 'audio', 'settings'];
       ['image', 'audio'].forEach(function(tab) {
         if (!parsed.includes(tab) && allDefs.includes(tab)) {
@@ -134,7 +135,7 @@ function getLocalHomeTabs() {
         }
       });
       localStorage.setItem('lumina.homeTabs', JSON.stringify(parsed));
-      localStorage.setItem(_homeTabsVersionKey, '5');
+      localStorage.setItem(_homeTabsVersionKey, _homeTabsCurrentVersion);
     }
 
     // Check missing enabled tabs dynamically:
@@ -213,7 +214,7 @@ function saveLocalHomeTabs(tabs) {
   if (homeUi.allow_local_override === false) return;
   try {
     localStorage.setItem('lumina.homeTabs', JSON.stringify(normalizeHomeTabs(tabs)));
-    localStorage.setItem(_homeTabsVersionKey, '3');
+    localStorage.setItem(_homeTabsVersionKey, _homeTabsCurrentVersion);
   } catch (_) {}
 }
 

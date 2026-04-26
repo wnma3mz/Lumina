@@ -27,6 +27,7 @@ audio                音频域配置（ASR、PTT 等）
   LUMINA_WHISPER_MODEL / LUMINA_HOST / LUMINA_PORT / LUMINA_LOG_LEVEL
 """
 import json
+import logging
 import os
 import threading
 from pydantic import BaseModel, Field, ConfigDict, model_validator, computed_field
@@ -584,12 +585,16 @@ class Config(BaseModel):
 
     @classmethod
     def load(cls, path: Optional[str] = None) -> "Config":
+        _log = logging.getLogger("lumina")
         cfg_path = Path(path) if path else _CONFIG_PATH
+        data: dict = {}
         try:
             with open(cfg_path, "r", encoding="utf-8") as f:
-                data: dict = json.load(f)
-        except Exception:
-            data = {}
+                data = json.load(f)
+        except FileNotFoundError:
+            pass  # 首次启动，配置文件尚不存在，使用默认值
+        except Exception as e:
+            _log.warning("配置文件解析失败，将使用默认配置（%s: %s）", cfg_path, e)
         return cls.from_data(data, env=os.environ)
 
 # 全局单例
