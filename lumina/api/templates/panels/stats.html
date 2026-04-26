@@ -96,8 +96,8 @@
       return `<text x="${x}" y="${H + 14}" text-anchor="middle" class="sparkline-label">${date}</text>`;
     });
 
-    return `<div class="overflow-x-auto -mx-1">
-      <svg viewBox="0 0 ${W} ${H + 18}" class="w-full sparkline-svg" style="min-width:240px">
+    return `<div style="overflow-x:auto;overflow-y:visible;margin:0 -4px;padding-top:6px">
+      <svg viewBox="0 0 ${W} ${H + 18}" class="w-full sparkline-svg" style="min-width:240px;overflow:visible">
         <defs>
           <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="#818cf8" stop-opacity="0.25"/>
