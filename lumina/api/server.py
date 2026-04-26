@@ -161,6 +161,7 @@ def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastA
             "document_enabled": cfg.document.enabled,
             "image_enabled": cfg.vision.enabled,
             "audio_enabled": cfg.audio.enabled,
+            "game_enabled": cfg.game.enabled,
             "image_modules": cfg.vision.enabled_modules,
             "allow_local_override": cfg.ui.home.allow_local_override,
         }

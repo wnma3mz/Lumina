@@ -1540,6 +1540,11 @@ body {
   grid-column: span 2 / span 2;
 }
 
+.-mx-1 {
+  margin-left: -0.25rem;
+  margin-right: -0.25rem;
+}
+
 .mx-auto {
   margin-left: auto;
   margin-right: auto;
@@ -1838,6 +1843,10 @@ body {
   max-width: 220px;
 }
 
+.max-w-\[60\%\] {
+  max-width: 60%;
+}
+
 .max-w-\[600px\] {
   max-width: 600px;
 }
@@ -1956,10 +1965,6 @@ body {
   align-items: center;
 }
 
-.justify-end {
-  justify-content: flex-end;
-}
-
 .justify-center {
   justify-content: center;
 }
@@ -1974,6 +1979,10 @@ body {
 
 .gap-1 {
   gap: 0.25rem;
+}
+
+.gap-1\.5 {
+  gap: 0.375rem;
 }
 
 .gap-2 {
@@ -2040,6 +2049,10 @@ body {
 
 .overflow-hidden {
   overflow: hidden;
+}
+
+.overflow-x-auto {
+  overflow-x: auto;
 }
 
 .overflow-y-auto {
@@ -2233,6 +2246,11 @@ body {
   background-color: rgb(254 226 226 / var(--tw-bg-opacity, 1));
 }
 
+.bg-red-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(248 113 113 / var(--tw-bg-opacity, 1));
+}
+
 .bg-red-50 {
   --tw-bg-opacity: 1;
   background-color: rgb(254 242 242 / var(--tw-bg-opacity, 1));
@@ -2245,6 +2263,11 @@ body {
 
 .bg-transparent {
   background-color: transparent;
+}
+
+.bg-violet-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(167 139 250 / var(--tw-bg-opacity, 1));
 }
 
 .bg-white {
@@ -3166,6 +3189,27 @@ body {
   border-bottom: 1px solid rgba(255,255,255,.08);
 }
 
+/* ── 统计面板：趋势图 & 刷新动画 ─────────────────────────────── */
+
+.sparkline-label {
+  font-size: 9px;
+  fill: #a1a1aa;
+}
+
+.dark .sparkline-label {
+  fill: #71717a;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .dark\:prose-invert:is(.dark *) {
   --tw-prose-body: var(--tw-prose-invert-body);
   --tw-prose-headings: var(--tw-prose-invert-headings);
@@ -3543,6 +3587,11 @@ body {
   background-color: rgb(49 46 129 / 0.4);
 }
 
+.dark\:bg-red-500:is(.dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(239 68 68 / var(--tw-bg-opacity, 1));
+}
+
 .dark\:bg-red-500\/10:is(.dark *) {
   background-color: rgb(239 68 68 / 0.1);
 }
@@ -3557,6 +3606,11 @@ body {
 
 .dark\:bg-red-900\/30:is(.dark *) {
   background-color: rgb(127 29 29 / 0.3);
+}
+
+.dark\:bg-violet-500:is(.dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(139 92 246 / var(--tw-bg-opacity, 1));
 }
 
 .dark\:bg-white:is(.dark *) {

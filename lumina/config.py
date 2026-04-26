@@ -227,6 +227,7 @@ class DocumentConfig(BaseModel):
 
 class GameConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    enabled: bool = False
     prompts: Dict[str, str] = Field(default_factory=dict)
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
 

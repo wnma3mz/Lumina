@@ -1,35 +1,55 @@
 <div id="panel-stats" class="p-4 md:p-6 max-w-4xl mx-auto w-full">
-  <div class="mb-5">
-    <h2 class="text-xl font-semibold text-zinc-800 dark:text-zinc-100">统计</h2>
-    <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">LLM 请求活动历史</p>
+  <div class="mb-5 flex items-center justify-between">
+    <div>
+      <h2 class="text-xl font-semibold text-zinc-800 dark:text-zinc-100">统计</h2>
+      <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">LLM 请求活动历史</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <!-- 时间维度切换 -->
+      <div class="flex rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 text-xs font-medium">
+        <button id="stats-toggle-24h"
+          onclick="setStatsWindow('24h')"
+          class="px-3 py-1.5 bg-indigo-500 text-white transition-colors">24 小时</button>
+        <button id="stats-toggle-7d"
+          onclick="setStatsWindow('7d')"
+          class="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">7 天</button>
+      </div>
+      <!-- 刷新 + 倒计时 -->
+      <button onclick="triggerStatsRefresh()"
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+        <svg id="stats-refresh-icon" class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 8A6 6 0 1 1 8 2" stroke-linecap="round"/>
+          <path d="M14 2v4h-4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="stats-refresh-label">刷新</span>
+      </button>
+    </div>
   </div>
 
   <div id="stats-body">
     <div class="text-zinc-400 dark:text-zinc-500 text-sm">加载中…</div>
   </div>
-
-  <div class="mt-4 flex justify-end">
-    <button
-      onclick="loadStats()"
-      class="px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-    >刷新</button>
-  </div>
 </div>
 
 <script>
 (function () {
+  /* ── 常量 ── */
   const ORIGIN_LABELS = {
-    chat: '对话',
-    chat_api: '对话 API',
-    digest: '日报',
-    document: '文档',
-    game_opening: '游戏开场',
-    game_score: '游戏评分',
-    vision: '图像',
-    audio: '音频',
-    unknown: '未知',
+    chat: '对话', chat_api: '对话 API', digest: '日报',
+    document: '文档', game_opening: '游戏开场', game_score: '游戏评分',
+    vision: '图像', audio: '音频', unknown: '未知',
   };
+  const REFRESH_INTERVAL = 30; // 秒
+  const LATENCY_WARN_MS  = 3000;
+  const LATENCY_CRIT_MS  = 8000;
 
+  /* ── 状态 ── */
+  let _statsData   = null;
+  let _window      = '24h';  // 当前时间维度
+  let _countdown   = REFRESH_INTERVAL;
+  let _timerHandle = null;
+
+  /* ── 工具函数 ── */
   function fmtMs(ms) {
     if (!ms) return '—';
     if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
@@ -37,77 +57,212 @@
   }
 
   function fmtNum(n) {
+    if (n == null) return '—';
     if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-    if (n >= 10000) return (n / 1000).toFixed(1) + 'k';
+    if (n >= 10000)   return (n / 1000).toFixed(1) + 'k';
     return String(n);
   }
 
+  function latencyColor(ms) {
+    if (!ms) return '';
+    if (ms >= LATENCY_CRIT_MS) return 'text-red-500 dark:text-red-400';
+    if (ms >= LATENCY_WARN_MS) return 'text-amber-500 dark:text-amber-400';
+    return '';
+  }
+
+  /* ── 趋势折线图（SVG） ── */
+  function renderSparkline(series) {
+    const W = 560, H = 52, PAD = 4;
+    const counts = series.map(d => d.count);
+    const max = Math.max(...counts, 1);
+    const n = counts.length;
+    if (n < 2) return '';
+
+    const pts = counts.map((v, i) => {
+      const x = PAD + (i / (n - 1)) * (W - PAD * 2);
+      const y = H - PAD - (v / max) * (H - PAD * 2);
+      return [x, y];
+    });
+
+    const linePath = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
+    const areaPath = linePath + ` L${pts[n-1][0]},${H - PAD} L${pts[0][0]},${H - PAD} Z`;
+
+    // X 轴标注：首、中、末三个日期
+    const labels = [0, Math.floor((n-1)/2), n-1].map(i => {
+      const x = PAD + (i / (n - 1)) * (W - PAD * 2);
+      const date = series[i].date.slice(5); // MM-DD
+      return `<text x="${x}" y="${H + 14}" text-anchor="middle" class="sparkline-label">${date}</text>`;
+    });
+
+    return `<div class="overflow-x-auto -mx-1">
+      <svg viewBox="0 0 ${W} ${H + 18}" class="w-full sparkline-svg" style="min-width:240px">
+        <defs>
+          <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#818cf8" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="${areaPath}" fill="url(#sg)"/>
+        <path d="${linePath}" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+        ${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2" fill="#818cf8"/>`).join('')}
+        ${labels.join('')}
+      </svg>
+    </div>`;
+  }
+
+  /* ── 模型分布 ── */
+  function renderModelDist(modelDist) {
+    const entries = Object.entries(modelDist).sort((a,b) => b[1]-a[1]);
+    if (!entries.length) return '';
+    const total = entries.reduce((s,[,v]) => s+v, 0);
+    const maxV = entries[0][1];
+    let html = '<div class="bento-card p-4 mb-4">';
+    html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">模型分布（7 天）</div>';
+    html += '<div class="space-y-2">';
+    for (const [model, cnt] of entries) {
+      const pct = maxV ? Math.round(cnt / maxV * 100) : 0;
+      const totalPct = total ? Math.round(cnt / total * 100) : 0;
+      const shortModel = model.length > 32 ? model.slice(0, 30) + '…' : model;
+      html += `<div>
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[60%]" title="${model}">${shortModel}</span>
+          <span class="text-xs text-zinc-400">${totalPct}% · ${fmtNum(cnt)} 次</span>
+        </div>
+        <div class="h-1 bg-zinc-100 dark:bg-zinc-700 rounded-full overflow-hidden">
+          <div class="h-1 bg-violet-400 dark:bg-violet-500 rounded-full" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  /* ── 主渲染 ── */
   function renderStats(el, data) {
-    const s = data.summary || {};
-    const origins7d = data['7d'] || {};
-    const origins24h = data['24h'] || {};
+    const s         = data.summary || {};
+    const origins7d = data['7d']  || {};
+    const origins24h= data['24h'] || {};
+    const prevBucket= data['prev_24h'] || {};
 
-    const total7d = s.total_7d || 0;
-    const total24h = s.total_24h || 0;
-    const avgMs = s.avg_ms_7d || 0;
+    // 汇总
+    const total7d   = s.total_7d   || 0;
+    const total24h  = s.total_24h  || 0;
+    const prev24h   = s.prev_total_24h || 0;
+    const avgMs     = s.avg_ms_7d  || 0;
 
+    const activeWindow = _window === '24h' ? origins24h : origins7d;
+    const windowLabel  = _window === '24h' ? '24 小时' : '7 天';
+
+    // 聚合 7d 数据
     let totalUserChars = 0, totalRespChars = 0, totalErrors = 0;
     let totalPromptTokens = 0, totalCompletionTokens = 0, tokenCount = 0;
     for (const b of Object.values(origins7d)) {
-      totalUserChars += b.user_chars || 0;
-      totalRespChars += b.resp_chars || 0;
-      totalErrors += b.error || 0;
-      totalPromptTokens += b.prompt_tokens || 0;
+      totalUserChars      += b.user_chars || 0;
+      totalRespChars      += b.resp_chars  || 0;
+      totalErrors         += b.error       || 0;
+      totalPromptTokens   += b.prompt_tokens || 0;
       totalCompletionTokens += b.completion_tokens || 0;
-      tokenCount += b.token_count || 0;
+      tokenCount          += b.token_count || 0;
     }
-    const errPct = total7d ? Math.round(totalErrors / total7d * 100) : 0;
+    const errPct    = total7d ? Math.round(totalErrors / total7d * 100) : 0;
     const hasTokens = tokenCount > 0;
+    const tokenCovPct = total7d ? Math.round(tokenCount / total7d * 100) : 0;
+
+    // 今日 vs 昨日对比
+    const deltaAbs = total24h - prev24h;
+    const deltaPct = prev24h ? Math.round(Math.abs(deltaAbs) / prev24h * 100) : null;
+    let deltaHtml = '';
+    if (prev24h > 0) {
+      const sign    = deltaAbs >= 0 ? '+' : '';
+      const color   = deltaAbs > 0 ? 'text-emerald-500' : deltaAbs < 0 ? 'text-red-400' : 'text-zinc-400';
+      const arrow   = deltaAbs > 0 ? '↑' : deltaAbs < 0 ? '↓' : '→';
+      deltaHtml = `<div class="text-[10px] ${color} mt-0.5">${arrow} 较昨日 ${sign}${deltaPct != null ? deltaPct + '%' : deltaAbs}</div>`;
+    }
 
     let html = '';
 
-    // 汇总数字卡片
-    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    const cards = [
-      { label: '今日请求', value: total24h, unit: '次', sub: '过去 24 小时' },
-      { label: '7 天请求', value: total7d, unit: '次', sub: '过去 7 天' },
-      { label: '平均耗时', value: fmtMs(avgMs), unit: '', sub: '7 天均值' },
-      { label: '错误率', value: errPct + '%', unit: '', sub: total7d ? totalErrors + ' 次错误' : '无记录' },
-    ];
-    for (const c of cards) {
-      html += `<div class="bento-card p-4">
-        <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${c.value}<span class="text-sm font-normal text-zinc-400 ml-1">${c.unit}</span></div>
-        <div class="text-xs font-medium text-zinc-500 mt-0.5">${c.label}</div>
-        <div class="text-[10px] text-zinc-400 mt-0.5">${c.sub}</div>
+    /* 汇总卡片 */
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">';
+    html += `<div class="bento-card p-4">
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(total24h)}<span class="text-sm font-normal text-zinc-400 ml-1">次</span></div>
+      <div class="text-xs font-medium text-zinc-500 mt-0.5">今日请求</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">过去 24 小时</div>
+      ${deltaHtml}
+    </div>`;
+    html += `<div class="bento-card p-4">
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(total7d)}<span class="text-sm font-normal text-zinc-400 ml-1">次</span></div>
+      <div class="text-xs font-medium text-zinc-500 mt-0.5">7 天请求</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">过去 7 天</div>
+    </div>`;
+    html += `<div class="bento-card p-4">
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${fmtMs(avgMs)}</div>
+      <div class="text-xs font-medium text-zinc-500 mt-0.5">平均耗时</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">7 天均值</div>
+    </div>`;
+    html += `<div class="bento-card p-4">
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${errPct}%</div>
+      <div class="text-xs font-medium text-zinc-500 mt-0.5">错误率</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">${total7d ? totalErrors + ' 次错误 · 7 天' : '无记录'}</div>
+    </div>`;
+    html += '</div>';
+
+    /* 趋势图 */
+    const series = data.daily_series || [];
+    if (series.length >= 2 && series.some(d => d.count > 0)) {
+      html += '<div class="bento-card p-4 mb-4">';
+      html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">请求趋势（7 天）</div>';
+      html += renderSparkline(series);
+      html += '</div>';
+    }
+
+    /* Token / 字符用量 */
+    const inputLabel = hasTokens ? '输入 Token' : '输入字符';
+    const outputLabel= hasTokens ? '输出 Token' : '输出字符';
+    const inputVal   = hasTokens ? fmtNum(totalPromptTokens)     : fmtNum(totalUserChars);
+    const outputVal  = hasTokens ? fmtNum(totalCompletionTokens) : fmtNum(totalRespChars);
+    const avgPerReq  = (hasTokens && tokenCount)
+      ? Math.round((totalPromptTokens + totalCompletionTokens) / tokenCount)
+      : null;
+
+    html += '<div class="bento-card p-4 mb-4">';
+    html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">用量（7 天）</div>';
+    html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-4">';
+    html += `<div>
+      <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${inputVal}</div>
+      <div class="text-xs text-zinc-500">${inputLabel}</div>
+    </div>`;
+    html += `<div>
+      <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${outputVal}</div>
+      <div class="text-xs text-zinc-500">${outputLabel}</div>
+    </div>`;
+    if (avgPerReq != null) {
+      html += `<div>
+        <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(avgPerReq)}</div>
+        <div class="text-xs text-zinc-500">均值 Token/请求</div>
       </div>`;
     }
     html += '</div>';
+    // 数据完整度提示
+    if (hasTokens && tokenCovPct < 100) {
+      html += `<div class="mt-3 text-[10px] text-zinc-400 flex items-center gap-1">
+        <svg class="w-3 h-3 shrink-0" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 11a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm.75-4.5h-1.5v-4h1.5v4z"/></svg>
+        Token 数据覆盖 ${tokenCount} / ${total7d} 条（${tokenCovPct}%），历史记录无 token 统计
+      </div>`;
+    } else if (!hasTokens) {
+      html += `<div class="mt-3 text-[10px] text-zinc-400">字符数（无 token 统计，发起新请求后将开始记录）</div>`;
+    }
+    html += '</div>';
 
-    // Token / 字符量
-    const inputLabel = hasTokens ? '输入 Token' : '输入字符';
-    const outputLabel = hasTokens ? '输出 Token' : '输出字符';
-    const inputVal = hasTokens ? fmtNum(totalPromptTokens) : fmtNum(totalUserChars);
-    const outputVal = hasTokens ? fmtNum(totalCompletionTokens) : fmtNum(totalRespChars);
-    const inputSub = hasTokens ? `覆盖 ${tokenCount} 条记录` : '字符数（无 token 数据）';
-    html += `<div class="bento-card p-4 mb-5">
-      <div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">用量（7 天）</div>
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${inputVal}</div>
-          <div class="text-xs text-zinc-500">${inputLabel}</div>
-          <div class="text-[10px] text-zinc-400 mt-0.5">${inputSub}</div>
-        </div>
-        <div>
-          <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${outputVal}</div>
-          <div class="text-xs text-zinc-500">${outputLabel}</div>
-        </div>
-      </div>
-    </div>`;
+    /* 模型分布 */
+    const modelDist = data.model_dist || {};
+    if (Object.keys(modelDist).length > 1) {
+      html += renderModelDist(modelDist);
+    }
 
-    // 来源分布
-    const sorted = Object.entries(origins7d).sort((a, b) => b[1].count - a[1].count);
+    /* 来源分布 */
+    const sorted = Object.entries(activeWindow).sort((a, b) => b[1].count - a[1].count);
     html += '<div class="bento-card p-4">';
-    html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">来源分布（7 天）</div>';
+    html += `<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">来源分布（${windowLabel}）</div>`;
 
     if (sorted.length === 0) {
       html += '<div class="text-zinc-400 dark:text-zinc-500 text-sm py-4 text-center">暂无活动记录</div>';
@@ -115,27 +270,58 @@
       const maxCount = sorted[0][1].count;
       html += '<div class="space-y-3">';
       for (const [origin, b] of sorted) {
-        const label = ORIGIN_LABELS[origin] || origin;
-        const pct = maxCount ? Math.round(b.count / maxCount * 100) : 0;
-        const count24h = (origins24h[origin] || {}).count || 0;
-        const avgMs = b.avg_ms || 0;
-        const errCount = b.error || 0;
-        const errPctOrigin = b.count ? Math.round(errCount / b.count * 100) : 0;
+        const label      = ORIGIN_LABELS[origin] || origin;
+        // 最小宽度 4% 保证极小值可见
+        const pct        = maxCount ? Math.max(Math.round(b.count / maxCount * 100), 4) : 4;
+        const avgMsOrig  = b.avg_ms  || 0;
+        const p95Ms      = b.p95_ms  || 0;
+        const errCount   = b.error   || 0;
+        const errPctOrig = b.count   ? Math.round(errCount / b.count * 100) : 0;
+
+        // 今日对比（仅 7d 视图时有意义）
+        const count24hOrig = _window === '7d' ? ((origins24h[origin] || {}).count || 0) : null;
+        const prevCount    = _window === '24h' ? ((prevBucket[origin] || {}).count || 0) : null;
+
+        // 延迟颜色
+        const latColor = latencyColor(avgMsOrig);
+
+        // 进度条颜色（高错误率变红）
+        const barColor = errPctOrig >= 20
+          ? 'bg-red-400 dark:bg-red-500'
+          : 'bg-indigo-400 dark:bg-indigo-500';
+
+        // 响应时间信息（含 P95）
+        let timeInfo = `<span class="${latColor || 'text-zinc-400'}">${fmtMs(avgMsOrig)} 均值</span>`;
+        if (p95Ms && p95Ms > avgMsOrig * 1.5) {
+          const p95Color = latencyColor(p95Ms) || 'text-zinc-400';
+          timeInfo += ` <span class="${p95Color} text-[10px]">P95 ${fmtMs(p95Ms)}</span>`;
+        }
+
+        // 对比标注
+        let compareHtml = '';
+        if (count24hOrig !== null) {
+          compareHtml = `<span class="text-indigo-500 font-medium">今日 +${count24hOrig}</span>`;
+        } else if (prevCount !== null) {
+          const diff = b.count - prevCount;
+          const sign = diff >= 0 ? '+' : '';
+          const diffColor = diff > 0 ? 'text-emerald-500' : diff < 0 ? 'text-red-400' : 'text-zinc-400';
+          compareHtml = `<span class="${diffColor} font-medium">较昨日 ${sign}${diff}</span>`;
+        }
 
         html += `<div>
           <div class="flex items-center justify-between mb-1">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 min-w-0">
               <span class="text-sm text-zinc-700 dark:text-zinc-300 font-medium">${label}</span>
-              ${errCount > 0 ? `<span class="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-500 px-1.5 py-0.5 rounded font-medium">${errPctOrigin}% 错误</span>` : ''}
+              ${errCount > 0 ? `<span class="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-500 px-1.5 py-0.5 rounded font-medium shrink-0">${errPctOrig}% 错误</span>` : ''}
             </div>
-            <div class="flex items-center gap-3 text-xs text-zinc-400">
-              <span>${fmtMs(avgMs)} 均值</span>
-              <span class="text-indigo-500 font-medium">今日 +${count24h}</span>
+            <div class="flex items-center gap-3 text-xs shrink-0 ml-2">
+              ${timeInfo}
+              ${compareHtml}
               <span class="font-bold text-zinc-600 dark:text-zinc-300 w-8 text-right">${b.count}</span>
             </div>
           </div>
           <div class="h-1.5 bg-zinc-100 dark:bg-zinc-700 rounded-full overflow-hidden">
-            <div class="h-1.5 bg-indigo-400 dark:bg-indigo-500 rounded-full transition-all" style="width:${pct}%"></div>
+            <div class="h-1.5 ${barColor} rounded-full transition-all" style="width:${pct}%"></div>
           </div>
         </div>`;
       }
@@ -146,21 +332,72 @@
     el.innerHTML = html;
   }
 
-  window.loadStats = async function () {
-    const el = document.getElementById('stats-body');
-    if (!el) return;
-    el.innerHTML = '<div class="text-zinc-400 dark:text-zinc-500 text-sm">加载中…</div>';
-    try {
-      const res = await fetch('/v1/activity');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      renderStats(el, data);
-    } catch (e) {
-      el.innerHTML = `<div class="text-red-400 text-sm">加载失败：${e.message}</div>`;
+  /* ── 时间维度切换 ── */
+  window.setStatsWindow = function(w) {
+    _window = w;
+    const btn24h = document.getElementById('stats-toggle-24h');
+    const btn7d   = document.getElementById('stats-toggle-7d');
+    if (!btn24h || !btn7d) return;
+    const activeClass   = 'bg-indigo-500 text-white';
+    const inactiveClass = 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700';
+    if (w === '24h') {
+      btn24h.className = btn24h.className.replace(/bg-zinc-100[^\s]*/g, '').replace(/text-zinc-[^\s]*/g, '').replace(/hover:[^\s]*/g, '').trim() + ' ' + activeClass;
+      btn7d.className  = btn7d.className.replace(/bg-indigo-500[^\s]*/g, '').replace(/text-white[^\s]*/g, '').trim() + ' ' + inactiveClass;
+    } else {
+      btn7d.className  = btn7d.className.replace(/bg-zinc-100[^\s]*/g, '').replace(/text-zinc-[^\s]*/g, '').replace(/hover:[^\s]*/g, '').trim() + ' ' + activeClass;
+      btn24h.className = btn24h.className.replace(/bg-indigo-500[^\s]*/g, '').replace(/text-white[^\s]*/g, '').trim() + ' ' + inactiveClass;
+    }
+    if (_statsData) {
+      const el = document.getElementById('stats-body');
+      if (el) renderStats(el, _statsData);
     }
   };
 
-  // tab 切换时通过 CSS :checked 显示，DOMContentLoaded 已触发，此脚本随 include 注入时直接执行
+  /* ── 自动刷新倒计时 ── */
+  function startCountdown() {
+    if (_timerHandle) clearInterval(_timerHandle);
+    _countdown = REFRESH_INTERVAL;
+    _timerHandle = setInterval(function() {
+      _countdown--;
+      const lbl = document.getElementById('stats-refresh-label');
+      if (lbl) lbl.textContent = _countdown > 0 ? _countdown + 's' : '刷新';
+      if (_countdown <= 0) {
+        clearInterval(_timerHandle);
+        _timerHandle = null;
+        loadStats();
+      }
+    }, 1000);
+  }
+
+  window.triggerStatsRefresh = function() {
+    if (_timerHandle) { clearInterval(_timerHandle); _timerHandle = null; }
+    loadStats();
+  };
+
+  /* ── 数据加载 ── */
+  window.loadStats = async function () {
+    const el = document.getElementById('stats-body');
+    if (!el) return;
+    // 保留已有内容，只加一个轻量指示
+    const icon = document.getElementById('stats-refresh-icon');
+    if (icon) icon.style.animation = 'spin 1s linear infinite';
+    const lbl = document.getElementById('stats-refresh-label');
+    if (lbl) lbl.textContent = '…';
+    try {
+      const res = await fetch('/v1/activity');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      _statsData = await res.json();
+      renderStats(el, _statsData);
+      startCountdown();
+    } catch (e) {
+      el.innerHTML = `<div class="text-red-400 text-sm">加载失败：${e.message}</div>`;
+    } finally {
+      if (icon) icon.style.animation = '';
+      const lbl2 = document.getElementById('stats-refresh-label');
+      if (lbl2 && lbl2.textContent === '…') lbl2.textContent = '刷新';
+    }
+  };
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', window.loadStats);
   } else {

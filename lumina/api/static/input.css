@@ -187,3 +187,8 @@
 .dark .modal-handle { background: rgba(84,84,88,.55); }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px 12px; border-bottom: 1px solid rgba(0,0,0,.08); flex-shrink: 0; }
 .dark .modal-header { border-bottom: 1px solid rgba(255,255,255,.08); }
+
+/* ── 统计面板：趋势图 & 刷新动画 ─────────────────────────────── */
+.sparkline-label { font-size: 9px; fill: #a1a1aa; }
+.dark .sparkline-label { fill: #71717a; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
