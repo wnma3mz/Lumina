@@ -5,16 +5,12 @@
       <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">LLM 请求活动历史</p>
     </div>
     <div class="flex items-center gap-2">
-      <!-- 时间维度切换 -->
       <div class="flex rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 text-xs font-medium">
-        <button id="stats-toggle-24h"
-          onclick="setStatsWindow('24h')"
+        <button id="stats-toggle-24h" onclick="setStatsWindow('24h')"
           class="px-3 py-1.5 bg-indigo-500 text-white transition-colors">24 小时</button>
-        <button id="stats-toggle-7d"
-          onclick="setStatsWindow('7d')"
+        <button id="stats-toggle-7d" onclick="setStatsWindow('7d')"
           class="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">7 天</button>
       </div>
-      <!-- 刷新 + 倒计时 -->
       <button onclick="triggerStatsRefresh()"
         class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
         <svg id="stats-refresh-icon" class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -29,106 +25,172 @@
   <div id="stats-body">
     <div class="text-zinc-400 dark:text-zinc-500 text-sm">加载中…</div>
   </div>
+
+  <!-- Tooltip 浮层（全局单例） -->
+  <div id="spark-tooltip" style="position:fixed;display:none;pointer-events:none;z-index:500"
+    class="bg-zinc-800 dark:bg-zinc-700 text-white text-xs rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap"></div>
 </div>
+
+<style>
+#panel-stats .sparkline-label { font-size: 9px; fill: #a1a1aa; }
+.dark #panel-stats .sparkline-label { fill: #71717a; }
+@keyframes stats-spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
+@keyframes spark-draw {
+  from { stroke-dashoffset: var(--spark-len, 2000); }
+  to   { stroke-dashoffset: 0; }
+}
+</style>
 
 <script>
 (function () {
   /* ── 常量 ── */
   const ORIGIN_LABELS = {
-    chat: '对话', chat_api: '对话 API', digest: '日报',
-    document: '文档', game_opening: '游戏开场', game_score: '游戏评分',
-    vision: '图像', audio: '音频', unknown: '未知',
+    chat:'对话', chat_api:'对话 API', digest:'日报',
+    document:'文档', game_opening:'游戏开场', game_score:'游戏评分',
+    vision:'图像', audio:'音频', unknown:'未知',
   };
-  const REFRESH_INTERVAL = 30; // 秒
+  const REFRESH_INTERVAL = 30;
   const LATENCY_WARN_MS  = 3000;
   const LATENCY_CRIT_MS  = 8000;
+  const P95_CRIT_MS      = 10000;
 
   /* ── 状态 ── */
-  let _statsData   = null;
-  let _window      = '24h';  // 当前时间维度
-  let _countdown   = REFRESH_INTERVAL;
-  let _timerHandle = null;
+  let _data     = null;
+  let _window   = '24h';
+  let _countdown= REFRESH_INTERVAL;
+  let _timer    = null;
 
-  /* ── 工具函数 ── */
+  /* ── 工具 ── */
   function fmtMs(ms) {
     if (!ms) return '—';
-    if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
-    return ms + 'ms';
+    return ms >= 1000 ? (ms/1000).toFixed(1)+'s' : ms+'ms';
   }
-
   function fmtNum(n) {
     if (n == null) return '—';
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-    if (n >= 10000)   return (n / 1000).toFixed(1) + 'k';
+    if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+    if (n >= 1e4) return (n/1e3).toFixed(1)+'k';
     return String(n);
   }
 
+  /* 延迟颜色（avg） */
   function latencyColor(ms) {
     if (!ms) return '';
     if (ms >= LATENCY_CRIT_MS) return 'text-red-500 dark:text-red-400';
     if (ms >= LATENCY_WARN_MS) return 'text-amber-500 dark:text-amber-400';
     return '';
   }
+  /* P95 颜色（阈值更高） */
+  function p95Color(ms) {
+    if (!ms) return 'text-zinc-400';
+    if (ms >= P95_CRIT_MS)    return 'text-red-500 dark:text-red-400';
+    if (ms >= LATENCY_CRIT_MS)return 'text-amber-500 dark:text-amber-400';
+    return 'text-zinc-400';
+  }
 
-  /* ── 趋势折线图（SVG） ── */
-  function renderSparkline(series) {
+  /* ── Tooltip ── */
+  const _tip = document.getElementById('spark-tooltip');
+  function showTip(x, y, html) {
+    _tip.innerHTML = html;
+    _tip.style.display = 'block';
+    // 防止超出右边
+    const tw = _tip.offsetWidth;
+    _tip.style.left = (x + 12 + tw > window.innerWidth ? x - tw - 8 : x + 12) + 'px';
+    _tip.style.top  = (y - 28) + 'px';
+  }
+  function hideTip() { _tip.style.display = 'none'; }
+
+  /* ── 趋势折线图（SVG + Tooltip + 入场动画） ── */
+  function renderSparkline(series, labelKey) {
     const W = 560, H = 52;
-    const PAD_X = 4, PAD_TOP = 8, PAD_BOT = 4;
+    const PX = 4, PT = 10, PB = 4;
     const counts = series.map(d => d.count);
     const max = Math.max(...counts, 1);
     const n = counts.length;
     if (n < 2) return '';
 
     const pts = counts.map((v, i) => {
-      const x = PAD_X + (i / (n - 1)) * (W - PAD_X * 2);
-      const y = PAD_TOP + (1 - v / max) * (H - PAD_TOP - PAD_BOT);
+      const x = PX + (i / (n-1)) * (W - PX*2);
+      const y = PT + (1 - v/max) * (H - PT - PB);
       return [x, y];
     });
 
-    const linePath = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
-    const baseY = H - PAD_BOT;
+    const linePath = pts.map((p,i) => (i===0?`M${p[0]},${p[1]}`:`L${p[0]},${p[1]}`)).join(' ');
+    const baseY    = H - PB;
     const areaPath = linePath + ` L${pts[n-1][0]},${baseY} L${pts[0][0]},${baseY} Z`;
 
-    // X 轴标注：首、中、末三个日期
-    const labels = [0, Math.floor((n-1)/2), n-1].map(i => {
-      const x = PAD_X + (i / (n - 1)) * (W - PAD_X * 2);
-      const date = series[i].date.slice(5); // MM-DD
-      return `<text x="${x}" y="${H + 14}" text-anchor="middle" class="sparkline-label">${date}</text>`;
+    // X 轴标注：首、中、末
+    const labelIdxs = [0, Math.floor((n-1)/2), n-1];
+    const labels = labelIdxs.map(i => {
+      const x   = PX + (i/(n-1)) * (W - PX*2);
+      const lbl = series[i][labelKey];
+      return `<text x="${x}" y="${H+14}" text-anchor="middle" class="sparkline-label">${lbl}</text>`;
     });
 
-    return `<div style="overflow-x:auto;overflow-y:visible;margin:0 -4px;padding-top:6px">
-      <svg viewBox="0 0 ${W} ${H + 18}" class="w-full sparkline-svg" style="min-width:240px;overflow:visible">
+    // 感应矩形（每列宽 = W/n，覆盖整列高度）
+    const colW  = W / n;
+    const rects = series.map((d, i) => {
+      const cx  = PX + (i/(n-1)) * (W - PX*2);
+      const lbl = d[labelKey];
+      return `<rect x="${cx - colW/2}" y="0" width="${colW}" height="${H+18}"
+        fill="transparent" style="cursor:default"
+        data-lbl="${lbl}" data-cnt="${d.count}"
+        onmouseenter="window._sparkTipShow(event,this)"
+        onmouseleave="window._sparkTipHide()"/>`;
+    });
+
+    // 路径总长（近似，用于动画）
+    const pathLen = pts.reduce((acc,[x,y],i) => {
+      if (i===0) return 0;
+      const [px,py] = pts[i-1];
+      return acc + Math.hypot(x-px, y-py);
+    }, 0);
+
+    const uid = 'sp' + Math.random().toString(36).slice(2,7);
+
+    return `<div style="overflow-x:auto;overflow-y:visible;margin:0 -4px;padding-top:4px">
+      <svg id="${uid}" viewBox="0 0 ${W} ${H+18}" class="w-full" style="min-width:240px;overflow:visible">
         <defs>
-          <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#818cf8" stop-opacity="0.25"/>
+          <linearGradient id="sg${uid}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#818cf8" stop-opacity="0.22"/>
             <stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
           </linearGradient>
         </defs>
-        <path d="${areaPath}" fill="url(#sg)"/>
-        <path d="${linePath}" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-        ${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="2" fill="#818cf8"/>`).join('')}
+        <path d="${areaPath}" fill="url(#sg${uid})"/>
+        <path d="${linePath}" fill="none" stroke="#818cf8" stroke-width="1.5"
+          stroke-linejoin="round" stroke-linecap="round"
+          style="stroke-dasharray:${pathLen};stroke-dashoffset:${pathLen};
+                 animation:spark-draw 0.8s ease forwards"/>
+        ${pts.map(([x,y]) => `<circle cx="${x}" cy="${y}" r="2.5" fill="#818cf8"/>`).join('')}
         ${labels.join('')}
+        ${rects.join('')}
       </svg>
     </div>`;
   }
+
+  /* 感应矩形回调（挂在 window 上供内联 onmouseenter 调用） */
+  window._sparkTipShow = function(e, el) {
+    const lbl = el.dataset.lbl, cnt = el.dataset.cnt;
+    showTip(e.clientX, e.clientY, `<span class="font-medium">${lbl}</span> &nbsp;${cnt} 次`);
+  };
+  window._sparkTipHide = hideTip;
 
   /* ── 模型分布 ── */
   function renderModelDist(modelDist) {
     const entries = Object.entries(modelDist).sort((a,b) => b[1]-a[1]);
     if (!entries.length) return '';
     const total = entries.reduce((s,[,v]) => s+v, 0);
-    const maxV = entries[0][1];
+    const maxV  = entries[0][1];
     let html = '<div class="bento-card p-4 mb-4">';
     html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">模型分布（7 天）</div>';
     html += '<div class="space-y-2">';
     for (const [model, cnt] of entries) {
-      const pct = maxV ? Math.round(cnt / maxV * 100) : 0;
-      const totalPct = total ? Math.round(cnt / total * 100) : 0;
-      const shortModel = model.length > 32 ? model.slice(0, 30) + '…' : model;
+      const pct   = maxV ? Math.max(Math.round(cnt/maxV*100), 2) : 2;
+      const tPct  = total ? Math.round(cnt/total*100) : 0;
+      const short = model.length > 32 ? model.slice(0,30)+'…' : model;
       html += `<div>
         <div class="flex items-center justify-between mb-1">
-          <span class="text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[60%]" title="${model}">${shortModel}</span>
-          <span class="text-xs text-zinc-400">${totalPct}% · ${fmtNum(cnt)} 次</span>
+          <span class="text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[60%]" title="${model}">${short}</span>
+          <span class="text-xs text-zinc-400">${tPct}% · ${fmtNum(cnt)} 次</span>
         </div>
         <div class="h-1 bg-zinc-100 dark:bg-zinc-700 rounded-full overflow-hidden">
           <div class="h-1 bg-violet-400 dark:bg-violet-500 rounded-full" style="width:${pct}%"></div>
@@ -141,44 +203,43 @@
 
   /* ── 主渲染 ── */
   function renderStats(el, data) {
-    const s         = data.summary || {};
-    const origins7d = data['7d']  || {};
-    const origins24h= data['24h'] || {};
-    const prevBucket= data['prev_24h'] || {};
+    const s         = data.summary    || {};
+    const origins7d = data['7d']      || {};
+    const origins24h= data['24h']     || {};
+    const prevBucket= data['prev_24h']|| {};
 
-    // 汇总
-    const total7d   = s.total_7d   || 0;
-    const total24h  = s.total_24h  || 0;
-    const prev24h   = s.prev_total_24h || 0;
-    const avgMs     = s.avg_ms_7d  || 0;
+    const total7d   = s.total_7d        || 0;
+    const total24h  = s.total_24h       || 0;
+    const prev24h   = s.prev_total_24h  || 0;
+    const avgMs     = s.avg_ms_7d       || 0;
 
     const activeWindow = _window === '24h' ? origins24h : origins7d;
     const windowLabel  = _window === '24h' ? '24 小时' : '7 天';
 
-    // 聚合 7d 数据
-    let totalUserChars = 0, totalRespChars = 0, totalErrors = 0;
-    let totalPromptTokens = 0, totalCompletionTokens = 0, tokenCount = 0;
+    /* 7d 汇总 */
+    let totalUserChars=0, totalRespChars=0, totalErrors=0;
+    let totalPT=0, totalCT=0, tokenCount=0;
     for (const b of Object.values(origins7d)) {
-      totalUserChars      += b.user_chars || 0;
-      totalRespChars      += b.resp_chars  || 0;
-      totalErrors         += b.error       || 0;
-      totalPromptTokens   += b.prompt_tokens || 0;
-      totalCompletionTokens += b.completion_tokens || 0;
-      tokenCount          += b.token_count || 0;
+      totalUserChars += b.user_chars||0;
+      totalRespChars += b.resp_chars||0;
+      totalErrors    += b.error||0;
+      totalPT        += b.prompt_tokens||0;
+      totalCT        += b.completion_tokens||0;
+      tokenCount     += b.token_count||0;
     }
-    const errPct    = total7d ? Math.round(totalErrors / total7d * 100) : 0;
-    const hasTokens = tokenCount > 0;
-    const tokenCovPct = total7d ? Math.round(tokenCount / total7d * 100) : 0;
+    const errPct      = total7d ? Math.round(totalErrors/total7d*100) : 0;
+    const hasTokens   = tokenCount > 0;
+    const tokenCovPct = total7d ? Math.round(tokenCount/total7d*100) : 0;
 
-    // 今日 vs 昨日对比
+    /* 今日 vs 昨日（中性色） */
     const deltaAbs = total24h - prev24h;
-    const deltaPct = prev24h ? Math.round(Math.abs(deltaAbs) / prev24h * 100) : null;
+    const deltaPct = prev24h ? Math.round(Math.abs(deltaAbs)/prev24h*100) : null;
     let deltaHtml = '';
     if (prev24h > 0) {
-      const sign    = deltaAbs >= 0 ? '+' : '';
-      const color   = deltaAbs > 0 ? 'text-emerald-500' : deltaAbs < 0 ? 'text-red-400' : 'text-zinc-400';
-      const arrow   = deltaAbs > 0 ? '↑' : deltaAbs < 0 ? '↓' : '→';
-      deltaHtml = `<div class="text-[10px] ${color} mt-0.5">${arrow} 较昨日 ${sign}${deltaPct != null ? deltaPct + '%' : deltaAbs}</div>`;
+      const sign  = deltaAbs >= 0 ? '+' : '';
+      const arrow = deltaAbs > 0 ? '↑' : deltaAbs < 0 ? '↓' : '→';
+      const val   = deltaPct != null ? deltaPct+'%' : Math.abs(deltaAbs);
+      deltaHtml = `<div class="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">${arrow} 较昨日 ${sign}${val}</div>`;
     }
 
     let html = '';
@@ -197,54 +258,44 @@
       <div class="text-[10px] text-zinc-400 mt-0.5">过去 7 天</div>
     </div>`;
     html += `<div class="bento-card p-4">
-      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${fmtMs(avgMs)}</div>
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100 ${latencyColor(avgMs)}">${fmtMs(avgMs)}</div>
       <div class="text-xs font-medium text-zinc-500 mt-0.5">平均耗时</div>
       <div class="text-[10px] text-zinc-400 mt-0.5">7 天均值</div>
     </div>`;
     html += `<div class="bento-card p-4">
       <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${errPct}%</div>
       <div class="text-xs font-medium text-zinc-500 mt-0.5">错误率</div>
-      <div class="text-[10px] text-zinc-400 mt-0.5">${total7d ? totalErrors + ' 次错误 · 7 天' : '无记录'}</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">${total7d ? totalErrors+' 次错误 · 7 天' : '无记录'}</div>
     </div>`;
     html += '</div>';
 
-    /* 趋势图 */
-    const series = data.daily_series || [];
+    /* 趋势图：24h→hourly，7d→daily */
+    const series   = _window === '24h' ? (data.hourly_series||[]) : (data.daily_series||[]);
+    const labelKey = _window === '24h' ? 'hour' : 'date';
+    const trendLabel = _window === '24h' ? '请求趋势（24 小时·按小时）' : '请求趋势（7 天）';
     if (series.length >= 2 && series.some(d => d.count > 0)) {
       html += '<div class="bento-card p-4 mb-4">';
-      html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">请求趋势（7 天）</div>';
-      html += renderSparkline(series);
+      html += `<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">${trendLabel}</div>`;
+      html += renderSparkline(series, labelKey);
       html += '</div>';
     }
 
     /* Token / 字符用量 */
-    const inputLabel = hasTokens ? '输入 Token' : '输入字符';
-    const outputLabel= hasTokens ? '输出 Token' : '输出字符';
-    const inputVal   = hasTokens ? fmtNum(totalPromptTokens)     : fmtNum(totalUserChars);
-    const outputVal  = hasTokens ? fmtNum(totalCompletionTokens) : fmtNum(totalRespChars);
-    const avgPerReq  = (hasTokens && tokenCount)
-      ? Math.round((totalPromptTokens + totalCompletionTokens) / tokenCount)
-      : null;
+    const inputLabel = hasTokens ? '输入 Token'  : '输入字符';
+    const outputLabel= hasTokens ? '输出 Token'  : '输出字符';
+    const inputVal   = hasTokens ? fmtNum(totalPT) : fmtNum(totalUserChars);
+    const outputVal  = hasTokens ? fmtNum(totalCT) : fmtNum(totalRespChars);
+    const avgPerReq  = (hasTokens && tokenCount) ? Math.round((totalPT+totalCT)/tokenCount) : null;
 
     html += '<div class="bento-card p-4 mb-4">';
     html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">用量（7 天）</div>';
     html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-4">';
-    html += `<div>
-      <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${inputVal}</div>
-      <div class="text-xs text-zinc-500">${inputLabel}</div>
-    </div>`;
-    html += `<div>
-      <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${outputVal}</div>
-      <div class="text-xs text-zinc-500">${outputLabel}</div>
-    </div>`;
+    html += `<div><div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${inputVal}</div><div class="text-xs text-zinc-500">${inputLabel}</div></div>`;
+    html += `<div><div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${outputVal}</div><div class="text-xs text-zinc-500">${outputLabel}</div></div>`;
     if (avgPerReq != null) {
-      html += `<div>
-        <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(avgPerReq)}</div>
-        <div class="text-xs text-zinc-500">均值 Token/请求</div>
-      </div>`;
+      html += `<div><div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(avgPerReq)}</div><div class="text-xs text-zinc-500">均值 Token/请求</div></div>`;
     }
     html += '</div>';
-    // 数据完整度提示
     if (hasTokens && tokenCovPct < 100) {
       html += `<div class="mt-3 text-[10px] text-zinc-400 flex items-center gap-1">
         <svg class="w-3 h-3 shrink-0" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 11a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm.75-4.5h-1.5v-4h1.5v4z"/></svg>
@@ -262,59 +313,48 @@
     }
 
     /* 来源分布 */
-    const sorted = Object.entries(activeWindow).sort((a, b) => b[1].count - a[1].count);
+    const sorted = Object.entries(activeWindow).sort((a,b) => b[1].count - a[1].count);
     html += '<div class="bento-card p-4">';
     html += `<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">来源分布（${windowLabel}）</div>`;
 
-    if (sorted.length === 0) {
+    if (!sorted.length) {
       html += '<div class="text-zinc-400 dark:text-zinc-500 text-sm py-4 text-center">暂无活动记录</div>';
     } else {
       const maxCount = sorted[0][1].count;
       html += '<div class="space-y-3">';
       for (const [origin, b] of sorted) {
-        const label      = ORIGIN_LABELS[origin] || origin;
-        // 最小宽度 4% 保证极小值可见
-        const pct        = maxCount ? Math.max(Math.round(b.count / maxCount * 100), 4) : 4;
-        const avgMsOrig  = b.avg_ms  || 0;
-        const p95Ms      = b.p95_ms  || 0;
-        const errCount   = b.error   || 0;
-        const errPctOrig = b.count   ? Math.round(errCount / b.count * 100) : 0;
+        const label     = ORIGIN_LABELS[origin] || origin;
+        const pct       = maxCount ? Math.max(Math.round(b.count/maxCount*100), 4) : 4;
+        const avgMsOrig = b.avg_ms  || 0;
+        const p95Ms     = b.p95_ms  || 0;
+        const errCount  = b.error   || 0;
+        const errPctO   = b.count   ? Math.round(errCount/b.count*100) : 0;
 
-        // 今日对比（仅 7d 视图时有意义）
-        const count24hOrig = _window === '7d' ? ((origins24h[origin] || {}).count || 0) : null;
-        const prevCount    = _window === '24h' ? ((prevBucket[origin] || {}).count || 0) : null;
+        const count24hO = _window === '7d' ? ((origins24h[origin]||{}).count||0) : null;
+        const prevCount = _window === '24h' ? ((prevBucket[origin]||{}).count||0) : null;
 
-        // 延迟颜色
-        const latColor = latencyColor(avgMsOrig);
+        const latCls    = latencyColor(avgMsOrig);
+        const barColor  = errPctO >= 20 ? 'bg-red-400 dark:bg-red-500' : 'bg-indigo-400 dark:bg-indigo-500';
 
-        // 进度条颜色（高错误率变红）
-        const barColor = errPctOrig >= 20
-          ? 'bg-red-400 dark:bg-red-500'
-          : 'bg-indigo-400 dark:bg-indigo-500';
-
-        // 响应时间信息（含 P95）
-        let timeInfo = `<span class="${latColor || 'text-zinc-400'}">${fmtMs(avgMsOrig)} 均值</span>`;
+        let timeInfo = `<span class="${latCls||'text-zinc-400'}">${fmtMs(avgMsOrig)} 均值</span>`;
         if (p95Ms && p95Ms > avgMsOrig * 1.5) {
-          const p95Color = latencyColor(p95Ms) || 'text-zinc-400';
-          timeInfo += ` <span class="${p95Color} text-[10px]">P95 ${fmtMs(p95Ms)}</span>`;
+          timeInfo += ` <span class="${p95Color(p95Ms)} text-[10px]">P95 ${fmtMs(p95Ms)}</span>`;
         }
 
-        // 对比标注
         let compareHtml = '';
-        if (count24hOrig !== null) {
-          compareHtml = `<span class="text-indigo-500 font-medium">今日 +${count24hOrig}</span>`;
-        } else if (prevCount !== null) {
+        if (count24hO !== null) {
+          compareHtml = `<span class="text-indigo-500 font-medium">今日 +${count24hO}</span>`;
+        } else if (prevCount !== null && prevCount > 0) {
           const diff = b.count - prevCount;
           const sign = diff >= 0 ? '+' : '';
-          const diffColor = diff > 0 ? 'text-emerald-500' : diff < 0 ? 'text-red-400' : 'text-zinc-400';
-          compareHtml = `<span class="${diffColor} font-medium">较昨日 ${sign}${diff}</span>`;
+          compareHtml = `<span class="text-zinc-400 font-medium">较昨日 ${sign}${diff}</span>`;
         }
 
         html += `<div>
           <div class="flex items-center justify-between mb-1">
             <div class="flex items-center gap-2 min-w-0">
               <span class="text-sm text-zinc-700 dark:text-zinc-300 font-medium">${label}</span>
-              ${errCount > 0 ? `<span class="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-500 px-1.5 py-0.5 rounded font-medium shrink-0">${errPctOrig}% 错误</span>` : ''}
+              ${errCount > 0 ? `<span class="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-500 px-1.5 py-0.5 rounded font-medium shrink-0">${errPctO}% 错误</span>` : ''}
             </div>
             <div class="flex items-center gap-3 text-xs shrink-0 ml-2">
               ${timeInfo}
@@ -331,72 +371,66 @@
     }
     html += '</div>';
 
+    // 保存并还原滚动位置
+    const scrollEl = document.querySelector('#panel-stats');
+    const prevScroll = scrollEl ? scrollEl.scrollTop : 0;
     el.innerHTML = html;
+    if (scrollEl) scrollEl.scrollTop = prevScroll;
   }
 
   /* ── 时间维度切换 ── */
   window.setStatsWindow = function(w) {
     _window = w;
-    const btn24h = document.getElementById('stats-toggle-24h');
-    const btn7d   = document.getElementById('stats-toggle-7d');
-    if (!btn24h || !btn7d) return;
-    const activeClass   = 'bg-indigo-500 text-white';
-    const inactiveClass = 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700';
-    if (w === '24h') {
-      btn24h.className = btn24h.className.replace(/bg-zinc-100[^\s]*/g, '').replace(/text-zinc-[^\s]*/g, '').replace(/hover:[^\s]*/g, '').trim() + ' ' + activeClass;
-      btn7d.className  = btn7d.className.replace(/bg-indigo-500[^\s]*/g, '').replace(/text-white[^\s]*/g, '').trim() + ' ' + inactiveClass;
-    } else {
-      btn7d.className  = btn7d.className.replace(/bg-zinc-100[^\s]*/g, '').replace(/text-zinc-[^\s]*/g, '').replace(/hover:[^\s]*/g, '').trim() + ' ' + activeClass;
-      btn24h.className = btn24h.className.replace(/bg-indigo-500[^\s]*/g, '').replace(/text-white[^\s]*/g, '').trim() + ' ' + inactiveClass;
-    }
-    if (_statsData) {
+    const b24 = document.getElementById('stats-toggle-24h');
+    const b7d = document.getElementById('stats-toggle-7d');
+    if (!b24 || !b7d) return;
+    const on  = 'bg-indigo-500 text-white';
+    const off = 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700';
+    b24.className = b24.className.split(' ').filter(c => !c.match(/^(bg-|text-|hover:)/)).concat((w==='24h'?on:off).split(' ')).join(' ');
+    b7d.className = b7d.className.split(' ').filter(c => !c.match(/^(bg-|text-|hover:)/)).concat((w==='7d'?on:off).split(' ')).join(' ');
+    if (_data) {
       const el = document.getElementById('stats-body');
-      if (el) renderStats(el, _statsData);
+      if (el) renderStats(el, _data);
     }
   };
 
   /* ── 自动刷新倒计时 ── */
   function startCountdown() {
-    if (_timerHandle) clearInterval(_timerHandle);
+    if (_timer) clearInterval(_timer);
     _countdown = REFRESH_INTERVAL;
-    _timerHandle = setInterval(function() {
+    _timer = setInterval(function() {
       _countdown--;
       const lbl = document.getElementById('stats-refresh-label');
-      if (lbl) lbl.textContent = _countdown > 0 ? _countdown + 's' : '刷新';
-      if (_countdown <= 0) {
-        clearInterval(_timerHandle);
-        _timerHandle = null;
-        loadStats();
-      }
+      if (lbl) lbl.textContent = _countdown > 0 ? _countdown+'s' : '刷新';
+      if (_countdown <= 0) { clearInterval(_timer); _timer=null; loadStats(); }
     }, 1000);
   }
 
   window.triggerStatsRefresh = function() {
-    if (_timerHandle) { clearInterval(_timerHandle); _timerHandle = null; }
+    if (_timer) { clearInterval(_timer); _timer=null; }
     loadStats();
   };
 
   /* ── 数据加载 ── */
-  window.loadStats = async function () {
+  window.loadStats = async function() {
     const el = document.getElementById('stats-body');
     if (!el) return;
-    // 保留已有内容，只加一个轻量指示
     const icon = document.getElementById('stats-refresh-icon');
-    if (icon) icon.style.animation = 'spin 1s linear infinite';
-    const lbl = document.getElementById('stats-refresh-label');
-    if (lbl) lbl.textContent = '…';
+    const lbl  = document.getElementById('stats-refresh-label');
+    if (icon) icon.style.animation = 'stats-spin 1s linear infinite';
+    if (lbl)  lbl.textContent = '…';
     try {
       const res = await fetch('/v1/activity');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      _statsData = await res.json();
-      renderStats(el, _statsData);
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      _data = await res.json();
+      renderStats(el, _data);
       startCountdown();
-    } catch (e) {
+    } catch(e) {
       el.innerHTML = `<div class="text-red-400 text-sm">加载失败：${e.message}</div>`;
     } finally {
       if (icon) icon.style.animation = '';
-      const lbl2 = document.getElementById('stats-refresh-label');
-      if (lbl2 && lbl2.textContent === '…') lbl2.textContent = '刷新';
+      const l2 = document.getElementById('stats-refresh-label');
+      if (l2 && l2.textContent === '…') l2.textContent = '刷新';
     }
   };
 

@@ -450,6 +450,8 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
 
     # 按日期统计请求量（只统计 7d 窗口）
     daily_counts: Dict[str, int] = {}
+    # 按小时统计请求量（只统计 24h 窗口，key = "HH"）
+    hourly_counts: Dict[str, int] = {}
     # 7d 内各模型调用次数
     model_dist: Dict[str, int] = {}
 
@@ -485,6 +487,13 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
             # 模型分布（仅 7d）
             model = entry.get("provider_model") or entry.get("client_model") or "unknown"
             model_dist[model] = model_dist.get(model, 0) + 1
+
+        # 每小时请求量（仅 24h 窗口）
+        if in_24h:
+            # 转换为本地时间取小时
+            local_ts = ts.astimezone()
+            hour_key = local_ts.strftime("%H")
+            hourly_counts[hour_key] = hourly_counts.get(hour_key, 0) + 1
 
         windows = []
         if in_7d:
@@ -527,6 +536,15 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
         day = (now - timedelta(days=i)).date().isoformat()
         daily_series.append({"date": day, "count": daily_counts.get(day, 0)})
 
+    # 补全过去 24 小时的每小时数据（本地时间，0-23 时，从最早到最新）
+    local_now = now.astimezone()
+    hourly_series = []
+    for i in range(23, -1, -1):
+        h = (local_now - timedelta(hours=i))
+        hour_key = h.strftime("%H")
+        label = h.strftime("%H:00")
+        hourly_series.append({"hour": label, "count": hourly_counts.get(hour_key, 0)})
+
     total_24h = sum(b["count"] for b in buckets["24h"].values())
     total_7d = sum(b["count"] for b in buckets["7d"].values())
     total_ms_7d = sum(b["total_ms"] for b in buckets["7d"].values())
@@ -538,6 +556,7 @@ def query_stats(days: int = 7) -> Dict[str, Any]:
         "7d": buckets["7d"],
         "prev_24h": buckets["prev_24h"],
         "daily_series": daily_series,
+        "hourly_series": hourly_series,
         "model_dist": model_dist,
         "summary": {
             "total_24h": total_24h,
