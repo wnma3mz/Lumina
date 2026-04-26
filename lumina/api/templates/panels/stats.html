@@ -1,0 +1,159 @@
+<div id="panel-stats" class="p-4 md:p-6 max-w-4xl mx-auto w-full">
+  <div class="mb-5">
+    <h2 class="text-xl font-semibold text-zinc-800 dark:text-zinc-100">统计</h2>
+    <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">LLM 请求活动历史</p>
+  </div>
+
+  <div id="stats-body">
+    <div class="text-zinc-400 dark:text-zinc-500 text-sm">加载中…</div>
+  </div>
+
+  <div class="mt-4 flex justify-end">
+    <button
+      onclick="loadStats()"
+      class="px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+    >刷新</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const ORIGIN_LABELS = {
+    chat: '对话',
+    chat_api: '对话 API',
+    digest: '日报',
+    document: '文档',
+    game_opening: '游戏开场',
+    game_score: '游戏评分',
+    vision: '图像',
+    audio: '音频',
+    unknown: '未知',
+  };
+
+  function fmtMs(ms) {
+    if (!ms) return '—';
+    if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
+    return ms + 'ms';
+  }
+
+  function fmtNum(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 10000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+  }
+
+  function renderStats(el, data) {
+    const s = data.summary || {};
+    const origins7d = data['7d'] || {};
+    const origins24h = data['24h'] || {};
+
+    const total7d = s.total_7d || 0;
+    const total24h = s.total_24h || 0;
+    const avgMs = s.avg_ms_7d || 0;
+
+    let totalUserChars = 0, totalRespChars = 0, totalErrors = 0;
+    for (const b of Object.values(origins7d)) {
+      totalUserChars += b.user_chars || 0;
+      totalRespChars += b.resp_chars || 0;
+      totalErrors += b.error || 0;
+    }
+    const errPct = total7d ? Math.round(totalErrors / total7d * 100) : 0;
+
+    let html = '';
+
+    // 汇总数字卡片
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
+    const cards = [
+      { label: '今日请求', value: total24h, unit: '次', sub: '过去 24 小时' },
+      { label: '7 天请求', value: total7d, unit: '次', sub: '过去 7 天' },
+      { label: '平均耗时', value: fmtMs(avgMs), unit: '', sub: '7 天均值' },
+      { label: '错误率', value: errPct + '%', unit: '', sub: total7d ? totalErrors + ' 次错误' : '无记录' },
+    ];
+    for (const c of cards) {
+      html += `<div class="bento-card p-4">
+        <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${c.value}<span class="text-sm font-normal text-zinc-400 ml-1">${c.unit}</span></div>
+        <div class="text-xs font-medium text-zinc-500 mt-0.5">${c.label}</div>
+        <div class="text-[10px] text-zinc-400 mt-0.5">${c.sub}</div>
+      </div>`;
+    }
+    html += '</div>';
+
+    // 输入/输出字符量
+    html += `<div class="bento-card p-4 mb-5">
+      <div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">字符量（7 天）</div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(totalUserChars)}</div>
+          <div class="text-xs text-zinc-500">输入字符</div>
+        </div>
+        <div>
+          <div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(totalRespChars)}</div>
+          <div class="text-xs text-zinc-500">输出字符</div>
+        </div>
+      </div>
+    </div>`;
+
+    // 来源分布
+    const sorted = Object.entries(origins7d).sort((a, b) => b[1].count - a[1].count);
+    html += '<div class="bento-card p-4">';
+    html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">来源分布（7 天）</div>';
+
+    if (sorted.length === 0) {
+      html += '<div class="text-zinc-400 dark:text-zinc-500 text-sm py-4 text-center">暂无活动记录</div>';
+    } else {
+      const maxCount = sorted[0][1].count;
+      html += '<div class="space-y-3">';
+      for (const [origin, b] of sorted) {
+        const label = ORIGIN_LABELS[origin] || origin;
+        const pct = maxCount ? Math.round(b.count / maxCount * 100) : 0;
+        const count24h = (origins24h[origin] || {}).count || 0;
+        const avgMs = b.avg_ms || 0;
+        const errCount = b.error || 0;
+        const errPctOrigin = b.count ? Math.round(errCount / b.count * 100) : 0;
+
+        html += `<div>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-zinc-700 dark:text-zinc-300 font-medium">${label}</span>
+              ${errCount > 0 ? `<span class="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-500 px-1.5 py-0.5 rounded font-medium">${errPctOrigin}% 错误</span>` : ''}
+            </div>
+            <div class="flex items-center gap-3 text-xs text-zinc-400">
+              <span>${fmtMs(avgMs)} 均值</span>
+              <span class="text-indigo-500 font-medium">今日 +${count24h}</span>
+              <span class="font-bold text-zinc-600 dark:text-zinc-300 w-8 text-right">${b.count}</span>
+            </div>
+          </div>
+          <div class="h-1.5 bg-zinc-100 dark:bg-zinc-700 rounded-full overflow-hidden">
+            <div class="h-1.5 bg-indigo-400 dark:bg-indigo-500 rounded-full transition-all" style="width:${pct}%"></div>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    el.innerHTML = html;
+  }
+
+  window.loadStats = async function () {
+    const el = document.getElementById('stats-body');
+    if (!el) return;
+    el.innerHTML = '<div class="text-zinc-400 dark:text-zinc-500 text-sm">加载中…</div>';
+    try {
+      const res = await fetch('/v1/activity');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      renderStats(el, data);
+    } catch (e) {
+      el.innerHTML = `<div class="text-red-400 text-sm">加载失败：${e.message}</div>`;
+    }
+  };
+
+  // tab 切换时通过 CSS :checked 显示，DOMContentLoaded 已触发，此脚本随 include 注入时直接执行
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', window.loadStats);
+  } else {
+    window.loadStats();
+  }
+})();
+</script>

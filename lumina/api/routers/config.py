@@ -88,3 +88,12 @@ async def prune_request_history_api():
 
     stats = await asyncio.to_thread(_request_history.prune_now)
     return {"ok": True, "stats": stats}
+
+
+@router.get("/v1/activity")
+async def get_activity_stats():
+    """返回过去 7 天的 LLM 请求活动统计，按来源（origin）聚合。"""
+    from lumina.engine import request_history as _request_history
+
+    stats = await asyncio.to_thread(_request_history.query_stats, 7)
+    return stats

@@ -360,6 +360,120 @@ def prune_now() -> Dict[str, int]:
     return _recorder.prune_now()
 
 
+def query_stats(days: int = 7) -> Dict[str, Any]:
+    """读取最近 days 天的请求日志，按 origin 聚合统计，分 24h 和 7d 两个窗口。"""
+    from datetime import timezone
+
+    now = datetime.now(timezone.utc)
+    cutoff_7d = now - timedelta(days=days)
+    cutoff_24h = now - timedelta(hours=24)
+
+    recorder = _recorder
+    current_dir = recorder._current_dir
+    archive_dir = recorder._archive_dir
+
+    def _iter_entries():
+        if current_dir.exists():
+            for f in sorted(current_dir.glob("*.jsonl")):
+                try:
+                    with open(f, encoding="utf-8") as fh:
+                        for line in fh:
+                            line = line.strip()
+                            if line:
+                                try:
+                                    yield json.loads(line)
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+        if archive_dir.exists():
+            for f in sorted(archive_dir.glob("*.jsonl.gz")):
+                date_str = f.name.replace(".jsonl.gz", "")
+                try:
+                    file_date = datetime.strptime(date_str, "%Y-%m-%d").replace(
+                        tzinfo=timezone.utc
+                    )
+                    if file_date < cutoff_7d:
+                        continue
+                except ValueError:
+                    pass
+                try:
+                    with gzip.open(f, "rt", encoding="utf-8") as fh:
+                        for line in fh:
+                            line = line.strip()
+                            if line:
+                                try:
+                                    yield json.loads(line)
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+
+    buckets: Dict[str, Dict[str, Any]] = {"24h": {}, "7d": {}}
+
+    for entry in _iter_entries():
+        ts_str = entry.get("ts_start", "")
+        try:
+            ts = datetime.fromisoformat(ts_str)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+        in_7d = ts >= cutoff_7d
+        in_24h = ts >= cutoff_24h
+        if not in_7d:
+            continue
+
+        origin = entry.get("origin") or "unknown"
+        status = entry.get("status", "unknown")
+        duration_ms = entry.get("duration_ms") or 0
+        user_chars = entry.get("user_chars") or 0
+        resp_chars = entry.get("response_chars") or 0
+
+        for window, flag in [("7d", True), ("24h", in_24h)]:
+            if not flag:
+                continue
+            if origin not in buckets[window]:
+                buckets[window][origin] = {
+                    "count": 0,
+                    "ok": 0,
+                    "error": 0,
+                    "total_ms": 0,
+                    "user_chars": 0,
+                    "resp_chars": 0,
+                    "avg_ms": 0,
+                }
+            b = buckets[window][origin]
+            b["count"] += 1
+            if status == "ok":
+                b["ok"] += 1
+            elif status == "error":
+                b["error"] += 1
+            b["total_ms"] += duration_ms
+            b["user_chars"] += user_chars
+            b["resp_chars"] += resp_chars
+
+    for window in buckets:
+        for b in buckets[window].values():
+            b["avg_ms"] = round(b["total_ms"] / b["count"]) if b["count"] else 0
+
+    total_24h = sum(b["count"] for b in buckets["24h"].values())
+    total_7d = sum(b["count"] for b in buckets["7d"].values())
+    total_ms_7d = sum(b["total_ms"] for b in buckets["7d"].values())
+    avg_ms_7d = round(total_ms_7d / total_7d) if total_7d else 0
+
+    return {
+        "24h": buckets["24h"],
+        "7d": buckets["7d"],
+        "summary": {
+            "total_24h": total_24h,
+            "total_7d": total_7d,
+            "avg_ms_7d": avg_ms_7d,
+        },
+    }
+
+
 __all__ = [
     "RequestHistoryRecorder",
     "configure",
@@ -368,4 +482,5 @@ __all__ = [
     "shutdown",
     "record",
     "prune_now",
+    "query_stats",
 ]

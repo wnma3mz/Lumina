@@ -72,7 +72,7 @@ _DEFAULT_HOME_TABS = list(HOME_TAB_KEYS)
 _VALID_IMAGE_MODULES = IMAGE_TASK_KEYS
 _DEFAULT_IMAGE_MODULES = list(IMAGE_TASK_KEYS)
 # Tabs that are opt-in only; never auto-inserted into existing stored configs.
-_BETA_HOME_TABS: frozenset[str] = frozenset({"game"})
+_BETA_HOME_TABS: frozenset[str] = frozenset({"game", "stats"})
 
 
 def normalize_home_tabs(tabs: Optional[list[str]]) -> list[str]:

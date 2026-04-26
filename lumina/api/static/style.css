@@ -1569,6 +1569,10 @@ body {
   margin-bottom: 1rem;
 }
 
+.mb-5 {
+  margin-bottom: 1.25rem;
+}
+
 .mb-6 {
   margin-bottom: 1.5rem;
 }
@@ -1667,6 +1671,10 @@ body {
 
 .h-1 {
   height: 0.25rem;
+}
+
+.h-1\.5 {
+  height: 0.375rem;
 }
 
 .h-10 {
@@ -1814,6 +1822,10 @@ body {
   min-width: 320px;
 }
 
+.max-w-4xl {
+  max-width: 56rem;
+}
+
 .max-w-5xl {
   max-width: 64rem;
 }
@@ -1942,6 +1954,10 @@ body {
 
 .items-center {
   align-items: center;
+}
+
+.justify-end {
+  justify-content: flex-end;
 }
 
 .justify-center {
@@ -2188,6 +2204,11 @@ body {
   background-color: rgb(224 231 255 / var(--tw-bg-opacity, 1));
 }
 
+.bg-indigo-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(129 140 248 / var(--tw-bg-opacity, 1));
+}
+
 .bg-indigo-50 {
   --tw-bg-opacity: 1;
   background-color: rgb(238 242 255 / var(--tw-bg-opacity, 1));
@@ -2205,6 +2226,11 @@ body {
 .bg-indigo-600 {
   --tw-bg-opacity: 1;
   background-color: rgb(79 70 229 / var(--tw-bg-opacity, 1));
+}
+
+.bg-red-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 226 226 / var(--tw-bg-opacity, 1));
 }
 
 .bg-red-50 {
@@ -2429,6 +2455,10 @@ body {
   padding-right: 0.75rem;
 }
 
+.pt-2 {
+  padding-top: 0.5rem;
+}
+
 .pt-3 {
   padding-top: 0.75rem;
 }
@@ -2624,6 +2654,11 @@ body {
 .text-indigo-700 {
   --tw-text-opacity: 1;
   color: rgb(67 56 202 / var(--tw-text-opacity, 1));
+}
+
+.text-red-400 {
+  --tw-text-opacity: 1;
+  color: rgb(248 113 113 / var(--tw-text-opacity, 1));
 }
 
 .text-red-500 {
@@ -2831,6 +2866,7 @@ body {
 #panel-image,
 #panel-audio,
 #panel-game,
+#panel-stats,
 #panel-settings {
   display: none;
 }
@@ -2857,6 +2893,10 @@ body {
   display: block;
 }
 
+#tab-stats:checked ~ main #panel-stats {
+  display: block;
+}
+
 #tab-settings:checked ~ main #panel-settings {
   display: block;
 }
@@ -2868,6 +2908,7 @@ body {
 #tab-image:checked ~ nav label[data-tab="image"],
 #tab-audio:checked ~ nav label[data-tab="audio"],
 #tab-game:checked ~ nav label[data-tab="game"],
+#tab-stats:checked ~ nav label[data-tab="stats"],
 #tab-settings:checked ~ nav label[data-tab="settings"] {
   --tw-bg-opacity: 1;
   background-color: rgb(99 102 241 / var(--tw-bg-opacity, 1));
@@ -2883,6 +2924,7 @@ body {
 #tab-image:not(:checked) ~ nav label[data-tab="image"],
 #tab-audio:not(:checked) ~ nav label[data-tab="audio"],
 #tab-game:not(:checked) ~ nav label[data-tab="game"],
+#tab-stats:not(:checked) ~ nav label[data-tab="stats"],
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"] {
   color: rgb(161 161 170);
   /* zinc-400 */
@@ -2893,6 +2935,7 @@ body {
 #tab-image:not(:checked) ~ nav label[data-tab="image"]:hover,
 #tab-audio:not(:checked) ~ nav label[data-tab="audio"]:hover,
 #tab-game:not(:checked) ~ nav label[data-tab="game"]:hover,
+#tab-stats:not(:checked) ~ nav label[data-tab="stats"]:hover,
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover {
   color: rgb(24 24 27);
   /* zinc-900 */
@@ -2903,6 +2946,7 @@ body {
 #tab-image:not(:checked) ~ nav label[data-tab="image"]:hover:is(.dark *),
 #tab-audio:not(:checked) ~ nav label[data-tab="audio"]:hover:is(.dark *),
 #tab-game:not(:checked) ~ nav label[data-tab="game"]:hover:is(.dark *),
+#tab-stats:not(:checked) ~ nav label[data-tab="stats"]:hover:is(.dark *),
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover:is(.dark *) {
   color: rgb(255 255 255);
   /* white */
@@ -3258,6 +3302,11 @@ body {
   background-color: rgb(255 255 255 / 0.9);
 }
 
+.hover\:bg-zinc-200:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(228 228 231 / var(--tw-bg-opacity, 1));
+}
+
 .hover\:bg-zinc-50:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(250 250 250 / var(--tw-bg-opacity, 1));
@@ -3469,6 +3518,11 @@ body {
   background-color: rgb(6 78 59 / 0.2);
 }
 
+.dark\:bg-indigo-500:is(.dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(99 102 241 / var(--tw-bg-opacity, 1));
+}
+
 .dark\:bg-indigo-500\/15:is(.dark *) {
   background-color: rgb(99 102 241 / 0.15);
 }
@@ -3499,6 +3553,10 @@ body {
 
 .dark\:bg-red-900\/20:is(.dark *) {
   background-color: rgb(127 29 29 / 0.2);
+}
+
+.dark\:bg-red-900\/30:is(.dark *) {
+  background-color: rgb(127 29 29 / 0.3);
 }
 
 .dark\:bg-white:is(.dark *) {
@@ -3640,6 +3698,11 @@ body {
   background-color: rgb(239 68 68 / 0.2);
 }
 
+.dark\:hover\:bg-zinc-700:hover:is(.dark *) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(63 63 70 / var(--tw-bg-opacity, 1));
+}
+
 .dark\:hover\:bg-zinc-800:hover:is(.dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(39 39 42 / var(--tw-bg-opacity, 1));
@@ -3722,6 +3785,10 @@ body {
 
   .md\:grid-cols-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .md\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .md\:flex-row {
