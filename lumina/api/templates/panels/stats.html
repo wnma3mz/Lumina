@@ -72,24 +72,26 @@
 
   /* ── 趋势折线图（SVG） ── */
   function renderSparkline(series) {
-    const W = 560, H = 52, PAD = 4;
+    const W = 560, H = 52;
+    const PAD_X = 4, PAD_TOP = 8, PAD_BOT = 4;
     const counts = series.map(d => d.count);
     const max = Math.max(...counts, 1);
     const n = counts.length;
     if (n < 2) return '';
 
     const pts = counts.map((v, i) => {
-      const x = PAD + (i / (n - 1)) * (W - PAD * 2);
-      const y = H - PAD - (v / max) * (H - PAD * 2);
+      const x = PAD_X + (i / (n - 1)) * (W - PAD_X * 2);
+      const y = PAD_TOP + (1 - v / max) * (H - PAD_TOP - PAD_BOT);
       return [x, y];
     });
 
     const linePath = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
-    const areaPath = linePath + ` L${pts[n-1][0]},${H - PAD} L${pts[0][0]},${H - PAD} Z`;
+    const baseY = H - PAD_BOT;
+    const areaPath = linePath + ` L${pts[n-1][0]},${baseY} L${pts[0][0]},${baseY} Z`;
 
     // X 轴标注：首、中、末三个日期
     const labels = [0, Math.floor((n-1)/2), n-1].map(i => {
-      const x = PAD + (i / (n - 1)) * (W - PAD * 2);
+      const x = PAD_X + (i / (n - 1)) * (W - PAD_X * 2);
       const date = series[i].date.slice(5); // MM-DD
       return `<text x="${x}" y="${H + 14}" text-anchor="middle" class="sparkline-label">${date}</text>`;
     });
