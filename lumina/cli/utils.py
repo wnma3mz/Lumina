@@ -209,7 +209,7 @@ def wait_for_pid(pid: int, timeout_sec: float = 5.0) -> bool:
     """
     import os
     import time
-    
+
     start_time = time.monotonic()
     while time.monotonic() - start_time < timeout_sec:
         try:

@@ -229,15 +229,15 @@ class RequestHistoryRecorder:
             archive_path = self._archive_dir / f"{path.stem}.jsonl.gz"
             source_size = path.stat().st_size
             before_size = archive_path.stat().st_size if archive_path.exists() else 0
-            
+
             # 临时写入 .tmp 文件，完成后重命名，保证原子性并避免 crash 导致数据损坏
             tmp_archive_path = archive_path.with_suffix(f".{uuid.uuid4().hex[:8]}.gz.tmp")
             with path.open("rb") as src, gzip.open(tmp_archive_path, "wb") as dst:
                 shutil.copyfileobj(src, dst)
-                
+
             tmp_archive_path.replace(archive_path)
             after_size = archive_path.stat().st_size
-            
+
             path.unlink(missing_ok=True)
             stats["compressed"] += 1
             stats["freed_bytes"] += max(0, source_size + before_size - after_size)

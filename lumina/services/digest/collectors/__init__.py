@@ -20,7 +20,7 @@ _SKIP_MODULES = {"base"}
 def _discover() -> list[Collector]:
     """扫描包内子模块及 ~/.lumina/plugins/collectors/，收集满足 Collector 协议的函数。"""
     discovered: list[Collector] = []
-    
+
     # 1. 扫描内置采集器
     pkg_path = str(Path(__file__).parent)
     for mod_info in pkgutil.iter_modules([pkg_path]):
@@ -46,7 +46,7 @@ def _discover() -> list[Collector]:
                         logger.info("Loaded external collector plugin: %s", item.name)
                 except Exception as e:
                     logger.error("Failed to load external plugin %s: %s", item.name, e)
-                    
+
     return discovered
 
 

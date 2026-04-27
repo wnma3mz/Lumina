@@ -91,13 +91,13 @@ async def render_markdown(request: RenderMarkdownRequest):
 async def _stream_text(user_text: str, task: str, llm, *, origin: str):
     from lumina.config import get_config
     import dataclasses
-    
+
     cfg = get_config()
     kwargs = {}
     if getattr(cfg.document, "sampling", None):
         s_dict = dataclasses.asdict(cfg.document.sampling) if dataclasses.is_dataclass(cfg.document.sampling) else dict(cfg.document.sampling)
         kwargs.update({k: v for k, v in s_dict.items() if v is not None})
-        
+
     async for chunk in stream_llm(
         llm,
         user_text,

@@ -521,9 +521,9 @@ class LocalProvider(BaseProvider):
             remaining = len(prompt) - 1
             n_to_process = min(2048, remaining)
             inputs = prompt[:n_to_process][None]
-            
+
             self._forward_with_cache(inputs, prompt_cache)
-                
+
             self._eval_cache_state(prompt_cache)
             prompt = prompt[n_to_process:]
             mx.clear_cache()
@@ -557,9 +557,9 @@ class LocalProvider(BaseProvider):
         try:
             prompt = self._prefill_prompt_cache(slot.prompt_tokens, prompt_cache)
             inputs = prompt[None]
-            
+
             logits = self._extract_logits(self._forward_with_cache(inputs, prompt_cache))[:, -1, :]
-                
+
             mx.eval(logits)
             token_id = self._sample_from_logits(logits, slot)
             slot.prompt_cache = prompt_cache
@@ -582,7 +582,7 @@ class LocalProvider(BaseProvider):
         try:
             inputs = mx.array([[slot.next_input_token]])
             logits = self._extract_logits(self._forward_with_cache(inputs, slot.prompt_cache))[:, -1, :]
-                
+
             mx.eval(logits)
             token_id = self._sample_from_logits(logits, slot)
         except Exception as e:
@@ -637,9 +637,9 @@ class LocalProvider(BaseProvider):
             while inputs.shape[1] > 1:
                 n_to_process = min(2048, inputs.shape[1] - 1)
                 batch_inputs = inputs[:, :n_to_process]
-                
+
                 self._forward_with_cache(batch_inputs, prompt_cache)
-                    
+
                 self._eval_cache_state(prompt_cache)
                 inputs = inputs[:, n_to_process:]
                 mx.clear_cache()
@@ -648,7 +648,7 @@ class LocalProvider(BaseProvider):
                 cache_layer.finalize()
 
             logits = self._extract_logits(self._forward_with_cache(inputs, prompt_cache))[:, -1, :]
-                
+
             mx.eval(logits)
         except Exception:
             newly_active = []
@@ -711,9 +711,9 @@ class LocalProvider(BaseProvider):
                     for layer_caches in zip(*(slot.prompt_cache for slot in batch_slots))
                 ]
             input_tokens = mx.array([[slot.next_input_token] for slot in batch_slots])
-            
+
             logits = self._extract_logits(self._forward_with_cache(input_tokens, merged_cache))[:, -1, :]
-                
+
             mx.eval(logits)
         except Exception:
             self._reset_continuous_batch()

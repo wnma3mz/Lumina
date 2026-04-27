@@ -167,7 +167,7 @@ class UIHomeConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
     enabled_tabs: list[str] = Field(default_factory=lambda: list(_DEFAULT_HOME_TABS))
     allow_local_override: bool = True
-    
+
     def model_post_init(self, __context: Any) -> None:
         self.enabled_tabs = normalize_home_tabs(self.enabled_tabs) or list(_DEFAULT_HOME_TABS)
         # Auto-append new tabs that exist in defaults but not in stored config.
@@ -202,7 +202,7 @@ class SamplingConfig(BaseModel):
     presence_penalty: float = 1.5
     repetition_penalty: float = 1.0
     max_tokens: int = 512
-    
+
     @model_validator(mode="before")
     @classmethod
     def allow_empty_strings(cls, data: Any) -> Any:
@@ -536,7 +536,7 @@ def normalize_config_data(data: Any, *, env: Optional[dict[str, str]] = None) ->
 
 class Config(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    
+
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
     system: SystemConfig = Field(default_factory=SystemConfig)
     digest: DigestConfig = Field(default_factory=DigestConfig)

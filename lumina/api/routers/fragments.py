@@ -228,15 +228,15 @@ async def fragment_digest_storage(request: Request):
     """返回动态的存储空间占用卡片 HTML 片段。"""
     from lumina.config import get_config
     from lumina.engine import request_history
-    
+
     recorder = request_history.get_recorder()
     total_bytes = recorder.total_bytes()
-        
+
     cfg = get_config()
     max_mb = cfg.request_history.max_total_mb
     used_mb = total_bytes / (1024 * 1024)
     pct = min(100, int((used_mb / max_mb) * 100)) if max_mb > 0 else 0
-    
+
     html = f"""
           <div class="flex justify-between items-end mb-3">
               <div>

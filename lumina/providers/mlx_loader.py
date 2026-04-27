@@ -264,7 +264,7 @@ class MlxModelLoader:
             model, tokenizer = mlx_load(load_target)
             self.loaded_as_vlm = False
         # ────────────────────────────────────────────────────────────────────────
-        
+
         # 始终预加载 Transformer Layers (L1) 以保证速度，
         # 根据开关选择性卸载辅助塔 (L2)。
         offload_keywords = self._build_offload_keywords(

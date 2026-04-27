@@ -157,7 +157,7 @@ class SystemPromptCache:
                 cache=prompt_cache,
                 enable_cpu_embedding=self.use_cpu_embedding,
             )
-            
+
             # 安全 eval state（兼容 ArraysCache 含 None 的情况）
             flat = []
             for c in prompt_cache:
@@ -168,7 +168,7 @@ class SystemPromptCache:
                     flat.append(s)
             if flat:
                 mx.eval(flat)
-                
+
             prompt = prompt[n_to_process:]
             mx.clear_cache()
         for cache_layer in prompt_cache:
