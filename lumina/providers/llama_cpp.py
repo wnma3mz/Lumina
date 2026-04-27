@@ -33,7 +33,14 @@ class LlamaCppProvider(BaseProvider):
 
     def load(self):
         """同步加载模型（由 LLMEngine.load() 调用）。"""
-        from llama_cpp import Llama  # type: ignore[import]
+        try:
+            from llama_cpp import Llama  # type: ignore[import]
+        except ImportError as exc:
+            raise RuntimeError(
+                "llama-cpp-python 未安装。Windows/Linux 使用 `provider=local` 时需要先运行 "
+                "`uv sync --extra local-llama` 或 `uv sync --extra full`。"
+            ) from exc
+
         self._llm = Llama(
             model_path=self._model_path,
             n_gpu_layers=self._n_gpu_layers,

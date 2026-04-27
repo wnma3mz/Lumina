@@ -48,7 +48,14 @@ def build_provider(cfg):
         logger.info("Provider: OpenAI-compatible  base_url=%s  model=%s", oa.base_url, oa.model)
         return OpenAIProvider(base_url=oa.base_url, api_key=oa.api_key, model=oa.model)
     if backend == "llama_cpp":
-        from lumina.providers.llama_cpp import LlamaCppProvider
+        try:
+            from lumina.providers.llama_cpp import LlamaCppProvider
+        except ImportError as exc:
+            raise RuntimeError(
+                "llama.cpp 本地后端依赖未安装。若要在 Windows/Linux 使用本地模型，"
+                "请先运行 `uv sync --extra full`；"
+                "若只需连接外部 OpenAI 兼容服务，请用 `--provider openai` 启动。"
+            ) from exc
         lc = cfg.provider.llama_cpp
         model_path = lc.model_path or cfg.provider.model_path
         logger.info(
@@ -616,6 +623,9 @@ def cmd_server(args):
     sync_request_history(cfg, run_startup_cleanup=True)
     setup_logging(cfg.log_level)
 
+    if getattr(args, "menubar", None) is True and sys.platform != "darwin":
+        raise RuntimeError("`--menubar` 目前只支持 macOS（rumps 菜单栏）。当前平台无法启动 menubar。")
+
     provider = build_provider(cfg)
     llm = LLMEngine(provider=provider, system_prompts=cfg.system_prompts)
 
@@ -749,6 +759,9 @@ def cmd_menubar(args):
     )
 
     enabled = args.state == "on"
+    if enabled and sys.platform != "darwin":
+        print("菜单栏模式目前只支持 macOS；当前平台不会启用 menubar。")
+        enabled = False
     persist_menubar_enabled(enabled, config_path=resolve_config_path())
 
     pid = read_pid()

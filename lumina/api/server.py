@@ -12,6 +12,7 @@ import sys as _sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,8 +20,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from lumina.services.audio.transcriber import Transcriber
 from lumina.engine.llm import LLMEngine
+
+if TYPE_CHECKING:
+    from lumina.services.audio.transcriber import Transcriber
 
 try:
     from importlib.metadata import version as _pkg_version
@@ -75,7 +78,7 @@ async def _default_lifespan(app: FastAPI):
         _request_history.shutdown()
 
 
-def create_app(llm: LLMEngine, transcriber: Transcriber, lifespan=None) -> FastAPI:
+def create_app(llm: LLMEngine, transcriber: "Transcriber", lifespan=None) -> FastAPI:
     """创建并配置 FastAPI 应用。
 
     Args:

@@ -47,7 +47,8 @@ if [[ "$OS" == "Darwin" ]]; then
         uv pip install --python "$INSTALL_DIR/.venv/bin/python" \
             "mlx>=0.30.0" \
             "mlx-lm>=0.31.2" \
-            "mlx-vlm>=0.4.4"
+            "mlx-vlm>=0.4.4" \
+            "rumps>=0.4.0"
     fi
 
     # 安装 lumina 包
@@ -139,7 +140,11 @@ PLIST
 # -------------------------
 elif [[ "$OS" == "Linux" ]]; then
     cd "$PROJECT_DIR"
-    uv sync
+    if [[ "$EDITION" == "full" ]]; then
+        uv sync --extra full
+    else
+        uv sync
+    fi
 
     echo "正在安装桌面集成 (Desktop Integrations)..."
     BIN_DIR="$HOME/.local/bin"
@@ -183,7 +188,11 @@ EOF
     echo "你现在可以在文件管理器中使用右键菜单 (Open With) 调用 Lumina"
     echo ""
     echo "启动服务："
-    echo "  uv run lumina server"
+    if [[ "$EDITION" == "full" ]]; then
+        echo "  LUMINA_EDITION=full uv run lumina server"
+    else
+        echo "  uv run lumina server --provider openai"
+    fi
     echo ""
     echo "运行 smoke 检查："
     echo "  uv run python scripts/smoke_check.py"

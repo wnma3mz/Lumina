@@ -2922,6 +2922,11 @@ body {
   display: none;
 }
 
+body.save-bar-visible #home-nav {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 /* 宠物气泡：放在宠物右侧 */
 
 .buddy-speech-right {

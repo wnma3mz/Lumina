@@ -119,7 +119,7 @@ class TestBasicLoad:
             },
         }
         cfg = Config.load(write_config(tmp_path, data))
-        assert cfg.ui.home.enabled_tabs == ["digest", "document", "image", "settings"]
+        assert cfg.ui.home.enabled_tabs == ["digest", "document", "image", "audio", "settings"]
         assert cfg.vision.enabled_modules == ["image_ocr"]
         assert cfg.ui.home.allow_local_override is False
 
@@ -133,7 +133,7 @@ class TestBasicLoad:
             },
         }
         cfg = Config.load(write_config(tmp_path, data))
-        assert cfg.ui.home.enabled_tabs == ["digest", "document", "image", "settings"]
+        assert cfg.ui.home.enabled_tabs == ["digest", "document", "image", "audio", "settings"]
 
 
 # ── SamplingConfig 解析 ───────────────────────────────────────────────────────

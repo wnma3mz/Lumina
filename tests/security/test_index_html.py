@@ -17,7 +17,7 @@ import pytest
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _TEMPLATES_DIR = _PROJECT_ROOT / "lumina" / "api" / "templates"
 _STATIC_DIR = _PROJECT_ROOT / "lumina" / "api" / "static"
-PANEL_KEYS = ["digest", "document", "image", "settings"]
+PANEL_KEYS = ["digest", "document", "image", "audio", "settings"]
 
 # 非默认面板（CSS 默认 display:none，由 :checked 选择器控制显示）
 NON_DEFAULT_PANELS = ["document", "image", "settings"]
@@ -31,7 +31,13 @@ def css() -> str:
 @pytest.fixture(scope="module")
 def html() -> str:
     from jinja2 import Environment, FileSystemLoader
-    from lumina.api.ui_meta import HOME_TAB_DEFS, IMAGE_TASK_DEFS, AUDIO_TASK_DEFS, LEGACY_HOME_TAB_MAP
+    from lumina.api.ui_meta import (
+        AUDIO_TASK_DEFS,
+        GAME_SCENARIO_DEFS,
+        HOME_TAB_DEFS,
+        IMAGE_TASK_DEFS,
+        LEGACY_HOME_TAB_MAP,
+    )
 
     env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)))
     tmpl = env.get_template("index.html")
@@ -46,7 +52,7 @@ def html() -> str:
             "本地运行，安心使用",
         ],
         home_ui={
-            "enabled_tabs": ["digest", "document", "image", "settings"],
+            "enabled_tabs": ["digest", "document", "image", "audio", "settings"],
             "image_enabled": True,
             "image_modules": ["image_ocr", "image_caption"],
             "allow_local_override": True,
@@ -61,6 +67,7 @@ def html() -> str:
         home_tab_defs=HOME_TAB_DEFS,
         image_task_defs=IMAGE_TASK_DEFS,
         audio_task_defs=AUDIO_TASK_DEFS,
+        game_scenario_defs=GAME_SCENARIO_DEFS,
         legacy_home_tab_map=LEGACY_HOME_TAB_MAP,
     )
 
