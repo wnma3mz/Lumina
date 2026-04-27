@@ -1540,11 +1540,6 @@ body {
   grid-column: span 2 / span 2;
 }
 
-.-mx-1 {
-  margin-left: -0.25rem;
-  margin-right: -0.25rem;
-}
-
 .mx-auto {
   margin-left: auto;
   margin-right: auto;
@@ -2051,10 +2046,6 @@ body {
   overflow: hidden;
 }
 
-.overflow-x-auto {
-  overflow-x: auto;
-}
-
 .overflow-y-auto {
   overflow-y: auto;
 }
@@ -2301,6 +2292,11 @@ body {
 
 .bg-zinc-50\/70 {
   background-color: rgb(250 250 250 / 0.7);
+}
+
+.bg-zinc-800 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(39 39 42 / var(--tw-bg-opacity, 1));
 }
 
 .bg-zinc-900 {
@@ -2989,11 +2985,6 @@ body {
   display: none;
 }
 
-body.save-bar-visible #home-nav {
-  opacity: 0.35;
-  pointer-events: none;
-}
-
 /* 宠物气泡：放在宠物右侧 */
 
 .buddy-speech-right {
@@ -3213,6 +3204,12 @@ body.save-bar-visible #home-nav {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* 保存栏可见时，淡化导航栏（仅降低不透明度，不阻断点击） */
+
+body.save-bar-visible #home-nav {
+  opacity: 0.35;
 }
 
 .dark\:prose-invert:is(.dark *) {

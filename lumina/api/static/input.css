@@ -192,3 +192,8 @@
 .sparkline-label { font-size: 9px; fill: #a1a1aa; }
 .dark .sparkline-label { fill: #71717a; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* 保存栏可见时，淡化导航栏（仅降低不透明度，不阻断点击） */
+body.save-bar-visible #home-nav {
+  opacity: 0.35;
+}
