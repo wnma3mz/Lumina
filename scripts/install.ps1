@@ -3,6 +3,10 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDir = Split-Path -Parent $ScriptDir
+$Edition = "full"
+if ($args.Count -gt 0 -and $args[0] -eq "--lite") {
+    $Edition = "lite"
+}
 
 Write-Host "=== 安装 Lumina (Windows) ==="
 Write-Host "项目目录: $ProjectDir"
@@ -15,7 +19,11 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 
 Set-Location $ProjectDir
 Write-Host "正在安装依赖..."
-uv sync
+if ($Edition -eq "full") {
+    uv sync --extra full
+} else {
+    uv sync
+}
 
 Write-Host "正在配置 SendTo 右键集成..."
 $SendToDir = Join-Path $env:APPDATA "Microsoft\Windows\SendTo"
@@ -49,7 +57,11 @@ Write-Host "  Lumina Summarize PDF.cmd"
 Write-Host "  Lumina Polish Text.cmd"
 Write-Host ""
 Write-Host "启动服务："
-Write-Host "  uv run lumina server"
+if ($Edition -eq "full") {
+    Write-Host "  `$env:LUMINA_EDITION='full'; uv run lumina server"
+} else {
+    Write-Host "  uv run lumina server --provider openai"
+}
 Write-Host ""
 Write-Host "运行 smoke 检查："
 Write-Host "  uv run python scripts/smoke_check.py"

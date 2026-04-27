@@ -139,7 +139,7 @@ class LocalProvider(BaseProvider):
         if not _MLX_AVAILABLE:
             raise ImportError(
                 "mlx / mlx-lm 未安装，LocalProvider 不可用。"
-                "macOS 用户请运行：pip install lumina[macos]"
+                "macOS 用户请运行：uv sync --extra local-macos 或 uv sync --extra full"
             )
         self.model_path = model_path
         self.max_new_prefill_per_iter = max(1, max_new_prefill_per_iter)

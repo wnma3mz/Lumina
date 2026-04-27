@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("mlx.core", reason="mlx not available on this platform")
+
 import lumina.providers.local_vlm as local_vlm_mod
 
 from lumina.providers.local import LocalProvider

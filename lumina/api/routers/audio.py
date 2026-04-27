@@ -7,20 +7,28 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from sse_starlette.sse import EventSourceResponse
 
 from lumina.api.protocol import RecordStopRequest, TranscriptionResponse
-from lumina.services.audio.live import LiveTranslator
 
 router = APIRouter(prefix="/v1/audio", tags=["audio"])
+
 
 @router.get("/live")
 async def live_translate(request: Request, lang_in: str = "auto", lang_out: str = "zh"):
     """SSE 流：实时系统音频同传。"""
+    try:
+        from lumina.services.audio.live import LiveTranslator
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="实时同传依赖未安装，请安装 Lumina 的 audio 可选依赖后重试。",
+        ) from exc
+
     translator = LiveTranslator(
-        request.app.state.llm, 
-        request.app.state.transcriber, 
-        lang_in=lang_in, 
-        lang_out=lang_out
+        request.app.state.llm,
+        request.app.state.transcriber,
+        lang_in=lang_in,
+        lang_out=lang_out,
     )
-    
+
     async def event_generator():
         try:
             async for item in translator.stream_translate():
@@ -39,12 +47,19 @@ async def live_translate(request: Request, lang_in: str = "auto", lang_out: str 
 @router.get("/check_env")
 async def check_audio_env():
     """检查是否安装了虚拟音频回路驱动（如 BlackHole）。"""
-    from lumina.services.audio.recorder import AudioRecorder
+    try:
+        from lumina.services.audio.recorder import AudioRecorder
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="音频录制依赖未安装，请安装 Lumina 的 audio 可选依赖后重试。",
+        ) from exc
+
     device_index = AudioRecorder.find_loopback_device()
     if device_index is None:
         raise HTTPException(
-            status_code=400, 
-            detail="未检测到虚拟音频回路设备 (如 BlackHole, Virtual Audio Cable)。请先安装才能使用系统级实时同传功能。"
+            status_code=400,
+            detail="未检测到虚拟音频回路设备 (如 BlackHole, Virtual Audio Cable)。请先安装才能使用系统级实时同传功能。",
         )
     return {"ok": True, "device_index": device_index}
 

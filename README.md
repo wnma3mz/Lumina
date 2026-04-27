@@ -40,15 +40,22 @@
 ```bash
 git clone https://github.com/wnma3mz/Lumina.git
 cd Lumina
-uv sync                        # 安装依赖（需要 uv）
-uv run lumina server           # 启动服务
+uv sync --extra full           # 安装完整依赖（需要 uv）
+uv run lumina server           # 默认 provider=local，按平台自动选择 MLX 或 llama.cpp
+```
+
+默认本地模式会自动识别平台：macOS 使用 MLX，Windows / Linux 使用 llama.cpp。若只想连接外部 OpenAI 兼容服务，也可以安装基础 Web / API 依赖并显式指定 `--provider openai`：
+
+```bash
+uv sync
+uv run lumina server --provider openai
 ```
 
 ### 平台安装脚本
 
-- macOS：`uv sync && uv run lumina server`
-- Linux：`bash scripts/install_linux.sh`
-- Windows：`powershell -ExecutionPolicy Bypass -File scripts/install_windows.ps1`
+- macOS：`uv sync --extra full && uv run lumina server`
+- Linux：`bash scripts/install.sh`
+- Windows：`powershell -ExecutionPolicy Bypass -File scripts/install.ps1`
 
 
 <details>
@@ -56,8 +63,8 @@ uv run lumina server           # 启动服务
 
 ### 平台入口集成
 
-- Linux 文件管理器入口：`bash scripts/install_linux_desktop_entry.sh`
-- Windows 右键 `Send to`：`powershell -ExecutionPolicy Bypass -File scripts/install_windows_sendto.ps1`
+- Linux 文件管理器入口：`bash scripts/install.sh`
+- Windows 右键 `Send to`：`powershell -ExecutionPolicy Bypass -File scripts/install.ps1`
 - 通用文件动作脚本：`uv run python scripts/lumina_file_action.py <translate|summarize|polish> <files...>`
 
 ### 平台验证手册
@@ -172,7 +179,7 @@ GET  /v1/digest/export
 
 | 版本 | 说明 |
 |------|------|
-| **Full**（默认） | 首次启动按平台自动下载本地模型：macOS 下载 MLX 模型，Windows / Linux 下载 GGUF 模型，无需联网推理 |
-| **Lite** | 不含模型，把请求转发到你自己的外部 OpenAI 兼容 API |
+| **Full** | 安装 `full` extra 后首次启动按平台自动下载本地模型：macOS 下载 MLX 模型，Windows / Linux 下载 GGUF 模型，无需联网推理 |
+| **Lite**（基础安装） | 不含模型，把请求转发到你自己的外部 OpenAI 兼容 API |
 
 </details>
