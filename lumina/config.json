@@ -165,6 +165,7 @@
     "_readme": "音频与语音转写配置。"
   },
   "game": {
+    "enabled": false,
     "sampling": {
       "temperature": 0.7,
       "max_tokens": 128

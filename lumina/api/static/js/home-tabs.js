@@ -3,6 +3,7 @@ var _allHomeTabs = [];
 var _legacyHomeTabMap = {};
 var _imageTaskDefs = [];
 var _homeTabsVersionKey = 'lumina.homeTabs.version';
+var _homeTabsCurrentVersion = '5'; // 迁移版本号，与 getLocalHomeTabs 迁移逻辑保持一致
 var _homeUi = {};
 var _imagePrompts = {};
 
@@ -97,6 +98,13 @@ function getServerHomeTabs() {
     if (idx >= 0) tabs.splice(idx, 0, 'audio');
     else tabs.push('audio');
   }
+  if (homeUi.game_enabled === false) {
+    tabs = tabs.filter(function(tab) { return tab !== 'game'; });
+  } else if (homeUi.game_enabled === true && !tabs.includes('game')) {
+    var gameIdx = tabs.indexOf('settings');
+    if (gameIdx >= 0) tabs.splice(gameIdx, 0, 'game');
+    else tabs.push('game');
+  }
   if (homeUi.digest_enabled === false) {
     tabs = tabs.filter(function(tab) { return tab !== 'digest'; });
   }
@@ -115,11 +123,11 @@ function getLocalHomeTabs() {
     var parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
     
-    // Version 4 Migration: Force add new core tabs
+    // Version 5 Migration: Remove game from core auto-insert (now opt-in via game.enabled)
     var version = localStorage.getItem(_homeTabsVersionKey);
-    if (version !== '4') {
-      var allDefs = _allHomeTabs.length ? _allHomeTabs : ['digest', 'document', 'image', 'audio', 'game', 'settings'];
-      ['image', 'audio', 'game'].forEach(function(tab) {
+    if (version !== _homeTabsCurrentVersion) {
+      var allDefs = _allHomeTabs.length ? _allHomeTabs : ['digest', 'document', 'image', 'audio', 'settings'];
+      ['image', 'audio'].forEach(function(tab) {
         if (!parsed.includes(tab) && allDefs.includes(tab)) {
           var settingsIdx = parsed.indexOf('settings');
           if (settingsIdx >= 0) parsed.splice(settingsIdx, 0, tab);
@@ -127,14 +135,19 @@ function getLocalHomeTabs() {
         }
       });
       localStorage.setItem('lumina.homeTabs', JSON.stringify(parsed));
-      localStorage.setItem(_homeTabsVersionKey, '4');
+      localStorage.setItem(_homeTabsVersionKey, _homeTabsCurrentVersion);
     }
-    
+
     // Check missing enabled tabs dynamically:
     if (homeUi.audio_enabled === true && !parsed.includes('audio')) {
       var audioIdx = parsed.indexOf('settings');
       if (audioIdx >= 0) parsed.splice(audioIdx, 0, 'audio');
       else parsed.push('audio');
+    }
+    if (homeUi.game_enabled === true && !parsed.includes('game')) {
+      var gameLocalIdx = parsed.indexOf('settings');
+      if (gameLocalIdx >= 0) parsed.splice(gameLocalIdx, 0, 'game');
+      else parsed.push('game');
     }
     
     return normalizeHomeTabs(parsed);
@@ -201,7 +214,7 @@ function saveLocalHomeTabs(tabs) {
   if (homeUi.allow_local_override === false) return;
   try {
     localStorage.setItem('lumina.homeTabs', JSON.stringify(normalizeHomeTabs(tabs)));
-    localStorage.setItem(_homeTabsVersionKey, '3');
+    localStorage.setItem(_homeTabsVersionKey, _homeTabsCurrentVersion);
   } catch (_) {}
 }
 

@@ -11,6 +11,7 @@ HOME_TAB_DEFS: list[dict[str, str]] = [
     {"key": "image", "label": "图像"},
     {"key": "audio", "label": "音频"},
     {"key": "game", "label": "游戏"},
+    {"key": "stats", "label": "统计"},
     {"key": "settings", "label": "设置"},
 ]
 HOME_TAB_KEYS = tuple(item["key"] for item in HOME_TAB_DEFS)

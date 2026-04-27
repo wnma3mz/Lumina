@@ -97,9 +97,9 @@ def test_config_store_patch_keeps_legacy_ui_on_disk_and_runtime_system_ui(tmp_pa
         cfg=cfg,
     )
 
-    assert result.new_cfg.system.ui.home.enabled_tabs == ["settings", "document"]
+    assert result.new_cfg.system.ui.home.enabled_tabs == ["digest", "image", "audio", "stats", "settings", "document"]
     written = Config.load(path)
-    assert written.system.ui.home.enabled_tabs == ["settings", "document"]
+    assert written.system.ui.home.enabled_tabs == ["digest", "image", "audio", "stats", "settings", "document"]
 
 
 def test_serialize_runtime_config_uses_runtime_sections_only(tmp_path):

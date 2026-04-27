@@ -1,13 +1,13 @@
 import unittest
 from unittest.mock import MagicMock
-import mlx.core as mx
-from lumina.providers.mlx_loader import MlxModelLoader
+
+import pytest
+
+mx = pytest.importorskip("mlx.core", reason="mlx not available on this platform")
 
 class TestMlxVlmAdapter(unittest.TestCase):
     def test_vlm_model_wrapper_unpacks_logits(self):
         # 模拟 VLM 加载后的代理逻辑
-        from lumina.providers.mlx_loader import MlxModelLoader
-        
         # 构造一个模拟的 LanguageModelOutput
         class MockOutput:
             def __init__(self, logits):

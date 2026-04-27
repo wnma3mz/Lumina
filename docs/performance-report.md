@@ -60,6 +60,7 @@ uv run python tests/benchmarks/http_bench.py --rounds 5 --skip-vision
 | :--- | :--- | :--- | :--- |
 | Env A | Apple M3 Pro, 18GB 统一内存 | macOS 14.4 (`23E214`) | `mlx 0.31.1`, `mlx_lm 0.31.2`, `mlx_vlm 0.4.4` |
 | Env B | Apple M4, 16GB 统一内存 | macOS 15.1.1 (`24B91`) | `mlx 0.31.1`, `mlx_lm 0.31.2`, `mlx_vlm 0.4.4` |
+| Env C | Intel Core i3-6100T, 4 线程, 7.6GB 内存 | Linux 6.8.0 x86_64 | `llama-cpp-python 0.3.20` |
 
 ---
 
@@ -93,6 +94,22 @@ uv run python tests/benchmarks/http_bench.py --rounds 5 --skip-vision
 - **模式差异微小**: 在 16GB+ 设备上跑 0.8B/2B 模型，Hybrid 对速度的影响极小（正负 1-2ms 波动），但在极端高并发或显存吃紧时，Hybrid 提供的安全冗余更有价值。
 - **Gemma 4 稳定性验证**: 本次实测确认 Gemma 4 在 M4 上运行非常稳健，且并发吞吐达到了 130 tok/s。
 
+### 2.3 Env C (Linux / llama.cpp / CPU)
+
+#### 2.3.1 核心对比矩阵
+
+Env C 使用非 macOS 默认本地后端 `llama.cpp`，当前加载模型为 `Qwen_Qwen3.5-0.8B-Q4_K_M.gguf`。该结果用于验证 Windows / Linux 路径的可用性和稳定性；由于后端、硬件和量化格式不同，不与 Apple Silicon / MLX 结果做直接性能对比。
+
+| 模型 | 模式 | text TTFT | text TPOT | vision 冷启动 TTFT | vision 热跑 TTFT | 4 并发 tok/s |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Qwen3.5-0.8B-GGUF (Q4_K_M) | llama.cpp CPU | 484.5ms | 61.7ms | N/A | N/A | 14.8 |
+
+补充：
+
+- text-only 使用 `http_bench.py --rounds 4 --skip-vision`，4 轮热跑均值，32 tokens。
+- 4 并发测试在 llama.cpp provider 加串行化保护后为 `4/4 ok`，总计 256 tokens / 17.27s，平均 TTFT 为 6987.6ms。
+- 当前单实例 llama.cpp 后端会串行执行并发生成，优先保证进程稳定；因此并发 TTFT 会随排队上升。
+
 ---
 
 ## 3. 显存分层效果
@@ -113,6 +130,7 @@ uv run python tests/benchmarks/http_bench.py --rounds 5 --skip-vision
 
 - **vision TPOT 不准确**：当前视觉测试只要求一个词，decode 步数太少，不适合测 VLM 持续生成速度。
 - **Metal 显存不是完整峰值**：`mx.get_active_memory()` 只统计当前活跃显存，不含 Metal driver 保留区域。
+- **llama.cpp 单实例并发会排队**：Env C 为避免同一个 `Llama` 实例并发访问 native context，当前采用串行化保护，因此可用于稳定性验证，但不代表多实例或服务池化后的最大吞吐。
 
 ---
 
@@ -134,4 +152,4 @@ uv run python tests/benchmarks/http_bench.py --skip-vision --skip-concurrent
 
 ---
 
-*最后更新: 2026-04-22 | Env A: Qwen3.5-0.8B-4bit / Gemma-4-E2B-IT-4bit（含 Gemma HTTP 实测与 `run_matrix.py` HTTP 主路径修复）*
+*最后更新: 2026-04-27 | Env A/B: Qwen3.5-0.8B-4bit / Gemma-4-E2B-IT-4bit；Env C: Linux llama.cpp / Qwen3.5-0.8B GGUF 稳定性实测*

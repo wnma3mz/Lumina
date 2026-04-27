@@ -49,6 +49,7 @@
 #panel-image,
 #panel-audio,
 #panel-game,
+#panel-stats,
 #panel-settings {
   display: none;
 }
@@ -59,6 +60,7 @@
 #tab-image:checked ~ main #panel-image { display: grid; }
 #tab-audio:checked ~ main #panel-audio { display: grid; }
 #tab-game:checked ~ main #panel-game { display: block; }
+#tab-stats:checked ~ main #panel-stats { display: block; }
 #tab-settings:checked ~ main #panel-settings { display: block; }
 
 /* 导航栏高亮 */
@@ -67,6 +69,7 @@
 #tab-image:checked ~ nav label[data-tab="image"],
 #tab-audio:checked ~ nav label[data-tab="audio"],
 #tab-game:checked ~ nav label[data-tab="game"],
+#tab-stats:checked ~ nav label[data-tab="stats"],
 #tab-settings:checked ~ nav label[data-tab="settings"] {
   @apply nav-active;
 }
@@ -76,6 +79,7 @@
 #tab-image:not(:checked) ~ nav label[data-tab="image"],
 #tab-audio:not(:checked) ~ nav label[data-tab="audio"],
 #tab-game:not(:checked) ~ nav label[data-tab="game"],
+#tab-stats:not(:checked) ~ nav label[data-tab="stats"],
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"] {
   color: rgb(161 161 170);  /* zinc-400 */
 }
@@ -85,6 +89,7 @@
 #tab-image:not(:checked) ~ nav label[data-tab="image"]:hover,
 #tab-audio:not(:checked) ~ nav label[data-tab="audio"]:hover,
 #tab-game:not(:checked) ~ nav label[data-tab="game"]:hover,
+#tab-stats:not(:checked) ~ nav label[data-tab="stats"]:hover,
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover {
   color: rgb(24 24 27);  /* zinc-900 */
 }
@@ -94,6 +99,7 @@
 #tab-image:not(:checked) ~ nav label[data-tab="image"]:hover:is(.dark *),
 #tab-audio:not(:checked) ~ nav label[data-tab="audio"]:hover:is(.dark *),
 #tab-game:not(:checked) ~ nav label[data-tab="game"]:hover:is(.dark *),
+#tab-stats:not(:checked) ~ nav label[data-tab="stats"]:hover:is(.dark *),
 #tab-settings:not(:checked) ~ nav label[data-tab="settings"]:hover:is(.dark *) {
   color: rgb(255 255 255);  /* white */
 }
@@ -181,3 +187,13 @@
 .dark .modal-handle { background: rgba(84,84,88,.55); }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px 12px; border-bottom: 1px solid rgba(0,0,0,.08); flex-shrink: 0; }
 .dark .modal-header { border-bottom: 1px solid rgba(255,255,255,.08); }
+
+/* ── 统计面板：趋势图 & 刷新动画 ─────────────────────────────── */
+.sparkline-label { font-size: 9px; fill: #a1a1aa; }
+.dark .sparkline-label { fill: #71717a; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* 保存栏可见时，淡化导航栏（仅降低不透明度，不阻断点击） */
+body.save-bar-visible #home-nav {
+  opacity: 0.35;
+}

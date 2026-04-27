@@ -6,7 +6,6 @@ import json
 import os
 import time
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -556,9 +555,9 @@ def test_config_defaults_model_path_to_user_cache_dir(tmp_path):
 
     reset_config()
     cfg = get_config(str(cfg_file))
-    assert cfg.provider.model_path == str(
-        Path.home() / ".lumina" / "models" / "qwen3.5-0.8b-4bit"
-    )
+    from lumina.platform_support.runtime import default_provider_model_path
+
+    assert cfg.provider.model_path == default_provider_model_path("local")
     reset_config()
 
 

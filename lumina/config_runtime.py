@@ -133,6 +133,13 @@ def public_system_prompts(prompts: Optional[dict[str, Any]]) -> dict[str, str]:
     }
 
 
+def _mask_api_key(key: str) -> str:
+    """将 API key 掩码，仅保留前 4 位供识别。"""
+    if not key or len(key) <= 4:
+        return "****"
+    return key[:4] + "****"
+
+
 def serialize_runtime_config(cfg: Any) -> dict[str, Any]:
     res: dict[str, Any] = {}
     for section in ("provider", "system", "digest", "document", "vision", "audio"):
@@ -143,6 +150,12 @@ def serialize_runtime_config(cfg: Any) -> dict[str, Any]:
     for value in res.values():
         if isinstance(value, dict) and "prompts" in value:
             value["prompts"] = public_system_prompts(value["prompts"])
+
+    # 掩码敏感字段：provider.openai.api_key
+    provider = res.get("provider", {})
+    openai_cfg = provider.get("openai")
+    if isinstance(openai_cfg, dict) and openai_cfg.get("api_key"):
+        openai_cfg["api_key"] = _mask_api_key(openai_cfg["api_key"])
 
     return res
 

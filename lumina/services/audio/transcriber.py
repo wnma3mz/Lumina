@@ -23,17 +23,14 @@ from lumina.platform_support.runtime import default_whisper_model
 # ── 后端选择 ──────────────────────────────────────────────────────────────────
 
 if sys.platform == "darwin":
-    # mlx-whisper 的 transcribe 接口与 openai-whisper 兼容
-    import mlx_whisper as _mlx_whisper  # type: ignore[import]
     _BACKEND = "mlx"
-    _DEFAULT_WHISPER_MODEL = os.environ.get("LUMINA_WHISPER_MODEL", default_whisper_model())
 else:
-    # faster-whisper 跨平台（CUDA GPU + CPU fallback）
     _BACKEND = "faster_whisper"
-    _DEFAULT_WHISPER_MODEL = os.environ.get("LUMINA_WHISPER_MODEL", default_whisper_model())
+_DEFAULT_WHISPER_MODEL = os.environ.get("LUMINA_WHISPER_MODEL", default_whisper_model())
 
 # faster-whisper 模块级缓存，避免每次转写重新加载
 _fw_model_cache: dict = {}
+_mlx_whisper = None
 
 # 运行时由 set_asr_prompts() 注入（由 cli/server.py / 配置热更新调用）
 _asr_prompt_zh: Optional[str] = None
@@ -79,6 +76,19 @@ def _get_faster_whisper_model(model_id: str):
     return _fw_model_cache[model_id]
 
 
+def _get_mlx_whisper():
+    global _mlx_whisper
+    if _mlx_whisper is None:
+        try:
+            import mlx_whisper as mlx_whisper_mod  # type: ignore[import]
+        except ImportError as exc:
+            raise RuntimeError(
+                "mlx-whisper 未安装。macOS 使用语音转写时请先运行 `uv sync --extra local-macos` 或 `uv sync --extra full`。"
+            ) from exc
+        _mlx_whisper = mlx_whisper_mod
+    return _mlx_whisper
+
+
 class Transcriber:
     def __init__(self, model: Optional[str] = None):
         self.model = model or _DEFAULT_WHISPER_MODEL
@@ -95,7 +105,7 @@ class Transcriber:
             language = None
         initial_prompt = _make_initial_prompt(language)
         if _BACKEND == "mlx":
-            result = _mlx_whisper.transcribe(
+            result = _get_mlx_whisper().transcribe(
                 audio,
                 path_or_hf_repo=self.model,
                 language=language,
@@ -132,7 +142,7 @@ class Transcriber:
         initial_prompt = _make_initial_prompt(language)
 
         if _BACKEND == "mlx":
-            result = _mlx_whisper.transcribe(
+            result = _get_mlx_whisper().transcribe(
                 audio,
                 path_or_hf_repo=self.model,
                 language=language,

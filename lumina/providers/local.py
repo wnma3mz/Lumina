@@ -139,7 +139,7 @@ class LocalProvider(BaseProvider):
         if not _MLX_AVAILABLE:
             raise ImportError(
                 "mlx / mlx-lm 未安装，LocalProvider 不可用。"
-                "macOS 用户请运行：pip install lumina[macos]"
+                "macOS 用户请运行：uv sync --extra local-macos 或 uv sync --extra full"
             )
         self.model_path = model_path
         self.max_new_prefill_per_iter = max(1, max_new_prefill_per_iter)
@@ -918,6 +918,12 @@ class LocalProvider(BaseProvider):
                 yield item
         finally:
             slot.done = True
+            try:
+                from lumina.engine.token_counter import set_token_counts
+                prompt_len = len(slot.prompt_tokens) if slot.prompt_tokens is not None else 0
+                set_token_counts(int(prompt_len), int(slot.n_tokens))
+            except Exception:
+                pass
 
     async def generate_messages_stream(
         self,

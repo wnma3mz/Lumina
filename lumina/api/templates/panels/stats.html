@@ -1,0 +1,533 @@
+<div id="panel-stats" class="p-4 md:p-6 max-w-4xl mx-auto w-full">
+  <div class="mb-5 flex items-center justify-between">
+    <div>
+      <h2 class="text-xl font-semibold text-zinc-800 dark:text-zinc-100">统计</h2>
+      <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">LLM 请求活动历史</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 text-xs font-medium">
+        <button id="stats-toggle-24h" onclick="setStatsWindow('24h')"
+          class="px-3 py-1.5 bg-indigo-500 text-white transition-colors">24 小时</button>
+        <button id="stats-toggle-7d" onclick="setStatsWindow('7d')"
+          class="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">7 天</button>
+      </div>
+      <button onclick="triggerStatsRefresh()"
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+        <svg id="stats-refresh-icon" class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 8A6 6 0 1 1 8 2" stroke-linecap="round"/>
+          <path d="M14 2v4h-4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="stats-refresh-label">刷新</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="stats-body">
+    <div class="text-zinc-400 dark:text-zinc-500 text-sm">加载中…</div>
+  </div>
+
+  <!-- Tooltip 浮层（全局单例） -->
+  <div id="spark-tooltip" style="position:fixed;display:none;pointer-events:none;z-index:500"
+    class="bg-zinc-800 dark:bg-zinc-700 text-white text-xs rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap"></div>
+</div>
+
+<style>
+#panel-stats .sparkline-label { font-size: 9px; fill: #a1a1aa; }
+.dark #panel-stats .sparkline-label { fill: #71717a; }
+@keyframes stats-spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
+@keyframes spark-draw {
+  from { stroke-dashoffset: var(--spark-len, 2000); }
+  to   { stroke-dashoffset: 0; }
+}
+</style>
+
+<script>
+(function () {
+  /* ── 常量 ── */
+  const ORIGIN_LABELS = {
+    chat:'对话', chat_api:'对话 API', digest:'日报',
+    document:'文档', game_opening:'游戏开场', game_score:'游戏评分',
+    vision:'图像', audio:'音频', unknown:'未知',
+  };
+  const REFRESH_INTERVAL = 30;
+  const LATENCY_WARN_MS  = 3000;
+  const LATENCY_CRIT_MS  = 8000;
+  const P95_CRIT_MS      = 10000;
+  const LS_WINDOW_KEY    = 'lumina.stats.window';
+
+  /* ── 状态 ── */
+  let _data     = null;
+  let _window   = (function() {
+    try { return localStorage.getItem(LS_WINDOW_KEY) || '24h'; } catch(_) { return '24h'; }
+  })();
+  let _countdown= REFRESH_INTERVAL;
+  let _timer    = null;
+
+  /* ── 工具函数 ── */
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function fmtMs(ms) {
+    if (!ms) return '—';
+    return ms >= 1000 ? (ms/1000).toFixed(1)+'s' : ms+'ms';
+  }
+  function fmtNum(n) {
+    if (n == null) return '—';
+    if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+    if (n >= 1e4) return (n/1e3).toFixed(1)+'k';
+    return String(n);
+  }
+
+  function latencyColor(ms) {
+    if (!ms) return '';
+    if (ms >= LATENCY_CRIT_MS) return 'text-red-500 dark:text-red-400';
+    if (ms >= LATENCY_WARN_MS) return 'text-amber-500 dark:text-amber-400';
+    return '';
+  }
+  function p95Color(ms) {
+    if (!ms) return 'text-zinc-400';
+    if (ms >= P95_CRIT_MS)     return 'text-red-500 dark:text-red-400';
+    if (ms >= LATENCY_CRIT_MS) return 'text-amber-500 dark:text-amber-400';
+    return 'text-zinc-400';
+  }
+
+  /* ── Tooltip ── */
+  const _tip = document.getElementById('spark-tooltip');
+  function showTip(x, y, text) {
+    _tip.textContent = text;
+    _tip.style.display = 'block';
+    const tw = _tip.offsetWidth;
+    _tip.style.left = (x + 12 + tw > window.innerWidth ? x - tw - 8 : x + 12) + 'px';
+    _tip.style.top  = (y - 28) + 'px';
+  }
+  function hideTip() { _tip.style.display = 'none'; }
+
+  /* ── 数据变换层（Data Transformer）── */
+  function transformData(data, win) {
+    const s          = data.summary    || {};
+    const origins7d  = data['7d']      || {};
+    const origins24h = data['24h']     || {};
+    const prevBucket = data['prev_24h']|| {};
+
+    const total7d  = s.total_7d       || 0;
+    const total24h = s.total_24h      || 0;
+    const prev24h  = s.prev_total_24h || 0;
+    const avgMs    = s.avg_ms_7d      || 0;
+
+    /* 7d 聚合 */
+    let totalUserChars=0, totalRespChars=0, totalErrors=0;
+    let totalPT=0, totalCT=0, tokenCount=0;
+    for (const b of Object.values(origins7d)) {
+      totalUserChars += b.user_chars||0;
+      totalRespChars += b.resp_chars||0;
+      totalErrors    += b.error||0;
+      totalPT        += b.prompt_tokens||0;
+      totalCT        += b.completion_tokens||0;
+      tokenCount     += b.token_count||0;
+    }
+    const errPct      = total7d ? Math.round(totalErrors/total7d*100) : 0;
+    const hasTokens   = tokenCount > 0;
+    const tokenCovPct = total7d ? Math.round(tokenCount/total7d*100) : 0;
+
+    /* 今日 vs 昨日 */
+    const deltaAbs = total24h - prev24h;
+    const deltaPct = prev24h ? Math.round(Math.abs(deltaAbs)/prev24h*100) : null;
+
+    /* 来源行数据 */
+    const activeWindow = win === '24h' ? origins24h : origins7d;
+    const sortedOrigins = Object.entries(activeWindow).sort((a,b) => b[1].count - a[1].count);
+    const maxCount = sortedOrigins.length ? sortedOrigins[0][1].count : 1;
+    const originRows = sortedOrigins.map(([origin, b]) => {
+      const avgMsOrig = b.avg_ms || 0;
+      const p95Ms     = b.p95_ms || 0;
+      const errCount  = b.error  || 0;
+      const errPctO   = b.count  ? Math.round(errCount/b.count*100) : 0;
+      const count24hO = win === '7d'  ? ((origins24h[origin]||{}).count||0) : null;
+      const prevCount = win === '24h' ? ((prevBucket[origin]||{}).count||0) : null;
+      return {
+        origin, label: ORIGIN_LABELS[origin] || origin,
+        count: b.count,
+        pct: maxCount ? Math.max(Math.round(b.count/maxCount*100), 4) : 4,
+        avgMsOrig, p95Ms, errCount, errPctO,
+        count24hO, prevCount,
+        latCls: latencyColor(avgMsOrig),
+        barColor: errPctO >= 20 ? 'bg-red-400 dark:bg-red-500' : 'bg-indigo-400 dark:bg-indigo-500',
+        showP95: !!(p95Ms && p95Ms > avgMsOrig * 1.5),
+      };
+    });
+
+    /* 趋势系列 */
+    const series   = win === '24h' ? (data.hourly_series||[]) : (data.daily_series||[]);
+    const labelKey = win === '24h' ? 'hour' : 'date';
+    const trendLabel = win === '24h' ? '请求趋势（24 小时·按小时）' : '请求趋势（7 天）';
+    const showTrend  = series.length >= 2 && series.some(d => d.count > 0);
+
+    /* 用量 */
+    const inputLabel = hasTokens ? '输入 Token'  : '输入字符';
+    const outputLabel= hasTokens ? '输出 Token'  : '输出字符';
+    const inputVal   = hasTokens ? fmtNum(totalPT) : fmtNum(totalUserChars);
+    const outputVal  = hasTokens ? fmtNum(totalCT) : fmtNum(totalRespChars);
+    const avgPerReq  = (hasTokens && tokenCount) ? Math.round((totalPT+totalCT)/tokenCount) : null;
+
+    return {
+      total24h, total7d, prev24h, avgMs, errPct, totalErrors,
+      deltaAbs, deltaPct,
+      hasTokens, tokenCovPct, tokenCount,
+      inputLabel, outputLabel, inputVal, outputVal, avgPerReq,
+      originRows, windowLabel: win === '24h' ? '24 小时' : '7 天',
+      series, labelKey, trendLabel, showTrend,
+      modelDist: data.model_dist || {},
+    };
+  }
+
+  /* ── 趋势折线图（SVG，XSS 安全：用 DOM API 构建感应矩形） ── */
+  function renderSparkline(series, labelKey) {
+    const W = 560, H = 52;
+    const PX = 4, PT = 10, PB = 4;
+    const counts = series.map(d => d.count);
+    const max = Math.max(...counts, 1);
+    const n = counts.length;
+    if (n < 2) return null;  // 返回 null 表示不渲染
+
+    const pts = counts.map((v, i) => {
+      const x = PX + (i / (n-1)) * (W - PX*2);
+      const y = PT + (1 - v/max) * (H - PT - PB);
+      return [x, y];
+    });
+
+    const linePath = pts.map((p,i) => (i===0?`M${p[0]},${p[1]}`:`L${p[0]},${p[1]}`)).join(' ');
+    const baseY    = H - PB;
+    const areaPath = linePath + ` L${pts[n-1][0]},${baseY} L${pts[0][0]},${baseY} Z`;
+
+    const pathLen = pts.reduce((acc,[x,y],i) => {
+      if (i===0) return 0;
+      const [px,py] = pts[i-1];
+      return acc + Math.hypot(x-px, y-py);
+    }, 0);
+
+    const uid = 'sp' + Math.random().toString(36).slice(2,7);
+    const svgNS = 'http://www.w3.org/2000/svg';
+
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('id', uid);
+    svg.setAttribute('viewBox', `0 0 ${W} ${H+18}`);
+    svg.setAttribute('class', 'w-full');
+    svg.style.cssText = 'min-width:240px;overflow:visible';
+
+    // defs + gradient
+    const defs = document.createElementNS(svgNS, 'defs');
+    const grad = document.createElementNS(svgNS, 'linearGradient');
+    grad.setAttribute('id', 'sg'+uid);
+    grad.setAttribute('x1','0'); grad.setAttribute('y1','0');
+    grad.setAttribute('x2','0'); grad.setAttribute('y2','1');
+    const s0 = document.createElementNS(svgNS, 'stop');
+    s0.setAttribute('offset','0%'); s0.setAttribute('stop-color','#818cf8'); s0.setAttribute('stop-opacity','0.22');
+    const s1 = document.createElementNS(svgNS, 'stop');
+    s1.setAttribute('offset','100%'); s1.setAttribute('stop-color','#818cf8'); s1.setAttribute('stop-opacity','0');
+    grad.appendChild(s0); grad.appendChild(s1);
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+
+    // area fill
+    const area = document.createElementNS(svgNS, 'path');
+    area.setAttribute('d', areaPath);
+    area.setAttribute('fill', `url(#sg${uid})`);
+    svg.appendChild(area);
+
+    // line
+    const line = document.createElementNS(svgNS, 'path');
+    line.setAttribute('d', linePath);
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', '#818cf8');
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-linejoin', 'round');
+    line.setAttribute('stroke-linecap', 'round');
+    line.style.cssText = `stroke-dasharray:${pathLen};stroke-dashoffset:${pathLen};animation:spark-draw 0.8s ease forwards`;
+    svg.appendChild(line);
+
+    // dots
+    pts.forEach(([x,y]) => {
+      const c = document.createElementNS(svgNS, 'circle');
+      c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', '2.5');
+      c.setAttribute('fill', '#818cf8');
+      svg.appendChild(c);
+    });
+
+    // x-axis labels
+    const labelIdxs = [0, Math.floor((n-1)/2), n-1];
+    labelIdxs.forEach(i => {
+      const x = PX + (i/(n-1)) * (W - PX*2);
+      const t = document.createElementNS(svgNS, 'text');
+      t.setAttribute('x', x); t.setAttribute('y', H+14);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('class', 'sparkline-label');
+      t.textContent = series[i][labelKey];  // textContent，无 XSS 风险
+      svg.appendChild(t);
+    });
+
+    // 感应矩形（用 DOM API 设置 data-* 属性，无 XSS 风险）
+    const colW = W / n;
+    series.forEach((d, i) => {
+      const cx = PX + (i/(n-1)) * (W - PX*2);
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', cx - colW/2); rect.setAttribute('y', '0');
+      rect.setAttribute('width', colW); rect.setAttribute('height', H+18);
+      rect.setAttribute('fill', 'transparent');
+      rect.style.cursor = 'default';
+      rect.dataset.lbl = d[labelKey];   // dataset 赋值，自动转义
+      rect.dataset.cnt = d.count;
+      rect.addEventListener('mouseenter', function(e) {
+        showTip(e.clientX, e.clientY, this.dataset.lbl + '  ' + this.dataset.cnt + ' 次');
+      });
+      rect.addEventListener('mouseleave', hideTip);
+      svg.appendChild(rect);
+    });
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'overflow-x:auto;overflow-y:visible;margin:0 -4px;padding-top:4px';
+    wrapper.appendChild(svg);
+    return wrapper;  // 返回 DOM 节点
+  }
+
+  /* ── 模型分布渲染 ── */
+  function renderModelDist(modelDist) {
+    const entries = Object.entries(modelDist).sort((a,b) => b[1]-a[1]);
+    if (!entries.length) return '';
+    const total = entries.reduce((s,[,v]) => s+v, 0);
+    const maxV  = entries[0][1];
+    let html = '<div class="bento-card p-4 mb-4">';
+    html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">模型分布（7 天）</div>';
+    html += '<div class="space-y-2">';
+    for (const [model, cnt] of entries) {
+      const pct   = maxV ? Math.max(Math.round(cnt/maxV*100), 2) : 2;
+      const tPct  = total ? Math.round(cnt/total*100) : 0;
+      const short = model.length > 32 ? model.slice(0,30)+'…' : model;
+      html += `<div>
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[60%]" title="${escHtml(model)}">${escHtml(short)}</span>
+          <span class="text-xs text-zinc-400">${tPct}% · ${fmtNum(cnt)} 次</span>
+        </div>
+        <div class="h-1 bg-zinc-100 dark:bg-zinc-700 rounded-full overflow-hidden">
+          <div class="h-1 bg-violet-400 dark:bg-violet-500 rounded-full" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  /* ── 主渲染（纯 HTML 拼接，无数据计算）── */
+  function renderStats(el, data) {
+    const d = transformData(data, _window);
+
+    /* 今日 vs 昨日 badge */
+    let deltaHtml = '';
+    if (d.prev24h > 0) {
+      const sign  = d.deltaAbs >= 0 ? '+' : '';
+      const arrow = d.deltaAbs > 0 ? '↑' : d.deltaAbs < 0 ? '↓' : '→';
+      const val   = d.deltaPct != null ? d.deltaPct+'%' : Math.abs(d.deltaAbs);
+      deltaHtml = `<div class="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">${arrow} 较昨日 ${sign}${val}</div>`;
+    }
+
+    let html = '';
+
+    /* 汇总卡片 */
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">';
+    html += `<div class="bento-card p-4">
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(d.total24h)}<span class="text-sm font-normal text-zinc-400 ml-1">次</span></div>
+      <div class="text-xs font-medium text-zinc-500 mt-0.5">今日请求</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">过去 24 小时</div>
+      ${deltaHtml}
+    </div>`;
+    html += `<div class="bento-card p-4">
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(d.total7d)}<span class="text-sm font-normal text-zinc-400 ml-1">次</span></div>
+      <div class="text-xs font-medium text-zinc-500 mt-0.5">7 天请求</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">过去 7 天</div>
+    </div>`;
+    html += `<div class="bento-card p-4">
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100 ${latencyColor(d.avgMs)}">${fmtMs(d.avgMs)}</div>
+      <div class="text-xs font-medium text-zinc-500 mt-0.5">平均耗时</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">7 天均值</div>
+    </div>`;
+    html += `<div class="bento-card p-4">
+      <div class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">${d.errPct}%</div>
+      <div class="text-xs font-medium text-zinc-500 mt-0.5">错误率</div>
+      <div class="text-[10px] text-zinc-400 mt-0.5">${d.total7d ? d.totalErrors+' 次错误 · 7 天' : '无记录'}</div>
+    </div>`;
+    html += '</div>';
+
+    /* 趋势图占位容器（sparkline 用 DOM 插入，不走 innerHTML） */
+    if (d.showTrend) {
+      html += `<div class="bento-card p-4 mb-4" id="stats-trend-card">
+        <div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">${d.trendLabel}</div>
+        <div id="stats-sparkline-mount"></div>
+      </div>`;
+    }
+
+    /* 用量 */
+    html += '<div class="bento-card p-4 mb-4">';
+    html += '<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">用量（7 天）</div>';
+    html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-4">';
+    html += `<div><div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${d.inputVal}</div><div class="text-xs text-zinc-500">${d.inputLabel}</div></div>`;
+    html += `<div><div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${d.outputVal}</div><div class="text-xs text-zinc-500">${d.outputLabel}</div></div>`;
+    if (d.avgPerReq != null) {
+      html += `<div><div class="text-lg font-bold text-zinc-800 dark:text-zinc-100">${fmtNum(d.avgPerReq)}</div><div class="text-xs text-zinc-500">均值 Token/请求</div></div>`;
+    }
+    html += '</div>';
+    if (d.hasTokens && d.tokenCovPct < 100) {
+      html += `<div class="mt-3 text-[10px] text-zinc-400 flex items-center gap-1">
+        <svg class="w-3 h-3 shrink-0" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 11a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm.75-4.5h-1.5v-4h1.5v4z"/></svg>
+        Token 数据覆盖 ${d.tokenCount} / ${d.total7d} 条（${d.tokenCovPct}%），历史记录无 token 统计
+      </div>`;
+    } else if (!d.hasTokens) {
+      html += `<div class="mt-3 text-[10px] text-zinc-400">字符数（无 token 统计，发起新请求后将开始记录）</div>`;
+    }
+    html += '</div>';
+
+    /* 模型分布 */
+    if (Object.keys(d.modelDist).length >= 1) {
+      html += renderModelDist(d.modelDist);
+    }
+
+    /* 来源分布 */
+    html += '<div class="bento-card p-4">';
+    html += `<div class="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">来源分布（${d.windowLabel}）</div>`;
+    if (!d.originRows.length) {
+      html += '<div class="text-zinc-400 dark:text-zinc-500 text-sm py-4 text-center">暂无活动记录</div>';
+    } else {
+      html += '<div class="space-y-3">';
+      for (const row of d.originRows) {
+        let timeInfo = `<span class="${row.latCls||'text-zinc-400'}">${fmtMs(row.avgMsOrig)} 均值</span>`;
+        if (row.showP95) {
+          timeInfo += ` <span class="${p95Color(row.p95Ms)} text-[10px]">P95 ${fmtMs(row.p95Ms)}</span>`;
+        }
+        let compareHtml = '';
+        if (row.count24hO !== null) {
+          compareHtml = `<span class="text-indigo-500 font-medium">今日 +${row.count24hO}</span>`;
+        } else if (row.prevCount !== null && row.prevCount > 0) {
+          const diff = row.count - row.prevCount;
+          const sign = diff >= 0 ? '+' : '';
+          compareHtml = `<span class="text-zinc-400 font-medium">较昨日 ${sign}${diff}</span>`;
+        }
+        html += `<div>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-sm text-zinc-700 dark:text-zinc-300 font-medium">${escHtml(row.label)}</span>
+              ${row.errCount > 0 ? `<span class="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-500 px-1.5 py-0.5 rounded font-medium shrink-0">${row.errPctO}% 错误</span>` : ''}
+            </div>
+            <div class="flex items-center gap-3 text-xs shrink-0 ml-2">
+              ${timeInfo}
+              ${compareHtml}
+              <span class="font-bold text-zinc-600 dark:text-zinc-300 w-8 text-right">${row.count}</span>
+            </div>
+          </div>
+          <div class="h-1.5 bg-zinc-100 dark:bg-zinc-700 rounded-full overflow-hidden">
+            <div class="h-1.5 ${row.barColor} rounded-full transition-all" style="width:${row.pct}%"></div>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // 保存并还原滚动位置
+    const scrollEl = document.querySelector('#panel-stats');
+    const prevScroll = scrollEl ? scrollEl.scrollTop : 0;
+    el.innerHTML = html;
+    if (scrollEl) scrollEl.scrollTop = prevScroll;
+
+    // 趋势图：通过 DOM API 挂载（绕开 innerHTML，避免 XSS）
+    if (d.showTrend) {
+      const mount = document.getElementById('stats-sparkline-mount');
+      if (mount) {
+        const sparkEl = renderSparkline(d.series, d.labelKey);
+        if (sparkEl) mount.appendChild(sparkEl);
+      }
+    }
+  }
+
+  /* ── 时间维度切换 ── */
+  const _TOGGLE_ON  = ['bg-indigo-500', 'text-white'];
+  const _TOGGLE_OFF = ['bg-zinc-100', 'dark:bg-zinc-800', 'text-zinc-600', 'dark:text-zinc-400',
+                       'hover:bg-zinc-200', 'dark:hover:bg-zinc-700'];
+  function _applyToggle(btn, active) {
+    (active ? _TOGGLE_OFF : _TOGGLE_ON).forEach(c => btn.classList.remove(c));
+    (active ? _TOGGLE_ON  : _TOGGLE_OFF).forEach(c => btn.classList.add(c));
+  }
+  window.setStatsWindow = function(w) {
+    _window = w;
+    try { localStorage.setItem(LS_WINDOW_KEY, w); } catch(_) {}
+    const b24 = document.getElementById('stats-toggle-24h');
+    const b7d = document.getElementById('stats-toggle-7d');
+    if (!b24 || !b7d) return;
+    _applyToggle(b24, w === '24h');
+    _applyToggle(b7d, w === '7d');
+    if (_data) {
+      const el = document.getElementById('stats-body');
+      if (el) renderStats(el, _data);
+    }
+  };
+
+  /* ── 自动刷新倒计时 ── */
+  function startCountdown() {
+    if (_timer) clearInterval(_timer);
+    _countdown = REFRESH_INTERVAL;
+    _timer = setInterval(function() {
+      _countdown--;
+      const lbl = document.getElementById('stats-refresh-label');
+      if (lbl) lbl.textContent = _countdown > 0 ? _countdown+'s' : '刷新';
+      if (_countdown <= 0) { clearInterval(_timer); _timer=null; loadStats(); }
+    }, 1000);
+  }
+
+  window.triggerStatsRefresh = function() {
+    if (_timer) { clearInterval(_timer); _timer=null; }
+    loadStats();
+  };
+
+  /* ── 初始化 toggle 状态（从 localStorage 恢复） ── */
+  function _initToggle() {
+    const b24 = document.getElementById('stats-toggle-24h');
+    const b7d = document.getElementById('stats-toggle-7d');
+    if (!b24 || !b7d) return;
+    _applyToggle(b24, _window === '24h');
+    _applyToggle(b7d, _window === '7d');
+  }
+
+  /* ── 数据加载 ── */
+  window.loadStats = async function() {
+    const el = document.getElementById('stats-body');
+    if (!el) return;
+    const icon = document.getElementById('stats-refresh-icon');
+    const lbl  = document.getElementById('stats-refresh-label');
+    if (icon) icon.style.animation = 'stats-spin 1s linear infinite';
+    if (lbl)  lbl.textContent = '…';
+    try {
+      const res = await fetch('/v1/activity');
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      _data = await res.json();
+      renderStats(el, _data);
+      startCountdown();
+    } catch(e) {
+      el.innerHTML = `<div class="text-red-400 text-sm">加载失败：${escHtml(e.message)}</div>`;
+    } finally {
+      if (icon) icon.style.animation = '';
+      const l2 = document.getElementById('stats-refresh-label');
+      if (l2 && l2.textContent === '…') l2.textContent = '刷新';
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { _initToggle(); window.loadStats(); });
+  } else {
+    _initToggle();
+    window.loadStats();
+  }
+})();
+</script>

@@ -132,6 +132,7 @@ def test_prefill_batch_uses_batched_model_call(monkeypatch):
     assert slots[1].prompt_cache == ["cache-1"]
 
 
+@pytest.mark.slow
 @pytest.mark.anyio
 async def test_batch_engine_matches_legacy_scheduler_outputs():
     if not MODEL_PATH.exists():
