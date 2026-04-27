@@ -17,7 +17,7 @@ import pytest
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _TEMPLATES_DIR = _PROJECT_ROOT / "lumina" / "api" / "templates"
 _STATIC_DIR = _PROJECT_ROOT / "lumina" / "api" / "static"
-PANEL_KEYS = ["digest", "document", "image", "audio", "settings"]
+PANEL_KEYS = ["digest", "document", "image", "audio", "stats", "settings"]
 
 # 非默认面板（CSS 默认 display:none，由 :checked 选择器控制显示）
 NON_DEFAULT_PANELS = ["document", "image", "settings"]
@@ -52,7 +52,7 @@ def html() -> str:
             "本地运行，安心使用",
         ],
         home_ui={
-            "enabled_tabs": ["digest", "document", "image", "audio", "settings"],
+            "enabled_tabs": ["digest", "document", "image", "audio", "stats", "settings"],
             "image_enabled": True,
             "image_modules": ["image_ocr", "image_caption"],
             "allow_local_override": True,

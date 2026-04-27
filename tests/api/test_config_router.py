@@ -205,7 +205,7 @@ class TestGetConfig:
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/v1/config")
-        assert r.json()["system"]["ui"]["home"]["enabled_tabs"] == ["digest", "document", "image", "audio", "settings"]
+        assert r.json()["system"]["ui"]["home"]["enabled_tabs"] == ["digest", "document", "image", "audio", "stats", "settings"]
 
 
 # ── PATCH /v1/config ─────────────────────────────────────────────────────────
@@ -451,7 +451,7 @@ class TestPatchConfig:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             await c.patch("/v1/config", json={"ui": {"home": {"enabled_tabs": ["digest", "document", "image", "settings"]}}})
         written = json.loads(config_path.read_text())
-        assert written["ui"]["home"]["enabled_tabs"] == ["digest", "document", "image", "audio", "settings"]
+        assert written["ui"]["home"]["enabled_tabs"] == ["digest", "document", "image", "audio", "stats", "settings"]
 
     async def test_patch_branding_username_not_restart_required(self, client_and_llm):
         app, _ = client_and_llm
