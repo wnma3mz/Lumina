@@ -79,8 +79,10 @@ target-version = ["py310"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
 markers = [
     "asyncio: legacy async test marker kept for compatibility",
+    "slow: tests that require a local model or heavy resources; excluded by default",
 ]
 filterwarnings = [
     "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
