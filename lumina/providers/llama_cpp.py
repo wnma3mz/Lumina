@@ -30,6 +30,7 @@ class LlamaCppProvider(BaseProvider):
         self._n_gpu_layers = n_gpu_layers
         self._n_ctx = n_ctx
         self._llm = None
+        self._generation_lock = threading.Lock()
 
     def load(self):
         """同步加载模型（由 LLMEngine.load() 调用）。"""
@@ -79,21 +80,24 @@ class LlamaCppProvider(BaseProvider):
 
         def _run():
             try:
-                for chunk in self._llm.create_chat_completion(  # type: ignore[union-attr]
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    top_k=top_k,
-                    min_p=min_p,
-                    presence_penalty=presence_penalty,
-                    repeat_penalty=repetition_penalty,
-                    stream=True,
-                ):
-                    delta = chunk["choices"][0].get("delta", {})
-                    text = delta.get("content", "")
-                    if text:
-                        loop.call_soon_threadsafe(queue.put_nowait, text)
+                # llama-cpp-python uses mutable native context state; concurrent
+                # generation on one Llama instance can trip ggml assertions.
+                with self._generation_lock:
+                    for chunk in self._llm.create_chat_completion(  # type: ignore[union-attr]
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        top_k=top_k,
+                        min_p=min_p,
+                        presence_penalty=presence_penalty,
+                        repeat_penalty=repetition_penalty,
+                        stream=True,
+                    ):
+                        delta = chunk["choices"][0].get("delta", {})
+                        text = delta.get("content", "")
+                        if text:
+                            loop.call_soon_threadsafe(queue.put_nowait, text)
             except Exception as exc:
                 loop.call_soon_threadsafe(queue.put_nowait, exc)
             finally:
