@@ -102,15 +102,10 @@ async def get_activity_stats():
 @router.get("/v1/update")
 async def get_update_info():
     """查询 GitHub 是否有新版本（1h 内存缓存）。"""
-    from importlib.metadata import version as _pkg_version
-
+    from lumina import __version__
     from lumina.engine.update_check import check_update
 
-    try:
-        current = _pkg_version("lumina")
-    except Exception:
-        current = "0.0.0"
-    info = await check_update(current)
+    info = await check_update(__version__)
     return {
         "current": info.current,
         "latest": info.latest,

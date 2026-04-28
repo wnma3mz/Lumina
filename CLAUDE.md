@@ -330,4 +330,22 @@ v0.8.0 起采用 **Bento Card** 设计风格，替代原有毛玻璃（glassmorp
 
 ## 版本
 
-当前：`v0.9.1`（`pyproject.toml` 和 `scripts/lumina_full.spec` 中的 `CFBundleShortVersionString`）
+当前：`v0.9.2`（`pyproject.toml` 和 `scripts/lumina_full.spec` 中的 `CFBundleShortVersionString`）
+
+### 版本号更新规范
+
+**必须使用 `scripts/bump_version.py`**，禁止手动编辑任何文件中的版本字符串：
+
+```bash
+# 预览将修改哪些文件（不实际写入）
+python scripts/bump_version.py 0.9.2 --dry-run
+
+# 执行更新（写入文件）
+python scripts/bump_version.py 0.9.2
+
+# 更新 + 自动 git commit + 打 tag（不 push）
+python scripts/bump_version.py 0.9.2 --commit
+# 然后手动：git push origin main v0.9.2
+```
+
+版本字符串分布在 7 个文件：`pyproject.toml`、`lumina/__init__.py`、`scripts/lumina_full.spec`、`scripts/build.sh`、`lumina/api/templates/index.html`、`docs/readme-showcase.html`、`CLAUDE.md`。手动修改极易遗漏，导致运行时版本与安装包版本不一致（历史教训：`__init__.py` 落后 `pyproject.toml` 一个版本，导致 `/v1/update` 返回错误的 `current`）。

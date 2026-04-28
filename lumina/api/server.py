@@ -65,8 +65,9 @@ def _compute_asset_version(static_root: Path) -> int:
 async def _bg_update_check() -> None:
     """启动后静默检查 GitHub 是否有新版本，结果缓存供 /v1/update 快速返回。"""
     try:
+        from lumina import __version__
         from lumina.engine.update_check import check_update
-        await check_update(_LUMINA_VERSION)
+        await check_update(__version__)
     except Exception:
         pass
 

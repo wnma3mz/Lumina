@@ -535,12 +535,7 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
             import threading
 
             from lumina.engine import update_check
-
-            try:
-                from importlib.metadata import version as _pkg_ver
-                _current = _pkg_ver("lumina")
-            except Exception:
-                _current = "0.0.0"
+            from lumina import __version__ as _current
 
             def _run():
                 loop = asyncio.new_event_loop()

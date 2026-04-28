@@ -144,7 +144,7 @@ app = BUNDLE(
     icon=None,
     bundle_identifier='com.lumina.lite',
     info_plist={
-        'CFBundleShortVersionString': '0.8.6',
+        'CFBundleShortVersionString': '0.9.2',
         'CFBundleName': 'Lumina Lite',
         'LSUIElement': True,
         'NSMicrophoneUsageDescription': 'Lumina 需要麦克风权限用于语音转文本',
