@@ -213,6 +213,11 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
   if (typeof updateFloatingUiState === 'function') {
     updateFloatingUiState();
   }
+  // config_form.html 加载完毕后，若当前活跃子 tab 是 server 则触发更新检查
+  var serverTab = document.getElementById('stab-server');
+  if (serverTab && !serverTab.classList.contains('hidden')) {
+    if (typeof checkUpdate === 'function') checkUpdate();
+  }
 });
 
 async function toggleFeature(featureName, enabled) {
