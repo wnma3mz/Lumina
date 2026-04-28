@@ -301,3 +301,34 @@ async function pruneRequestHistory(btn) {
     }
   }
 }
+
+async function checkUpdate() {
+  var el = document.getElementById('update-info');
+  var btn = document.getElementById('update-check-btn');
+  if (!el) return;
+  if (btn) btn.textContent = '检查中…';
+  try {
+    var res = await fetch('/v1/update');
+    var d = await res.json();
+    if (d.has_update) {
+      el.innerHTML = '<div class="flex items-center gap-2 flex-wrap">'
+        + '<span class="text-xs text-zinc-500">当前 <span class="font-mono">' + escHtml(d.current) + '</span></span>'
+        + '<span class="text-xs text-emerald-500 font-bold">→ ' + escHtml(d.latest) + ' 可用</span>'
+        + '<a href="' + escHtml(d.release_url) + '" target="_blank"'
+        + ' class="text-xs text-indigo-500 underline hover:text-indigo-600">查看发布说明</a>'
+        + '</div>';
+    } else if (d.error) {
+      el.innerHTML = '<div class="text-xs text-zinc-500">当前 <span class="font-mono">'
+        + escHtml(d.current || '—') + '</span>'
+        + '<span class="text-red-400 ml-2">检查失败</span></div>';
+    } else {
+      el.innerHTML = '<div class="text-xs text-zinc-500">当前 <span class="font-mono">'
+        + escHtml(d.current) + '</span>'
+        + '<span class="text-zinc-400 ml-2">已是最新</span></div>';
+    }
+  } catch(e) {
+    el.innerHTML = '<div class="text-xs text-red-400">检查失败</div>';
+  } finally {
+    if (btn) btn.textContent = '检查更新';
+  }
+}
