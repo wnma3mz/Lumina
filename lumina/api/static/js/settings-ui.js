@@ -200,6 +200,9 @@ function switchSettingsSubTab(key, btn) {
   if (key === 'ui' && typeof syncLocalHomeUiForm === 'function') {
     syncLocalHomeUiForm();
   }
+  if (key === 'server' && typeof checkUpdate === 'function') {
+    checkUpdate();
+  }
 }
 
 document.body.addEventListener('htmx:afterSwap', function(event) {

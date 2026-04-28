@@ -62,6 +62,15 @@ def _compute_asset_version(static_root: Path) -> int:
         return 0
 
 
+async def _bg_update_check() -> None:
+    """启动后静默检查 GitHub 是否有新版本，结果缓存供 /v1/update 快速返回。"""
+    try:
+        from lumina.engine.update_check import check_update
+        await check_update(_LUMINA_VERSION)
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def _default_lifespan(app: FastAPI):
     """默认 lifespan：精确设置服务启动时间戳。
@@ -69,7 +78,10 @@ async def _default_lifespan(app: FastAPI):
     create_app() 在初始化时已设置估算值；lifespan 在 uvicorn 真正就绪后
     用更精确的时间戳覆盖，供 /v1/digest 等接口判断服务是否重启。
     """
+    import asyncio
+
     app.state.server_start_time = time.time()
+    asyncio.create_task(_bg_update_check())
     try:
         yield
     finally:

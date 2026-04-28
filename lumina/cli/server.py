@@ -423,6 +423,7 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
                 self._lan_toggle_item,
                 rumps.MenuItem("关闭菜单栏显示", callback=self._hide_menubar),
                 None,
+                rumps.MenuItem("检查更新…", callback=self._on_check_update),
                 rumps.MenuItem("重启服务", callback=self._restart),
                 rumps.MenuItem("退出 Lumina", callback=self._quit),
             ]
@@ -528,6 +529,39 @@ def _run_with_menubar(fastapi_app, cfg, llm, config_path: str | None = None):
             from lumina.platform_support.platform_utils import open_url
 
             open_url(f"http://127.0.0.1:{cfg.port}")
+
+        def _on_check_update(self, _):
+            import asyncio
+            import threading
+
+            from lumina.engine import update_check
+
+            try:
+                from importlib.metadata import version as _pkg_ver
+                _current = _pkg_ver("lumina")
+            except Exception:
+                _current = "0.0.0"
+
+            def _run():
+                loop = asyncio.new_event_loop()
+                try:
+                    info = loop.run_until_complete(update_check.check_update(_current))
+                finally:
+                    loop.close()
+                if info.has_update:
+                    rumps.notification(
+                        "Lumina 有新版本",
+                        f"v{info.latest} 已发布",
+                        info.release_url or "",
+                    )
+                elif info.error:
+                    rumps.notification("Lumina", "检查更新失败", info.error[:80])
+                else:
+                    rumps.notification(
+                        "Lumina", "已是最新版本", f"当前 v{info.current}"
+                    )
+
+            threading.Thread(target=_run, daemon=True).start()
 
         def _restart(self, _):
             server.should_exit = True
