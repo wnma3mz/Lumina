@@ -53,8 +53,7 @@ lumina/
   providers/
     __init__.py        # 懒加载：LocalProvider / OpenAIProvider 按需 import（见下节）
     local.py           # mlx-lm/mlx-vlm 本地推理，含 Continuous Batching 和 VLM 兼容层
-    mlx_loader.py      # Layer 0：模型路径解析 + 加载（自动识别 VLM/LM）+ BatchGenerator 初始化
-    mlx_prompt.py      # Layer 1：chat_template 渲染 + tokenize + system prefix 提取
+    mlx/               # MLX 本地后端实现细节（loader/prompt/scheduler/offload/vlm/cache）
     openai.py          # OpenAI 兼容远程接口
   services/
     document/          # 文档处理服务（PDF/文本、watcher、pdf_cache）
@@ -154,7 +153,7 @@ mlx_vlm 与 mlx_lm 在以下三处存在接口差异，均已在 `LocalProvider`
 - **启动冷却**：`maybe_generate_digest()` 在生成前先检查上次生成时间（从 digest.md mtime 恢复），若距今不足 `refresh_hours`（默认 1h）则跳过，防止每次重启都重复采集
 - **采集顺序随机化**：`_collect_all()` 每次执行前 `random.shuffle(active)` 打乱 collector 顺序，确保各来源在 LLM token 上下文中均匀分布
 
-### MLX 内存分层（`providers/mlx_loader.py`）
+### MLX 内存分层（`providers/mlx/loader.py`）
 
 加载策略只有一种：**L1 Eager + L2 Offload（Hybrid）**，不再有 `lazy_load` 全量 offload 模式。
 

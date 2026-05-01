@@ -32,6 +32,10 @@ class LLMEngine:
         """初始化 Provider（本地模型加载、连接检查等）。"""
         self._provider.load()
 
+    async def close(self) -> None:
+        """释放 Provider 持有的异步资源。"""
+        await self._provider.close()
+
     @property
     def is_loaded(self) -> bool:
         return self._provider.is_ready

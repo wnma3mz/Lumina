@@ -1,5 +1,5 @@
 """
-lumina/providers/scheduler.py — MlxBatchScheduler
+lumina/providers/mlx/scheduler.py — MlxBatchScheduler
 
 将 mlx-lm BatchGenerator 的调度逻辑从 LocalProvider 中提取为独立类。
 

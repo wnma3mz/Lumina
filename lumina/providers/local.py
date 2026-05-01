@@ -6,15 +6,15 @@ LocalProvider：使用本地 mlx-lm 模型进行推理（默认 Provider）。
 ──────────────────────────────────────────────────────────────────────────────
 
 Layer 0 — 生命周期（load / _maybe_run_warmup）
-  委托给 MlxModelLoader（providers/mlx_loader.py）：路径解析、模型加载、
+  委托给 MlxModelLoader（providers/mlx/loader.py）：路径解析、模型加载、
   BatchGenerator 初始化。warmup 留在此处（依赖 Layer 1/2 能力）。
 
 Layer 1 — Prompt 构建（_build_prompt_tokens / _render_prompt_text）
-  委托给 MlxPromptBuilder（providers/mlx_prompt.py）：tokenizer 编码，
+  委托给 MlxPromptBuilder（providers/mlx/prompt.py）：tokenizer 编码，
   chat_template 渲染。保留单行委托方法，保证测试 patch 和子类兼容。
 
 Layer 2 — System Prompt 缓存（_get_or_create_system_prompt_cache）
-  委托给 SystemPromptCache（providers/system_prompt_cache.py）。
+  委托给 SystemPromptCache（providers/mlx/system_prompt_cache.py）。
   对高频 system prompt 做 KV-cache 预填充并缓存（LRU 32 条）。
 
 Layer 3 — 请求槽（_RequestSlot）
@@ -25,7 +25,7 @@ Layer 4a — 旧版调度器（_legacy_scheduler，即原 _scheduler）
   用于 LocalProvider 被子类覆盖 _do_prefill 时的 fallback 路径。
 
 Layer 4b — mlx-lm BatchGenerator 调度器（_mlx_batch_scheduler，即原 _batch_scheduler）
-  委托给 MlxBatchScheduler（providers/scheduler.py）。
+  委托给 MlxBatchScheduler（providers/mlx/scheduler.py）。
   默认路径：将多请求提交给 mlx-lm 官方 BatchGenerator，每轮 .next() 批量推进。
   支持专属 ThreadPoolExecutor（隔离 GPU 线程），通过 asyncio.Queue 与事件循环通信。
 
@@ -63,12 +63,13 @@ except ImportError:
 
 from lumina.engine.scheduler import GenerationRequest
 from .base import BaseProvider, ProviderCapabilities
+from .inference_queue import InferenceQueue
 from .message_parts import messages_include_images
-from .local_offload import forward_with_cache, maybe_embed_on_cpu
-from .mlx_loader import MlxModelLoader
-from .mlx_prompt import MlxPromptBuilder
-from .local_vlm import LocalVlmAdapter, _MLX_VLM_AVAILABLE
-from .system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
+from .mlx.loader import MlxModelLoader
+from .mlx.offload import forward_with_cache, maybe_embed_on_cpu
+from .mlx.prompt import MlxPromptBuilder
+from .mlx.system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
+from .mlx.vlm import LocalVlmAdapter, _MLX_VLM_AVAILABLE
 from lumina.engine.sampling import (
     DEFAULT_MIN_P,
     DEFAULT_PRESENCE_PENALTY,
@@ -151,6 +152,7 @@ class LocalProvider(BaseProvider):
         self._model = None
         self._tokenizer = None
         self._prefill_queue: Optional[asyncio.Queue] = None
+        self._inference_queue: Optional[InferenceQueue] = None
         self._not_empty: Optional[asyncio.Event] = None
         self._worker_task: Optional[asyncio.Task] = None
         self._active: List[_RequestSlot] = []
@@ -228,19 +230,10 @@ class LocalProvider(BaseProvider):
                 old_queue = self._prefill_queue
                 if old_queue is not None:
                     err = RuntimeError("Event loop changed; request dropped")
-                    while True:
-                        try:
-                            slot = old_queue.get_nowait()
-                            if not slot.done:
-                                slot.done = True
-                                try:
-                                    slot.token_queue.put_nowait(err)
-                                except Exception:
-                                    pass
-                        except asyncio.QueueEmpty:
-                            break
+                    InferenceQueue.drop_pending(old_queue, err)
                 self._prefill_queue = asyncio.Queue()
                 self._not_empty = asyncio.Event()
+                self._inference_queue = InferenceQueue(self._prefill_queue, self._not_empty)
             if self._worker_task is None or self._worker_task.done():
                 self._loop = current_loop
                 # _batch_scheduler finally 会 close batch_generator / shutdown executor；
@@ -766,8 +759,8 @@ class LocalProvider(BaseProvider):
     # ══════════════════════════════════════════════════════════════════════════
 
     async def _mlx_batch_scheduler(self) -> None:
-        """Layer 4b — 委托给 MlxBatchScheduler（providers/scheduler.py）。"""
-        from .scheduler import MlxBatchScheduler
+        """Layer 4b — 委托给 MlxBatchScheduler（providers/mlx/scheduler.py）。"""
+        from .mlx.scheduler import MlxBatchScheduler
         scheduler = MlxBatchScheduler(
             model=self._model,
             tokenizer=self._tokenizer,
@@ -903,21 +896,16 @@ class LocalProvider(BaseProvider):
             system_text=system_str,
             user_text=user_text,
         )
-        await self._prefill_queue.put(slot)
-        self._not_empty.set()
+        assert self._inference_queue is not None
+        await self._inference_queue.submit(slot)
 
         # 从 token_queue 流式消费：None = 结束，Exception = 错误
         # finally 在协程被 Cancel（客户端断开）时标记 done，通知调度器跳过后续生成
         try:
-            while True:
-                item = await slot.token_queue.get()
-                if item is None:
-                    break
-                if isinstance(item, Exception):
-                    raise item
+            async for item in self._inference_queue.consume(slot):
                 yield item
         finally:
-            slot.done = True
+            self._inference_queue.cancel(slot)
             try:
                 from lumina.engine.token_counter import set_token_counts
                 prompt_len = len(slot.prompt_tokens) if slot.prompt_tokens is not None else 0

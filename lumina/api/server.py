@@ -88,7 +88,10 @@ async def _default_lifespan(app: FastAPI):
     finally:
         from lumina.engine import request_history as _request_history
 
-        _request_history.shutdown()
+        try:
+            await app.state.llm.close()
+        finally:
+            _request_history.shutdown()
 
 
 def create_app(llm: LLMEngine, transcriber: "Transcriber", lifespan=None) -> FastAPI:

@@ -186,3 +186,24 @@ def test_finish_reason_stop_also_emits_none_terminator():
     sentinel = slot.token_queue.get_nowait()
     assert sentinel is None
     assert slot.done is True
+
+
+@pytest.mark.anyio
+async def test_generate_stream_marks_slot_done_when_consumer_closes():
+    provider = SyntheticInterleavedProvider(
+        prefill_delay=0.001,
+        decode_delay=0.05,
+        max_new_prefill_per_iter=1,
+    )
+    stream = provider.generate_stream("cancel-me", system=None, max_tokens=5, temperature=0.0)
+
+    try:
+        assert await stream.__anext__() == "t1"
+        with provider._active_lock:
+            slots = list(provider._active)
+        assert len(slots) == 1
+
+        await stream.aclose()
+        assert slots[0].done is True
+    finally:
+        await _stop_provider(provider)

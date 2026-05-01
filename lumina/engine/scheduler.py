@@ -7,7 +7,7 @@ GenerationRequest：纯 Python 请求控制结构（无 mlx 依赖），
 EngineScheduler：封装 legacy scheduler 路径的 idle-wait / drain / iterate
 连续批处理循环，具体 forward 由 LocalProvider._run_one_iter 回调提供。
 
-与 MlxBatchScheduler（providers/scheduler.py）并列，互不继承：
+与 MlxBatchScheduler（providers/mlx/scheduler.py）并列，互不继承：
 - EngineScheduler    — legacy 路径（_do_prefill 被子类覆盖时使用）
 - MlxBatchScheduler — mlx BatchGenerator 路径（默认路径）
 

@@ -1,5 +1,5 @@
 """
-lumina/providers/mlx_prompt.py — Prompt 构建与 tokenization
+lumina/providers/mlx/prompt.py — Prompt 构建与 tokenization
 
 职责：chat_template 渲染（自动检测并禁用 thinking 模式）、
 token 编码（返回 mx.array）、system prefix token 提取（供 SystemPromptCache 使用）。

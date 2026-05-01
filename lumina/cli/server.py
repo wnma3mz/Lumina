@@ -690,7 +690,10 @@ def cmd_server(args):
         try:
             yield
         finally:
-            _request_history.shutdown()
+            try:
+                await app.state.llm.close()
+            finally:
+                _request_history.shutdown()
 
     _env_interval = int(os.environ.get("LUMINA_DIGEST_INTERVAL", 0))
     _cfg_interval = int(getattr(cfg.digest, "refresh_hours", 1.0) * 3600)

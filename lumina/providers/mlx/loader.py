@@ -1,5 +1,5 @@
 """
-lumina/providers/mlx_loader.py — mlx-lm 模型加载
+lumina/providers/mlx/loader.py — mlx-lm 模型加载
 
 职责：路径解析（本地目录 / HF Hub 缓存快照 / repo id 回退）、
 模型加载（mlx_lm.load）、BatchGenerator / ThreadPoolExecutor 初始化。

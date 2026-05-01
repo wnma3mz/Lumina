@@ -1,5 +1,5 @@
 """
-lumina/providers/system_prompt_cache.py — System Prompt KV-Cache
+lumina/providers/mlx/system_prompt_cache.py — System Prompt KV-Cache
 
 对高频 system prompt 做 KV-cache 预填充并缓存（LRU 上限 32 条），
 避免每次推理都重新计算 system prompt 部分的注意力。
@@ -23,7 +23,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Callable, List, Optional
 
-from .local_offload import forward_with_cache
+from .offload import forward_with_cache
 
 logger = logging.getLogger("lumina")
 

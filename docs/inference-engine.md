@@ -142,7 +142,7 @@ _RequestSlot:
 | 文件 | 内容 |
 |---|---|
 | `lumina/providers/local.py` | 调度主逻辑、`_RequestSlot`、EOS 检测（token id 248046） |
-| `lumina/providers/system_prompt_cache.py` | LRU 缓存实现 |
-| `lumina/providers/scheduler.py` | `MlxBatchScheduler`（BatchGenerator 路径） |
+| `lumina/providers/mlx/system_prompt_cache.py` | LRU 缓存实现 |
+| `lumina/providers/mlx/scheduler.py` | `MlxBatchScheduler`（BatchGenerator 路径） |
 | `lumina/engine/scheduler.py` | `EngineScheduler`（Legacy 路径） |
-| `lumina/providers/mlx_loader.py` | `BatchGenerator` 初始化、模型加载策略 |
+| `lumina/providers/mlx/loader.py` | `BatchGenerator` 初始化、模型加载策略 |

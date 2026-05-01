@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import types
 
-import lumina.providers.system_prompt_cache as spc_mod
+import lumina.providers.mlx.system_prompt_cache as spc_mod
 
 from lumina.providers.local import LocalProvider, _RequestSlot
-from lumina.providers.system_prompt_cache import SystemPromptCacheEntry as _SystemPromptCacheEntry
+from lumina.providers.mlx.system_prompt_cache import SystemPromptCacheEntry as _SystemPromptCacheEntry
 from tests.providers.local_provider_test_helpers import mx
 
 
 def test_system_prompt_cache_reuses_prefix_cache(monkeypatch):
-    from lumina.providers import system_prompt_cache as runtime_spc_mod
-    from lumina.providers.system_prompt_cache import SystemPromptCache
+    from lumina.providers.mlx import system_prompt_cache as runtime_spc_mod
+    from lumina.providers.mlx.system_prompt_cache import SystemPromptCache
 
     class FakeCacheLayer:
         def __init__(self, state):
@@ -52,7 +52,7 @@ def test_system_prompt_cache_reuses_prefix_cache(monkeypatch):
 
 
 def test_prepare_batch_generator_prompt_falls_back_when_prefix_mismatches():
-    from lumina.providers.system_prompt_cache import SystemPromptCache
+    from lumina.providers.mlx.system_prompt_cache import SystemPromptCache
 
     class FakeCacheLayer:
         def __init__(self, state):
@@ -95,7 +95,7 @@ def test_prepare_batch_generator_prompt_falls_back_when_prefix_mismatches():
 
 
 def test_prepare_batch_generator_prompt_reconstructs_full_prompt_when_cache_hits():
-    from lumina.providers.system_prompt_cache import SystemPromptCache
+    from lumina.providers.mlx.system_prompt_cache import SystemPromptCache
 
     class FakeCacheLayer:
         def __init__(self, state):
@@ -138,7 +138,7 @@ def test_prepare_batch_generator_prompt_reconstructs_full_prompt_when_cache_hits
 
 
 def test_system_prompt_cache_evicts_lru():
-    from lumina.providers.system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
+    from lumina.providers.mlx.system_prompt_cache import SystemPromptCache, SystemPromptCacheEntry
 
     class FakeCacheLayer:
         @property

@@ -153,5 +153,5 @@ uv run pytest -q
 
 - MLX Lazy Loading: `mlx.core.load` with safetensors.
 - Memory Mapping: `mmap(2)` via macOS Page Cache.
-- Implementation: `lumina/providers/mlx_loader.py`
+- Implementation: `lumina/providers/mlx/loader.py`
 - 性能测试报告: `docs/performance-report.md`

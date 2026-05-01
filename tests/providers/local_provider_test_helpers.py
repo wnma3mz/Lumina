@@ -10,7 +10,7 @@ import pytest
 
 mx = pytest.importorskip("mlx.core", reason="mlx not available on this platform")
 
-import lumina.providers.mlx_loader as mlx_loader_mod  # noqa: E402
+import lumina.providers.mlx.loader as mlx_loader_mod  # noqa: E402
 from lumina.providers.local import LocalProvider, _RequestSlot  # noqa: E402
 
 MODEL_PATH = Path.home() / ".lumina" / "models" / "qwen3.5-0.8b-4bit"
@@ -195,7 +195,7 @@ def _make_slot() -> _RequestSlot:
 
 
 def _make_scheduler():
-    from lumina.providers.scheduler import MlxBatchScheduler
+    from lumina.providers.mlx.scheduler import MlxBatchScheduler
 
     return MlxBatchScheduler(
         model=object(),

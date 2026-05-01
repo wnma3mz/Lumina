@@ -176,6 +176,9 @@ class BaseProvider(ABC):
     def load(self):
         """可选的同步初始化（本地模型加载用）。"""
 
+    async def close(self) -> None:
+        """可选的异步清理钩子（远程连接池等资源释放用）。"""
+
     @property
     def is_ready(self) -> bool:
         """Provider 是否已就绪。"""

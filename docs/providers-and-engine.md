@@ -19,10 +19,10 @@ HTTP / CLI
 - `lumina/engine/llm.py`
 - `lumina/providers/__init__.py`
 - `lumina/providers/local.py`
-- `lumina/providers/local_offload.py`
-- `lumina/providers/local_vlm.py`
+- `lumina/providers/mlx/offload.py`
+- `lumina/providers/mlx/vlm.py`
 - `lumina/providers/message_parts.py`
-- `lumina/providers/mlx_loader.py`
+- `lumina/providers/mlx/loader.py`
 - `lumina/engine/request_history.py`
 - `lumina/api/sse.py`
 
@@ -66,12 +66,12 @@ batching 设计要点：
 这部分逻辑主要在：
 
 - `lumina/providers/local.py`
-- `lumina/providers/scheduler.py`
+- `lumina/providers/mlx/scheduler.py`
 - `lumina/engine/scheduler.py`
 
 ## 4. `mlx_loader` 的加载分层
 
-`lumina/providers/mlx_loader.py` 的职责是：
+`lumina/providers/mlx/loader.py` 的职责是：
 
 - 解析模型路径
 - 区分 `mlx_lm` 与 `mlx_vlm`
@@ -227,10 +227,10 @@ Config
 - `lumina/config.py`
 - `lumina/config_runtime.py`
 - `lumina/config_apply.py`
-- `lumina/providers/mlx_loader.py`
+- `lumina/providers/mlx/loader.py`
 - `lumina/providers/local.py`
-- `lumina/providers/local_offload.py`
-- `lumina/providers/local_vlm.py`
+- `lumina/providers/mlx/offload.py`
+- `lumina/providers/mlx/vlm.py`
 - `lumina/providers/message_parts.py`
 
 ## 11. 最近验证结果

@@ -18,7 +18,7 @@ def _make_sse_bytes(events: list[dict | str]) -> list[bytes]:
         if ev == "[DONE]":
             lines.append(b"data: [DONE]\n\n")
         else:
-            lines.append(b"data: " + json.dumps(ev).encode() + b"\n\n")
+            lines.append(b"data: " + json.dumps(ev, ensure_ascii=False).encode() + b"\n\n")
     return lines
 
 
@@ -37,7 +37,7 @@ async def _mock_stream(chunks: list[bytes]):
 
 
 def _make_mock_session(chunks: list[bytes]):
-    """构造 aiohttp.ClientSession 的 async-context-manager mock。"""
+    """构造 aiohttp.ClientSession mock。"""
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
     mock_resp.content.iter_any = lambda: _mock_stream(chunks)
@@ -47,13 +47,11 @@ def _make_mock_session(chunks: list[bytes]):
     mock_cm_resp.__aexit__ = AsyncMock(return_value=False)
 
     mock_session = MagicMock()
+    mock_session.closed = False
+    mock_session.close = AsyncMock()
     mock_session.post = MagicMock(return_value=mock_cm_resp)
 
-    mock_cm_sess = MagicMock()
-    mock_cm_sess.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_cm_sess.__aexit__ = AsyncMock(return_value=False)
-
-    return mock_cm_sess
+    return mock_session
 
 
 async def _collect(provider, text: str) -> list[str]:
@@ -79,6 +77,38 @@ async def test_sse_basic_two_tokens():
     with patch("aiohttp.ClientSession", return_value=_make_mock_session(chunks)):
         tokens = await _collect(provider, "hi")
     assert tokens == ["Hello", " world"]
+
+
+@pytest.mark.anyio
+async def test_client_session_reused_across_requests():
+    """同一个 provider 多次请求复用同一个 ClientSession。"""
+    from lumina.providers.openai import OpenAIProvider
+
+    chunks = _make_sse_bytes([_delta_event("ok"), "[DONE]"])
+    session = _make_mock_session(chunks)
+    provider = OpenAIProvider(base_url="http://fake")
+    with patch("aiohttp.ClientSession", return_value=session) as session_cls:
+        assert await _collect(provider, "one") == ["ok"]
+        assert await _collect(provider, "two") == ["ok"]
+
+    assert session_cls.call_count == 1
+    assert session.post.call_count == 2
+
+
+@pytest.mark.anyio
+async def test_client_session_close_closes_cached_session():
+    """Provider close 会关闭已创建的 ClientSession。"""
+    from lumina.providers.openai import OpenAIProvider
+
+    chunks = _make_sse_bytes([_delta_event("ok"), "[DONE]"])
+    session = _make_mock_session(chunks)
+    provider = OpenAIProvider(base_url="http://fake")
+    with patch("aiohttp.ClientSession", return_value=session):
+        assert await _collect(provider, "hi") == ["ok"]
+        await provider.close()
+
+    session.close.assert_awaited_once()
+    assert provider._session is None
 
 
 # ── Fix #1：SSE 跨 chunk 解析 ────────────────────────────────────────────────
@@ -116,6 +146,52 @@ async def test_sse_multiple_events_in_one_chunk():
     with patch("aiohttp.ClientSession", return_value=_make_mock_session(chunks)):
         tokens = await _collect(provider, "hi")
     assert tokens == ["A", "B"]
+
+
+@pytest.mark.anyio
+async def test_sse_crlf_events_are_parsed():
+    """兼容使用 CRLF 分隔的标准 SSE 响应。"""
+    from lumina.providers.openai import OpenAIProvider
+
+    chunks = [
+        b"data: " + json.dumps(_delta_event("crlf")).encode() + b"\r\n\r\n",
+        b"data: [DONE]\r\n\r\n",
+    ]
+
+    provider = OpenAIProvider(base_url="http://fake")
+    with patch("aiohttp.ClientSession", return_value=_make_mock_session(chunks)):
+        tokens = await _collect(provider, "hi")
+    assert tokens == ["crlf"]
+
+
+@pytest.mark.anyio
+async def test_sse_utf8_character_split_across_chunks():
+    """UTF-8 字符跨 chunk 时不应被 replacement char 破坏。"""
+    from lumina.providers.openai import OpenAIProvider
+
+    line = b"data: " + json.dumps(_delta_event("你好"), ensure_ascii=False).encode() + b"\n\n"
+    split_at = line.index("你".encode()[:1]) + 1
+    chunks = [line[:split_at], line[split_at:], b"data: [DONE]\n\n"]
+
+    provider = OpenAIProvider(base_url="http://fake")
+    with patch("aiohttp.ClientSession", return_value=_make_mock_session(chunks)):
+        tokens = await _collect(provider, "hi")
+    assert tokens == ["你好"]
+
+
+@pytest.mark.anyio
+async def test_sse_multiline_data_event_parser():
+    """SSE 同一事件内多个 data 行按规范用换行拼接。"""
+    from lumina.providers.openai import OpenAIProvider
+
+    chunks = [b"data: hello\r\ndata: world\r\n\r\n"]
+    provider = OpenAIProvider(base_url="http://fake")
+    session = _make_mock_session(chunks)
+    resp_cm = session.post.return_value
+    resp = await resp_cm.__aenter__()
+
+    items = [item async for item in provider._iter_sse_data(resp)]
+    assert items == ["hello\nworld"]
 
 
 @pytest.mark.anyio

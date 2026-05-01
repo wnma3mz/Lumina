@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import os
 
-import lumina.providers.local_vlm as local_vlm_mod
-import lumina.providers.mlx_loader as mlx_loader_mod
+import lumina.providers.mlx.loader as mlx_loader_mod
+import lumina.providers.mlx.vlm as local_vlm_mod
 
 from lumina.providers.local import LocalProvider
-from lumina.providers.mlx_loader import _DEFAULT_MODEL_REPO_ID
+from lumina.providers.mlx.loader import _DEFAULT_MODEL_REPO_ID
 from tests.providers.local_provider_test_helpers import (
     FakeLoadedModel,
     FakeLoadedTokenizer,
@@ -84,6 +84,7 @@ def test_load_falls_back_to_default_repo_when_default_local_dir_missing(monkeypa
             "vlm_load",
             lambda model_path, **kwargs: (load_calls.append(model_path) or (FakeLoadedModel(), FakeLoadedTokenizer())),
         )
+    monkeypatch.setattr(provider._loader, "_detect_vlm_target", lambda load_target: False)
     monkeypatch.setattr(provider._loader, "_init_batch_engine", lambda model, tokenizer: (None, None))
     monkeypatch.setattr(provider, "_run_warmup", lambda: None)
 
@@ -109,6 +110,7 @@ def test_load_uses_existing_local_model_dir(monkeypatch, tmp_path):
             "vlm_load",
             lambda model_path, **kwargs: (load_calls.append(model_path) or (FakeLoadedModel(), FakeLoadedTokenizer())),
         )
+    monkeypatch.setattr(provider._loader, "_detect_vlm_target", lambda load_target: False)
     monkeypatch.setattr(provider._loader, "_init_batch_engine", lambda model, tokenizer: (None, None))
     monkeypatch.setattr(provider, "_run_warmup", lambda: None)
 
@@ -148,7 +150,7 @@ def test_find_cached_repo_snapshot_prefers_latest(monkeypatch, tmp_path):
 
 
 def test_render_prompt_disables_thinking_when_tokenizer_supports_flag():
-    from lumina.providers.mlx_prompt import MlxPromptBuilder
+    from lumina.providers.mlx.prompt import MlxPromptBuilder
 
     provider = LocalProvider(model_path="synthetic")
 
@@ -175,7 +177,7 @@ def test_render_prompt_disables_thinking_when_tokenizer_supports_flag():
 
 
 def test_render_prompt_falls_back_when_tokenizer_has_no_thinking_flag():
-    from lumina.providers.mlx_prompt import MlxPromptBuilder
+    from lumina.providers.mlx.prompt import MlxPromptBuilder
 
     provider = LocalProvider(model_path="synthetic")
 

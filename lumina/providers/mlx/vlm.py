@@ -5,7 +5,7 @@ import io
 import threading
 from typing import Any, Optional
 
-from .message_parts import to_vlm_messages_and_images
+from lumina.providers.message_parts import to_vlm_messages_and_images
 
 try:
     from mlx_vlm import generate as vlm_generate
